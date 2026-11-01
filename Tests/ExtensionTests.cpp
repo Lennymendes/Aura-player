@@ -630,16 +630,24 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         app.engine().setSettings (st);
         app.navigate ({ nx::PageId::Settings });
         t.check (shoot ("16_profil_anubis") > 40, "Réglages : profils Merging Anubis (3 profils, astuce MT VAD)"_t);
-        {   // Step 5 fix: the equipment catalogue (7 cards) can be scrolled fully into view and the page ends with a margin
+        {   // the equipment manager: compact (search + a ~190 px list that scrolls), fully visible, page ends with a margin
             auto& page = main->getSettingsWindow().getPage();
             juce::Component* catalog = nullptr;
-            for (auto* c : page.content().getChildren()) if (c->getHeight() == 98 + 7 * 46 + 8) catalog = c;
-            t.check (catalog != nullptr, "Réglages : le gestionnaire d'équipements est présent"_t);
+            juce::Viewport* list = nullptr;
+            for (auto* c : page.content().getChildren())
+                for (auto* k : c->getChildren())
+                    if (auto* v = dynamic_cast<juce::Viewport*> (k); v != nullptr && v->getHeight() == 190) { catalog = c; list = v; }
+            t.check (catalog != nullptr && catalog->getHeight() < 310, "Réglages : gestionnaire d'équipements compact ("_t + juce::String (catalog != nullptr ? catalog->getHeight() : 0) + " px)");
             if (catalog != nullptr)
             {
+                const int rowsH = list->getViewedComponent()->getHeight();
+                list->setViewPosition (0, 1000);
+                t.check (rowsH >= 5 * 38 && list->getViewPositionY() == rowsH - 190 && catalog->getCachedComponentImage() != nullptr,
+                         "gestionnaire : 5 équipements en lignes fines, liste défilante (swipe), cadre mis en cache image"_t);
+                list->setViewPosition (0, 0);
                 page.setScrollY (catalog->getY() - 16);
                 settle (100);
-                t.check (catalog->getBottom() <= page.getScrollY() + page.getHeight(), "Réglages : les 7 cartes d'équipements tiennent dans la zone visible, sans troncature"_t);
+                t.check (catalog->getBottom() <= page.getScrollY() + page.getHeight(), "Réglages : le gestionnaire d'équipements tient dans la zone visible, sans troncature"_t);
                 shoot ("16c_gestionnaire_equipements");
             }
             page.setScrollY (100000);
@@ -658,16 +666,24 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     }
     // Step 4: equipment catalogue (search, apply, save) and the Streamer / Gaming mode
     {
-        t.check (nx::searchDeviceModels ("adi").size() == 3 && nx::searchDeviceModels ("ka17").size() == 1
-                 && nx::searchDeviceModels ("anubis pro").size() == 1 && nx::searchDeviceModels ("zzz").empty(),
-                 "catalogue : la recherche trouve ADI-2 (3), KA17, Anubis Pro"_t);
+        t.check (nx::deviceModels().size() == 5 && nx::searchDeviceModels ("adi").size() == 1 && nx::searchDeviceModels ("pro ae").size() == 1
+                 && nx::searchDeviceModels ("ka17").size() == 1 && nx::searchDeviceModels ("anubis pro").size() == 1 && nx::searchDeviceModels ("zzz").empty()
+                 && juce::String (nx::deviceModels().back().id) == "generic",
+                 "catalogue : RME ADI-2 Series (une seule fiche), Anubis Premium, Anubis Pro / SPS, KA17, générique en dernier"_t);
+        const auto dot = juce::String::fromUTF8 (" \xc2\xb7 ");
+        t.check (nx::findDeviceModel ("rme-adi2")->badges() == "DSD" + dot + "DoP" + dot + "DXD" && nx::findDeviceModel ("merging-anubis-pro")->badges() == "PCM 192 kHz"
+                 && nx::findDeviceModel ("merging-anubis-premium")->badges() == "DSD" + dot + "DoP" + dot + "DXD" && nx::findDeviceModel ("fiio-ka17")->badges() == "DSD" + dot + "DoP" + dot + "DXD"
+                 && juce::String::fromUTF8 (nx::findDeviceModel ("rme-adi2")->subtitle) == "DAC FS" + dot + "Pro FS" + dot + "Pro AE",
+                 "badges : ADI-2 Series DSD · DoP · DXD (DAC FS · Pro FS · Pro AE), Anubis Pro / SPS « PCM 192 kHz »"_t);
+        t.check (nx::findDeviceModel ("rme-adi2-dac") == nx::findDeviceModel ("rme-adi2") && nx::findDeviceModel ("rme-adi2-pro-ae") == nx::findDeviceModel ("rme-adi2")
+                 && nx::canonicalModelId ("rme-adi2-pro") == "rme-adi2", "anciens identifiants RME (DAC, Pro, Pro AE) repris par ADI-2 Series"_t);
         auto st = app.engine().getSettings();
         nx::applyDeviceModel (st, *nx::findDeviceModel ("merging-anubis-pro"));
         app.engine().setSettings (st);
         app.applyEngineSettings();
         const auto pro = nx::resolveProfile (app.engine().getSettings(), "Carte quelconque");
-        t.check (pro.dsdMode == nx::DsdMode::ConvertToPcm && ! pro.dopAllowed && pro.profileTag == "Anubis Ref",
-                 "Anubis Pro / SPS : pas de DSD natif, jamais de DoP (conversion DXD)"_t);
+        t.check (pro.dsdMode == nx::DsdMode::ConvertToPcm && ! pro.dopAllowed && pro.profileTag == "Anubis Ref" && pro.maxDsdToPcmRate == 176400.0 && ! pro.upsampleToDxd,
+                 "Anubis Pro / SPS : ni DSD ni DoP ni DXD, tout reste à 192 kHz au plus (DSD converti en 176,4 kHz)"_t);
         nx::applyDeviceModel (st, *nx::findDeviceModel ("merging-anubis-premium"));
         st.anubisProfile = nx::AnubisProfile::PureDoP;
         t.check (nx::resolveProfile (st, "Carte quelconque").dsdMode == nx::DsdMode::DoP, "Anubis Premium : DoP disponible"_t);
@@ -675,10 +691,11 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         t.check (nx::resolveProfile (st, "USB DAC").dsdMode == nx::DsdMode::DoP, "FiiO KA17 : DoP, profil appliqué à un pilote non reconnu"_t);
         st.fiioProfile = 1;
         t.check (nx::resolveProfile (st, "USB DAC").dsdMode == nx::DsdMode::ConvertToPcm, "FiiO KA17 : profil DXD"_t);
-        nx::applyDeviceModel (st, *nx::findDeviceModel ("rme-adi2-pro-ae"));
+        nx::applyDeviceModel (st, *nx::findDeviceModel ("rme-adi2-pro-ae"));   // an id saved by an older version
         app.engine().setSettings (st);
         app.applyEngineSettings();
-        t.check (app.settings().get ("engine").getProperty ("deviceModel", {}).toString() == "rme-adi2-pro-ae", "équipement choisi enregistré dans les préférences"_t);
+        t.check (app.settings().get ("engine").getProperty ("deviceModel", {}).toString() == "rme-adi2"
+                 && st.hardwareProfile == nx::HardwareProfile::RmeAdi2, "équipement choisi enregistré dans les préférences (ADI-2 Series)"_t);
         st.hardwareProfile = nx::HardwareProfile::Auto;
         st.deviceModel = {};
         st.anubisProfile = nx::AnubisProfile::StudioDxdReference;   // do not leak Pure DoP / FiiO choices into the next tests
@@ -805,6 +822,24 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
              "Réglages : fenêtre modale par-dessus la page (roue crantée), onglet Audio & Système"_t);
     t.check (shoot ("24_tableau_de_bord") > 60, "tableau de bord ORDINATEUR ↔ PÉRIPHÉRIQUE AUDIO (Anubis)"_t);
     {
+        // smooth scrolling: no system / driver call while painting, static cards cached as images
+        nx::HardwareDashboard* dash = nullptr;
+        for (auto* c : sw.getPage().content().getChildren()) if (auto* d = dynamic_cast<nx::HardwareDashboard*> (c)) dash = d;
+        bool cached = dash != nullptr && dash->getCachedComponentImage() != nullptr;
+        const int reads = dash != nullptr ? dash->getRefreshCount() : -1;
+        const auto t0 = juce::Time::getMillisecondCounterHiRes();
+        for (int y = 0; y < 2000; y += 100)
+        {
+            sw.getPage().setScrollY (y);
+            main->createComponentSnapshot (main->getLocalBounds(), true, 1.0f);
+        }
+        const double perFrame = (juce::Time::getMillisecondCounterHiRes() - t0) / 20.0;
+        sw.getPage().setScrollY (0);
+        t.check (cached && dash->getRefreshCount() == reads,
+                 "Audio & Système : 20 images de défilement sans aucune lecture du pilote ni du système, tableau de bord en cache image"_t);
+        juce::ignoreUnused (perFrame);
+    }
+    {
         nx::DeviceCapabilities caps;
         caps.sampleRates = { 44100.0, 48000.0, 88200.0, 96000.0, 176400.0, 192000.0 };
         using RS = nx::HardwareDashboard::RateSupport;
@@ -818,6 +853,97 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     shoot ("25_reglages_bibliotheque");
     sw.getPage().setTab ("interface");
     t.check (shoot ("26_reglages_interface") > 30, "onglet Interface : langue, thème, disposition, vue immersive, relancer l'assistant"_t);
+    {
+        // Partie 3/3 — reassignable keyboard shortcuts
+        namespace sc = nx::shortcuts;
+        using K = juce::KeyPress;
+        const auto cmd = juce::ModifierKeys::commandModifier;
+        sc::resetAll (app.settings());
+        t.check (sc::get (app.settings(), sc::Action::PlayPause) == K (K::spaceKey) && sc::get (app.settings(), sc::Action::Next) == K (K::rightKey, cmd, 0)
+                 && sc::get (app.settings(), sc::Action::VolumeUp) == K (K::upKey, cmd, 0) && sc::get (app.settings(), sc::Action::Mute) == K ('m')
+                 && sc::get (app.settings(), sc::Action::Streamer) == K ('s', cmd | juce::ModifierKeys::shiftModifier, 0)
+                 && sc::get (app.settings(), sc::Action::Search) == K ('f', cmd, 0) && sc::all().size() == 10,
+                 "raccourcis : 10 actions, touches par défaut (Espace, Cmd/Ctrl + flèches, M, S, R, Cmd/Ctrl + Maj + S, Cmd/Ctrl + F)"_t);
+
+        // they act through the main window
+        auto& eng = app.engine();
+        const bool wasShuffle = app.isShuffle();
+        main->keyPressed (K ('s'));
+        const bool shuffleOk = app.isShuffle() != wasShuffle && main->player.shuffleButton.active == app.isShuffle();
+        main->keyPressed (K ('s'));
+        main->keyPressed (K ('r'));
+        const bool repeatOk = eng.getRepeat() == nx::PlaybackEngine::Repeat::All;
+        main->keyPressed (K ('r')); main->keyPressed (K ('r'));
+        main->player.stepVolume (-0.5);
+        const double v0 = main->player.getVolumePosition();
+        main->keyPressed (K (K::upKey, cmd, 0));
+        const double v1 = main->player.getVolumePosition();
+        main->keyPressed (K (K::downKey, cmd, 0));
+        main->keyPressed (K ('m'));
+        const double muted = main->player.getVolumePosition();
+        main->keyPressed (K ('m'));
+        const double restored = main->player.getVolumePosition();
+        main->keyPressed (K ('s', cmd | juce::ModifierKeys::shiftModifier, 0));
+        const bool streamer = app.isStreamerMode();
+        main->keyPressed (K ('s', cmd | juce::ModifierKeys::shiftModifier, 0));
+        t.check (shuffleOk && repeatOk && eng.getRepeat() == nx::PlaybackEngine::Repeat::Off && v1 > v0 && muted == 0.0 && std::abs (restored - v0) < 1e-9
+                 && streamer && ! app.isStreamerMode(),
+                 "raccourcis actifs : aléatoire, répéter, volume +/−, muet puis retour au niveau, mode Streamer"_t);
+        main->player.stepVolume (1.0);
+
+        // reassign from the settings: click a row, press the new keys; a key already used is refused; reset
+        juce::Component* muteRow = nullptr;
+        for (auto* c : sw.getPage().content().getChildren()) if (c->getTitle() == nx::tr ("Muet")) muteRow = c;
+        bool reassigned = false, refused = false;
+        if (muteRow != nullptr)
+        {
+            muteRow->postCommandMessage (1);
+            settle (50);
+            muteRow->keyPressed (K ('k', cmd | juce::ModifierKeys::altModifier, 0));
+            reassigned = sc::get (app.settings(), sc::Action::Mute) == K ('k', cmd | juce::ModifierKeys::altModifier, 0)
+                         && sc::match (app.settings(), K ('m')) == std::nullopt
+                         && app.settings().get ("shortcuts").getProperty ("mute", {}).toString().isNotEmpty();
+            muteRow->postCommandMessage (1);
+            settle (50);
+            muteRow->keyPressed (K (K::spaceKey));                       // already "Lecture / Pause"
+            refused = sc::get (app.settings(), sc::Action::Mute) == K ('k', cmd | juce::ModifierKeys::altModifier, 0);
+        }
+        main->keyPressed (K ('k', cmd | juce::ModifierKeys::altModifier, 0));
+        const bool newKeyWorks = main->player.getVolumePosition() == 0.0;
+        main->keyPressed (K ('k', cmd | juce::ModifierKeys::altModifier, 0));
+        sw.getPage().setTab ("interface");
+        shoot ("26b_raccourcis_clavier");
+        sc::resetAll (app.settings());
+        t.check (muteRow != nullptr && reassigned && refused && newKeyWorks && sc::get (app.settings(), sc::Action::Mute) == K ('m'),
+                 "Réglages › Raccourcis clavier : réassignation par clic + touches, doublon refusé, enregistré, réinitialisation"_t);
+
+        // Easter egg: three clicks on the logo within 800 ms unlock the hidden ZEYN theme (listed, not applied)
+        const auto themeBefore = app.theme().id;
+        main->sidebar.logoClicked (10000); main->sidebar.logoClicked (10500); main->sidebar.logoClicked (11000);
+        const bool slowIgnored = ! app.isZeynUnlocked() && app.themes().findTheme ("zeyn") == nullptr;
+        main->sidebar.logoClicked (20000); main->sidebar.logoClicked (20250); main->sidebar.logoClicked (20500);
+        const auto* zeyn = app.themes().findTheme ("zeyn");
+        t.check (slowIgnored && app.isZeynUnlocked() && (bool) app.settings().get ("zeynUnlocked", false) && zeyn != nullptr && zeyn->name == "ZEYN"
+                 && app.theme().id == themeBefore && main->sidebar.logoBounds().getHeight() == 40,
+                 "triple clic sur le logo (< 800 ms) : thème ZEYN déverrouillé et mémorisé, pas appliqué ; clics lents ignorés"_t);
+        t.check (zeyn != nullptr && zeyn->bg() == juce::Colour (0xff06070a) && zeyn->surface() == juce::Colour (0xff0e1117) && zeyn->accent() == juce::Colour (0xff00f5a0),
+                 "thème ZEYN : fond obsidienne #06070A, surfaces #0E1117, accent émeraude #00F5A0"_t);
+        sw.getPage().setTab ("interface");
+        bool listed = false;
+        for (auto& th : app.themes().getThemes()) listed = listed || th.id == "zeyn";
+        nx::ThemeManager fresh;
+        fresh.setZeynUnlocked ((bool) app.settings().get ("zeynUnlocked", false));
+        t.check (listed && fresh.findTheme ("zeyn") != nullptr, "Réglages › Apparence : ZEYN proposé parmi les thèmes, aussi après redémarrage"_t);
+        sw.close();
+        app.applyThemeNow ("zeyn");
+        app.navigate ({ nx::PageId::Albums });
+        shoot ("26c_theme_zeyn");
+        app.applyThemeNow (themeBefore);
+        app.navigate ({ nx::PageId::Settings, "interface" });
+        t.check (nx::shortcuts::describe (K ('m')) == "M" && nx::shortcuts::describe (K ('s', cmd | juce::ModifierKeys::shiftModifier, 0)).endsWith ("S")
+                 && nx::shortcuts::describe (K (K::rightKey, cmd, 0)).endsWith (juce::String::fromUTF8 ("\xe2\x86\x92")),
+                 "raccourcis affichés lisiblement (Ctrl / ⌘, flèches, lettres)"_t);
+    }
     app.setRemoteEnabled (true);
     sw.getPage().setTab ("remote");
     t.check (app.remote().isRunning() && shoot ("27_nx_remote") > 30, "NX Remote activé : QR code et lien"_t);

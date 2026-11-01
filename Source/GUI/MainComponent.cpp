@@ -764,6 +764,25 @@ void MainComponent::timerCallback()
     if (fadeProgress >= 1.0f) stopTimer();
 }
 
+void MainComponent::performShortcut (shortcuts::Action a)
+{
+    using A = shortcuts::Action;
+    auto& e = ctx.engine();
+    switch (a)
+    {
+        case A::PlayPause:  e.togglePlayPause(); break;
+        case A::Next:       e.next(); break;
+        case A::Previous:   e.previous(); break;
+        case A::VolumeUp:   player.stepVolume (0.05); break;
+        case A::VolumeDown: player.stepVolume (-0.05); break;
+        case A::Mute:       player.toggleMute(); break;
+        case A::Shuffle:    player.shuffleButton.onClick(); break;
+        case A::Repeat:     player.repeatButton.onClick(); break;
+        case A::Streamer:   ctx.setStreamerMode (! ctx.isStreamerMode()); break;
+        case A::Search:     if (! sidebarVisible) setSidebarVisible (true, false); sidebar.getSearchField().grabKeyboardFocus(); break;
+    }
+}
+
 bool MainComponent::keyPressed (const juce::KeyPress& k)
 {
     auto& e = ctx.engine();
@@ -776,14 +795,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& k)
     }
     if (k == juce::KeyPress (',', juce::ModifierKeys::commandModifier, 0)) { openSettings ({}); return true; }
     if (onboarding.isVisible()) return false;
-    if (k == juce::KeyPress::spaceKey) { e.togglePlayPause(); return true; }
+    // reassignable shortcuts first (Réglages › Interface › Raccourcis clavier)
+    if (const auto action = shortcuts::match (ctx.settings(), k)) { performShortcut (*action); return true; }
     if (k == juce::KeyPress::rightKey) { e.seek (e.getPositionSeconds() + 10.0); return true; }
     if (k == juce::KeyPress::leftKey)  { e.seek (juce::jmax (0.0, e.getPositionSeconds() - 10.0)); return true; }
-    if (k == juce::KeyPress ('f', juce::ModifierKeys::commandModifier, 0)) { sidebar.getSearchField().grabKeyboardFocus(); return true; }
     if (k == juce::KeyPress ('l', juce::ModifierKeys::commandModifier, 0)) { if (player.onToggleLyrics) player.onToggleLyrics(); return true; }
     if (k == juce::KeyPress ('m', juce::ModifierKeys::commandModifier, 0)) { ctx.toggleMiniPlayer(); return true; }
-    if (k == juce::KeyPress (juce::KeyPress::rightKey, juce::ModifierKeys::commandModifier, 0)) { e.next(); return true; }
-    if (k == juce::KeyPress (juce::KeyPress::leftKey, juce::ModifierKeys::commandModifier, 0)) { e.previous(); return true; }
     // Navigation history and sidebar
     if (k == juce::KeyPress ('[', juce::ModifierKeys::commandModifier, 0) || k == juce::KeyPress (juce::KeyPress::leftKey, juce::ModifierKeys::altModifier, 0)) { goBack(); return true; }
     if (k == juce::KeyPress (']', juce::ModifierKeys::commandModifier, 0) || k == juce::KeyPress (juce::KeyPress::rightKey, juce::ModifierKeys::altModifier, 0)) { goForward(); return true; }

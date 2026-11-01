@@ -66,6 +66,11 @@ public:
 
     static bool loadTheme (const juce::File& folder, Theme& out, juce::String& error);
 
+    /** The hidden built-in "ZEYN" theme (Easter egg): listed only once unlocked. */
+    void setZeynUnlocked (bool on) { zeynUnlocked = on; rescan(); }
+    bool isZeynUnlocked() const noexcept { return zeynUnlocked; }
+    static Theme makeZeynTheme();
+
     /** Called after apply() and after every hot reload. */
     std::function<void (const Theme&)> onThemeChanged;
     void checkForChanges() { timerCallback(); }   // tests
@@ -78,6 +83,7 @@ private:
     std::vector<Theme> themes;
     Theme active;
     juce::int64 activeFingerprint = 0;
+    bool zeynUnlocked = false;
 };
 
 } // namespace nx

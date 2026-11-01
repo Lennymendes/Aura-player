@@ -110,6 +110,7 @@ AppController::AppController (Options options)
     };
 
     // Themes
+    themeManager.setZeynUnlocked ((bool) appSettings.get ("zeynUnlocked", false));
     themeManager.setSearchFolders ({ resourcesDir.getChildFile ("Themes"), dataDir.getChildFile ("Themes") });
     themeManager.onThemeChanged = [this] (const Theme& t)
     {
@@ -263,7 +264,7 @@ void AppController::loadEngineSettings()
         s.bufferMilliseconds = (int) v.getProperty ("bufferMs", 0);
         s.hardwareProfile = (HardwareProfile) juce::jlimit (0, 4, (int) v.getProperty ("hardwareProfile", 0));
         s.fiioProfile = juce::jlimit (0, 1, (int) v.getProperty ("fiioProfile", 0));
-        s.deviceModel = v.getProperty ("deviceModel", {}).toString();
+        s.deviceModel = canonicalModelId (v.getProperty ("deviceModel", {}).toString());   // old RME ids -> "rme-adi2"
         s.rmeProfile = (RmeProfile) juce::jlimit (0, 1, (int) v.getProperty ("rmeProfile", 0));
         s.rmeLockVolume = (bool) v.getProperty ("rmeLockVolume", true);
         s.anubisProfile = (AnubisProfile) juce::jlimit (0, 2, (int) v.getProperty ("anubisProfile", 0));
@@ -775,6 +776,30 @@ void AppController::setLayoutOption (const juce::String& key, const juce::var& v
     appSettings.set ("layout", l);
     applyLayoutSettings();
     if (auto* m = getMainComponent()) { m->resized(); m->sidebar.resized(); m->repaint(); }
+}
+
+void AppController::unlockZeynTheme()
+{
+    if (themeManager.isZeynUnlocked())
+    {
+        showMessage ("Thème ZEYN déjà déverrouillé — Réglages › Apparence"_t);
+        return;
+    }
+    appSettings.set ("zeynUnlocked", true);
+    themeManager.setZeynUnlocked (true);
+    showMessage ("Thème ZEYN déverrouillé — Disponible dans Réglages › Apparence"_t);
+}
+
+bool AppController::isZeynUnlocked() { return themeManager.isZeynUnlocked(); }
+
+bool AppController::handleShortcutKey (const juce::KeyPress& k)
+{
+    auto* m = getMainComponent();
+    if (m == nullptr) return false;
+    const auto action = shortcuts::match (appSettings, k);
+    if (! action) return false;
+    m->performShortcut (*action);
+    return true;
 }
 
 void AppController::setStreamerMode (bool on)

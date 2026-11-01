@@ -9,6 +9,7 @@ MiniPlayer::MiniPlayer (AppContext& c)
       prev (style::Icon::Previous, "Précédent"_t, c), play (style::Icon::Play, "Lecture / pause"_t, c),
       next (style::Icon::Next, "Suivant"_t, c), expand (style::Icon::Expand, "Fenêtre principale"_t, c), seek (c)
 {
+    setWantsKeyboardFocus (true);
     artwork.shadow = false;
     artwork.cornerRadius = 8.0f;
     play.primary = true;

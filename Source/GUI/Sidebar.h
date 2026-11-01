@@ -4,6 +4,8 @@
 // playlist are appended to it; dropped on "Playlists" they start a new one; on "Favoris" they become favourites.
 #pragma once
 
+#include <array>
+
 #include "Widgets.h"
 
 namespace nx
@@ -38,6 +40,10 @@ public:
 
     juce::String getTooltip() override;
 
+    /** The NX Player logo, top left. Three clicks within 800 ms unlock the hidden ZEYN theme. */
+    juce::Rectangle<int> logoBounds() const;
+    void logoClicked (juce::uint32 nowMs);
+
 private:
     struct Item { bool header = false; juce::String label; style::Icon icon = style::Icon::Home; PageRequest target; juce::Colour dot; bool quickAdd = false; };
     void timerCallback() override;
@@ -56,6 +62,7 @@ private:
     PageRequest active;
     int hover = -1, dropHover = -1, listTop = 0, scroll = 0;
     bool quickHover = false;
+    std::array<juce::uint32, 3> logoClicks {};   // last click times (ms)
     int itemHeight = 32, headerHeight = 34;
 };
 

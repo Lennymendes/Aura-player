@@ -14,15 +14,32 @@ std::unique_ptr<juce::Component> makeRemotePanel (AppContext& ctx) { return std:
 //==============================================================================
 HardwareDashboard::HardwareDashboard (AppContext& c) : ctx (c)
 {
+    setBufferedToImage (true);               // re-rendered once a second (or during playback), blitted while scrolling
     refresh();
     startTimerHz (30);
 }
 
 void HardwareDashboard::refresh()
 {
+    ++refreshCount;
     snapshot = monitor.sample();
     caps = ctx.engine().getCapabilities();
     status = ctx.engine().getOutputStatus();
+    const auto eff = ctx.engine().getSettings();
+    device = status.open && status.deviceName.isNotEmpty() ? status.deviceName : ctx.engine().getDeviceName();
+    family = familyFromName (device) != DeviceFamily::None ? familyFromName (device) : activeFamily (eff, device);
+    backendName = ctx.getCurrentBackendName();
+    memoryPlayOn = eff.memoryPlay;
+    const auto resident = MemoryPlayStream::residentBytes();
+    memoryLine = eff.memoryPlay ? "Memory Play : actif"_t + (resident > 0 ? " · "_t + juce::String ((int) (resident / (1024 * 1024))) + " Mo en RAM"_t : juce::String())
+                                : juce::String ("Memory Play : désactivé (lecture disque)"_t);
+    sleepBlocked = ctx.isSleepBlocked();
+    const bool preventing = (bool) ctx.settings().get ("preventSleep", true);
+    sleepLine = ! SleepBlocker::isSupported() ? juce::String ("Mise en veille : non gérée sur ce système"_t)
+              : sleepBlocked ? juce::String ("Veille empêchée : lecture en cours"_t)
+              : preventing ? juce::String ("Veille empêchée pendant la lecture (prêt)"_t)
+                           : juce::String ("Mise en veille autorisée"_t);
+    exclusive = status.open ? status.exclusive : eff.exclusive;
 }
 
 void HardwareDashboard::timerCallback()
@@ -30,8 +47,11 @@ void HardwareDashboard::timerCallback()
     perf::retune (*this, 30, 2);
     const int rate = perf::hz (30, 2);
     phase += 1.0 / rate;
-    if (++ticks % rate == 0) refresh();    // counters once a second, the flow animation at 30 fps
-    repaint();
+    const bool wasPlaying = playing;
+    playing = ctx.engine().getState() == PlaybackEngine::State::Playing;
+    const bool second = ++ticks % rate == 0;
+    if (second) refresh();                  // counters and driver state once a second
+    if (playing || wasPlaying || second) repaint();   // the flow animation only runs during playback
 }
 
 HardwareDashboard::RateSupport HardwareDashboard::supportFor (const DeviceCapabilities& caps, double rate, bool dsd)
@@ -136,17 +156,8 @@ void HardwareDashboard::paint (juce::Graphics& g)
     gauge (g, c.removeFromTop (30), t, "Charge CPU"_t, snapshot.cpuLoad >= 0 ? juce::String (juce::roundToInt (snapshot.cpuLoad * 100.0)) + " %" : "…"_t,
            (float) snapshot.cpuLoad);
     c.removeFromTop (10);
-    const auto eff = ctx.engine().getSettings();
-    const auto resident = MemoryPlayStream::residentBytes();
-    statusLine (g, c.removeFromTop (20), t, eff.memoryPlay,
-                eff.memoryPlay ? "Memory Play : actif"_t + (resident > 0 ? " · "_t + mb (resident) + " en RAM"_t : juce::String())
-                               : juce::String ("Memory Play : désactivé (lecture disque)"_t));
-    const bool preventing = (bool) ctx.settings().get ("preventSleep", true);
-    statusLine (g, c.removeFromTop (20), t, ctx.isSleepBlocked(),
-                ! SleepBlocker::isSupported() ? juce::String ("Mise en veille : non gérée sur ce système"_t)
-                : ctx.isSleepBlocked() ? juce::String ("Veille empêchée : lecture en cours"_t)
-                : preventing ? juce::String ("Veille empêchée pendant la lecture (prêt)"_t)
-                             : juce::String ("Mise en veille autorisée"_t));
+    statusLine (g, c.removeFromTop (20), t, memoryPlayOn, memoryLine);
+    statusLine (g, c.removeFromTop (20), t, sleepBlocked, sleepLine);
     if (snapshot.appMemory > 0)
         statusLine (g, c.removeFromTop (20), t, true, "NX Player : "_t + mb (snapshot.appMemory) + " · moteur 64 bits"_t);
 
@@ -154,17 +165,14 @@ void HardwareDashboard::paint (juce::Graphics& g)
     card (g, right, t, "PÉRIPHÉRIQUE AUDIO"_t);
     auto d = right.reduced (18, 12);
     d.removeFromTop (22);
-    const auto device = status.open && status.deviceName.isNotEmpty() ? status.deviceName : ctx.engine().getDeviceName();
-    const auto family = familyFromName (device) != DeviceFamily::None ? familyFromName (device)
-                                                                     : activeFamily (ctx.engine().getSettings(), device);
     g.setColour (t.textCol());
     g.setFont (style::font (15.5f, true));
     g.drawText (device.isNotEmpty() ? device : juce::String ("Aucun périphérique"_t), d.removeFromTop (22), juce::Justification::centredLeft, true);
     g.setColour (t.textDim());
     g.setFont (style::font (12.0f));
-    g.drawText (family != DeviceFamily::None ? deviceart::familyName (family) + " · "_t + ctx.getCurrentBackendName() : ctx.getCurrentBackendName(),
+    g.drawText (family != DeviceFamily::None ? deviceart::familyName (family) + " · "_t + backendName : backendName,
                 d.removeFromTop (18), juce::Justification::centredLeft, true);
-    const float level = ctx.engine().getState() == PlaybackEngine::State::Playing ? 0.5f + 0.5f * (float) std::sin (phase * 3.0) * 0.6f : 0.0f;
+    const float level = playing ? 0.5f + 0.5f * (float) std::sin (phase * 3.0) * 0.6f : 0.0f;
     deviceart::draw (g, family, d.removeFromTop (92).reduced (0, 6), t, juce::jlimit (0.0f, 1.0f, level), true);
     d.removeFromTop (6);
 
@@ -225,7 +233,6 @@ void HardwareDashboard::paint (juce::Graphics& g)
     const auto kind = connectionKind (device, status.backendName);
     const float y = left.getY() + 132.0f;
     juce::Line<float> line (left.getRight() + 6.0f, y, right.getX() - 6.0f, y);
-    const bool playing = ctx.engine().getState() == PlaybackEngine::State::Playing;
     g.setColour (t.accent().withAlpha (0.25f));
     g.drawLine (line, 3.0f);
     g.setGradientFill (juce::ColourGradient (t.accent(), line.getStartX(), y, t.accent2(), line.getEndX(), y, false));
@@ -252,7 +259,6 @@ void HardwareDashboard::paint (juce::Graphics& g)
     g.setFont (style::font (12.5f, true));
     g.drawText (kindText, label.withTrimmedRight (10.0f), juce::Justification::centred);
 
-    const bool exclusive = status.open ? status.exclusive : ctx.engine().getSettings().exclusive;
     auto lock = juce::Rectangle<float> (link.getWidth() - 8.0f, 44.0f).withCentre ({ link.getCentreX(), y + 36.0f });
     g.setColour ((exclusive ? style::qualityColour (t, PathQuality::BitPerfect) : t.textDim()).withAlpha (0.16f));
     g.fillRoundedRectangle (lock, 10.0f);

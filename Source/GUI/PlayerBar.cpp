@@ -80,7 +80,7 @@ PlayerBar::PlayerBar (AppContext& c)
     lyricsButton.onClick = [this] { if (onToggleLyrics) onToggleLyrics(); };
     queueButton.onClick = [this] { if (onToggleQueue) onToggleQueue(); };
     miniButton.onClick = [this] { ctx.toggleMiniPlayer(); };
-    volumeButton.onClick = [this] { if (volume.isEnabled()) volume.setValue (volume.getValue() > 0.0 ? 0.0 : 1.0); };
+    volumeButton.onClick = [this] { toggleMute(); };
     seek.onSeek = [this] (double s) { ctx.engine().seek (s); };
     badge.onClick = [this] { if (onShowSignalPath) onShowSignalPath(); };
 
@@ -110,6 +110,19 @@ PlayerBar::PlayerBar (AppContext& c)
 }
 
 PlayerBar::~PlayerBar() { ctx.trackAnalyzer().removeChangeListener (this); }
+
+void PlayerBar::stepVolume (double delta)
+{
+    if (volume.isEnabled()) volume.setValue (juce::jlimit (0.0, 1.0, volume.getValue() + delta), juce::sendNotificationSync);
+}
+
+void PlayerBar::toggleMute()
+{
+    if (! volume.isEnabled()) return;                       // fixed volume (DoP, RME DSD Direct): nothing to mute
+    const double v = volume.getValue();
+    if (v > 0.0) volumeBeforeMute = v;
+    volume.setValue (v > 0.0 ? 0.0 : (volumeBeforeMute > 0.0 ? volumeBeforeMute : 1.0), juce::sendNotificationSync);
+}
 
 void PlayerBar::syncTransportButtons()
 {

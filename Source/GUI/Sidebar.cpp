@@ -155,8 +155,30 @@ void Sidebar::addMusicFolder()
     });
 }
 
+juce::Rectangle<int> Sidebar::logoBounds() const
+{
+    return getLocalBounds().reduced (isCompact() ? 0 : 16, 14).removeFromTop (40);
+}
+
+void Sidebar::logoClicked (juce::uint32 nowMs)
+{
+    logoClicks[0] = logoClicks[1];
+    logoClicks[1] = logoClicks[2];
+    logoClicks[2] = nowMs;
+    if (logoClicks[0] != 0 && nowMs - logoClicks[0] < 800)
+    {
+        logoClicks = {};
+        ctx.unlockZeynTheme();
+    }
+}
+
 void Sidebar::mouseUp (const juce::MouseEvent& e)
 {
+    if (logoBounds().contains (e.getPosition()) && ! e.mods.isPopupMenu())
+    {
+        logoClicked (juce::jmax<juce::uint32> (1, juce::Time::getMillisecondCounter()));
+        return;
+    }
     const int i = itemAt (e.y);
     if (i == -2) { ctx.navigate ({ PageId::Settings }); return; }
     if (i == -3) { ctx.setLayoutOption ("sidebar", "wide"); juce::MessageManager::callAsync ([this] { search.grabKeyboardFocus(); }); return; }

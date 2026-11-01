@@ -23,6 +23,8 @@ public:
     enum class RateSupport { None, Pcm, DoP, Native };
     static RateSupport supportFor (const DeviceCapabilities& caps, double rate, bool dsd);
     SystemSnapshot getSnapshot() const { return snapshot; }
+    /** Number of times the system / driver state was read (paint() never reads it: only refresh(), once a second). */
+    int getRefreshCount() const noexcept { return refreshCount; }
 private:
     void timerCallback() override;
     AppContext& ctx;
@@ -30,6 +32,11 @@ private:
     SystemSnapshot snapshot;
     DeviceCapabilities caps;
     OutputStatus status;
+    // cached by refresh(): paint() only draws these
+    juce::String device, backendName, memoryLine, sleepLine;
+    DeviceFamily family = DeviceFamily::None;
+    bool memoryPlayOn = false, sleepBlocked = false, exclusive = false, playing = false;
+    int refreshCount = 0;
     double phase = 0.0;
     int ticks = 0;
 };

@@ -233,7 +233,14 @@ EngineSettings resolveProfile (const EngineSettings& in, const juce::String& dev
             s.dopPrerollMs = 1500;
             break;
     }
-    if (noDsd) { s.dsdMode = DsdMode::ConvertToPcm; s.dopAllowed = false; }
+    if (noDsd)
+    {
+        // Anubis SPS: PCM up to 192 kHz, no DSD and no DXD: DSD is converted to 176,4 kHz, nothing goes above
+        s.dsdMode = DsdMode::ConvertToPcm;
+        s.dopAllowed = false;
+        s.maxDsdToPcmRate = 176400.0;
+        s.upsampleToDxd = false;
+    }
     return s;
 }
 
@@ -307,20 +314,35 @@ const std::vector<DeviceModel>& deviceModels()
 {
     static const std::vector<DeviceModel> models
     {
-        { "rme-adi2-dac",   "RME",     "ADI-2 DAC",             "ADI-2",   HardwareProfile::RmeAdi2,        0, true,  true,  true },
-        { "rme-adi2-pro",   "RME",     "ADI-2 Pro",             "ADI-2",   HardwareProfile::RmeAdi2,        0, true,  true,  true },
-        { "rme-adi2-pro-ae","RME",     "ADI-2 Pro AE",          "ADI-2",   HardwareProfile::RmeAdi2,        0, true,  true,  true },
-        { "merging-anubis-premium", "Merging", "Anubis Premium", "Anubis", HardwareProfile::MergingRavenna,  0, true,  true,  true },
-        { "merging-anubis-pro",     "Merging", "Anubis Pro / SPS", "Anubis", HardwareProfile::MergingRavenna, 0, false, false, true },
-        { "fiio-ka17",      "FiiO",    "KA17",                  "KA",      HardwareProfile::FiioKa17,       0, true,  true,  true },
-        { "generic",        "",        "Autre DAC (générique)", "",        HardwareProfile::Generic,        0, true,  true,  false }
+        { "rme-adi2",               "RME",     "ADI-2 Series",          "ADI-2",  "DAC FS \xc2\xb7 Pro FS \xc2\xb7 Pro AE", HardwareProfile::RmeAdi2,        0, true,  true,  true,  0 },
+        { "merging-anubis-premium", "Merging", "Anubis Premium",        "Anubis", "",                                     HardwareProfile::MergingRavenna, 0, true,  true,  true,  0 },
+        { "merging-anubis-pro",     "Merging", "Anubis Pro / SPS",      "Anubis", "",                                     HardwareProfile::MergingRavenna, 0, false, false, false, 192 },
+        { "fiio-ka17",              "FiiO",    "KA17",                  "KA",     "",                                     HardwareProfile::FiioKa17,       0, true,  true,  true,  0 },
+        { "generic",                "",        "Autre DAC (générique)", "",       "",                                     HardwareProfile::Generic,        0, true,  true,  false, 0 }
     };
     return models;
 }
 
+juce::String DeviceModel::badges() const
+{
+    if (! dsd && ! dop && ! dxd && maxPcmKhz > 0) return "PCM " + juce::String (maxPcmKhz) + " kHz";
+    juce::StringArray tags;
+    if (dsd) tags.add ("DSD");
+    if (dop) tags.add ("DoP");
+    if (dxd) tags.add ("DXD");
+    if (tags.isEmpty()) tags.add ("PCM");
+    return tags.joinIntoString (juce::String::fromUTF8 (" \xc2\xb7 "));
+}
+
+juce::String canonicalModelId (const juce::String& id)
+{
+    return id.startsWith ("rme-adi2") ? juce::String ("rme-adi2") : id;   // rme-adi2-dac / -pro / -pro-ae (before 1.0.x)
+}
+
 const DeviceModel* findDeviceModel (const juce::String& id)
 {
-    for (auto& m : deviceModels()) if (id == m.id) return &m;
+    const auto canonical = canonicalModelId (id);
+    for (auto& m : deviceModels()) if (canonical == m.id) return &m;
     return nullptr;
 }
 
@@ -331,6 +353,7 @@ std::vector<const DeviceModel*> searchDeviceModels (const juce::String& query)
     for (auto& m : deviceModels())
     {
         const juce::String hay = juce::String (m.brand) + " " + juce::String::fromUTF8 (m.name) + " " + m.series + " " + juce::String::fromUTF8 (m.name).replace ("-", " ")
+                               + " " + juce::String::fromUTF8 (m.subtitle)
                                + (juce::String (m.id) == "generic" ? " generique générique autre dac" : "");
         bool all = true;
         for (auto& w : words) if (w.isNotEmpty() && ! hay.containsIgnoreCase (w)) { all = false; break; }
@@ -350,7 +373,7 @@ void applyDeviceModel (EngineSettings& s, const DeviceModel& m)
 
 bool modelHasNoDsd (const EngineSettings& s)
 {
-    return s.deviceModel == "merging-anubis-pro";
+    return canonicalModelId (s.deviceModel) == "merging-anubis-pro";
 }
 
 } // namespace nx

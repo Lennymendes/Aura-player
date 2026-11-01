@@ -2,6 +2,7 @@
 #pragma once
 
 #include <map>
+#include "Shortcuts.h"
 
 #include "Background.h"
 #include "Sidebar.h"
@@ -51,6 +52,7 @@ public:
     void resized() override;
     void paint (juce::Graphics&) override {}
     bool keyPressed (const juce::KeyPress&) override;
+    void performShortcut (shortcuts::Action a);
 
     /** Opens a page and records it in the history (‹ / › buttons). */
     void navigate (const PageRequest& r);

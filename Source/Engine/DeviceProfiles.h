@@ -37,12 +37,18 @@ struct DeviceModel
     const char* brand;
     const char* name;
     const char* series;
+    const char* subtitle;    // second line (UTF-8); empty = "Série <series>"
     HardwareProfile hardware;
     int profile;             // profile of the family applied with the model
-    bool dsd, dop, dxd;      // capabilities shown as tags (dsd = DSD files reach the DAC, as DoP or converted)
+    bool dsd, dop, dxd;      // capabilities shown as tags
+    int maxPcmKhz;           // PCM-only devices: highest rate (the tag reads "PCM 192 kHz"); 0 = see dsd / dop / dxd
+    /** "DSD · DoP · DXD", "PCM 192 kHz"... */
+    juce::String badges() const;
 };
 const std::vector<DeviceModel>& deviceModels();
 const DeviceModel* findDeviceModel (const juce::String& id);
+/** Ids saved by older versions (one card per RME ADI-2 model) -> the current id. */
+juce::String canonicalModelId (const juce::String& id);
 /** Models whose brand / name / series contain every word of the query (all of them when empty). */
 std::vector<const DeviceModel*> searchDeviceModels (const juce::String& query);
 /** Forces the family and profile of the model (and remembers it). */

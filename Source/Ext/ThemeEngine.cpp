@@ -173,8 +173,56 @@ void ThemeManager::rescan()
             juce::String err;
             if (loadTheme (e.getFile(), t, err)) byId[t.id] = t;
         }
+    if (zeynUnlocked && byId.count ("zeyn") == 0) byId["zeyn"] = makeZeynTheme();
     themes.clear();
     for (auto& [id, t] : byId) themes.push_back (t);
+}
+
+Theme ThemeManager::makeZeynTheme()
+{
+    // Built in (no folder): obsidian black, emerald / cyan neon of the NX logo, discreet gradients.
+    Theme t;
+    t.id = "zeyn";
+    t.name = "ZEYN";
+    t.author = "NX Audio Suite";
+    t.version = "1.0";
+    t.description = "Thème caché : noir obsidienne, accents émeraude / cyan néon du logo NX Player."_t;
+    t.background = juce::JSON::parse (R"({ "type": "mesh", "speed": 0.08 })");
+    t.vars = parseCssVariables (R"CSS(:root {
+        --nx-bg: #06070A;
+        --nx-bg-2: #0A0D12;
+        --nx-surface: #0E1117;
+        --nx-glass-tint: rgba(9, 11, 16, 0.66);
+        --nx-glass-strong: rgba(6, 7, 10, 0.88);
+        --nx-border: rgba(0, 245, 160, 0.10);
+        --nx-highlight: rgba(0, 217, 245, 0.07);
+        --nx-shadow: rgba(0, 0, 0, 0.70);
+        --nx-text: #F2F7F5;
+        --nx-text-dim: #7E8C88;
+        --nx-accent: #00F5A0;
+        --nx-accent-2: #00D2FF;
+        --nx-on-accent: #031510;
+        --nx-quality-bitperfect: #B07CFF;
+        --nx-quality-enhanced: var(--nx-accent);
+        --nx-quality-high: #6FE8D0;
+        --nx-quality-low: #FFB547;
+        --nx-radius: 16px;
+        --nx-radius-small: 9px;
+        --nx-sidebar-width: 236px;
+        --nx-player-height: 84px;
+        --nx-player-position: bottom;
+        --nx-card-size: 176px;
+        --nx-artwork-blur: 56;
+        --nx-artwork-dim: 0.66;
+        --nx-artwork-saturation: 1.15;
+        --nx-lyrics-active: var(--nx-text);
+        --nx-lyrics-inactive: rgba(242, 247, 245, 0.28);
+        --nx-lyrics-size: 30px;
+        --nx-font: "";
+        --nx-font-size: 14px;
+        --nx-animation-speed: 1.0;
+    })CSS");
+    return t;
 }
 
 juce::StringArray ThemeManager::getThemeIds() const
@@ -195,7 +243,7 @@ bool ThemeManager::apply (const juce::String& id)
     const auto* t = findTheme (id);
     if (t == nullptr) return false;
     active = *t;
-    activeFingerprint = fingerprint (active.folder);
+    activeFingerprint = active.folder.isDirectory() ? fingerprint (active.folder) : 0;   // built-in themes have no folder
     if (onThemeChanged) onThemeChanged (active);
     return true;
 }

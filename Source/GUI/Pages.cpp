@@ -5,6 +5,7 @@
 #include "../Engine/DeviceProfiles.h"
 #include "DeviceArt.h"
 #include "Logo.h"
+#include "Shortcuts.h"
 #include "../Library/Downloads.h"
 #include "../Providers/StreamingProviders.h"
 #include "../Library/LibraryScanner.h"
@@ -1038,6 +1039,7 @@ namespace
             : ctx (c), family (f), deviceName (device), autoDetected (detected)
         {
             setRepaintsOnMouseActivity (true);
+            setBufferedToImage (true);           // static card: scrolling the page only blits it
         }
 
         static int idealHeight (DeviceFamily) { return 286; }
@@ -1135,22 +1137,37 @@ namespace
     };
 
     /** Equipment catalogue (Roon-style): search your model and apply its profile to the active output. */
+    /** Equipment manager: search field on top, then a compact list (≈ 190 px) that scrolls / swipes. */
     class DeviceCatalogPanel : public juce::Component
     {
     public:
-        DeviceCatalogPanel (AppContext& c, std::function<void()> applied) : ctx (c), onApplied (std::move (applied))
+        DeviceCatalogPanel (AppContext& c, std::function<void()> applied) : ctx (c), onApplied (std::move (applied)), list (*this)
         {
             search.setTextToShowWhenEmpty ("Rechercher votre modèle (RME, Anubis, FiiO KA17…)"_t, juce::Colours::grey);
             search.setFont (style::font (14.0f));
-            search.onTextChange = [this] { results = searchDeviceModels (search.getText()); repaint(); };
+            search.onTextChange = [this] { setResults (searchDeviceModels (search.getText())); };
             addAndMakeVisible (search);
-            results = searchDeviceModels ({});
+            viewport.setViewedComponent (&list, false);
+            viewport.setScrollBarsShown (true, false);
+            viewport.setScrollBarThickness (6);
+            viewport.setScrollOnDragMode (juce::Viewport::ScrollOnDragMode::all);   // swipe on touch screens / trackpads
+            addAndMakeVisible (viewport);
+            setBufferedToImage (true);           // the frame is static; the list scrolls on its own
+            setResults (searchDeviceModels ({}));
         }
 
-        static int idealHeight() { return headH + 7 * rowH + 8; }
-        static constexpr int headH = 98, rowH = 46;
+        static constexpr int headH = 96, rowH = 38, listH = 190;
+        static int idealHeight() { return headH + listH + 12; }
+        int getListHeight() const { return viewport.getHeight(); }
+        juce::Viewport& getViewport() { return viewport; }
+        const std::vector<const DeviceModel*>& getResults() const { return results; }
 
-        void resized() override { search.setBounds (16, 58, getWidth() - 32, 32); }
+        void resized() override
+        {
+            search.setBounds (16, 54, getWidth() - 32, 32);
+            viewport.setBounds (10, headH, getWidth() - 20, listH);
+            list.setSize (viewport.getMaximumVisibleWidth(), juce::jmax (listH, (int) results.size() * rowH + 4));
+        }
 
         void paint (juce::Graphics& g) override
         {
@@ -1159,72 +1176,148 @@ namespace
             auto r = getLocalBounds().reduced (16, 12);
             g.setColour (t.textCol());
             g.setFont (style::font (15.0f, true));
-            g.drawText ("Gestionnaire d'équipements"_t, r.removeFromTop (22), juce::Justification::centredLeft);
+            g.drawText ("Gestionnaire d'équipements"_t, r.removeFromTop (20), juce::Justification::centredLeft);
             g.setColour (t.textDim());
             g.setFont (style::font (12.0f));
             g.drawText ("Pilote non reconnu ? Choisissez votre modèle : son profil est appliqué à la sortie active et mémorisé."_t, r.removeFromTop (18), juce::Justification::centredLeft, true);
-            rows.clear();
-            auto list = getLocalBounds().reduced (10, 0).withTrimmedTop (headH);
-            const auto current = ctx.engine().getSettings().deviceModel;
-            for (auto* m : results)
-            {
-                auto row = list.removeFromTop (rowH).reduced (0, 2);
-                rows.push_back ({ row, m });
-                const bool on = current == m->id;
-                const bool hover = row.contains (getMouseXYRelative()) && isMouseOver (true);
-                g.setColour (on ? t.accent().withAlpha (0.18f) : juce::Colours::white.withAlpha (hover ? 0.08f : 0.03f));
-                g.fillRoundedRectangle (row.toFloat(), 8.0f);
-                if (on) { g.setColour (t.accent()); g.drawRoundedRectangle (row.toFloat().reduced (0.5f), 8.0f, 1.4f); }
-                auto in = row.reduced (10, 4);
-                deviceart::drawLogo (g, m->id, in.removeFromLeft (36).toFloat(), on ? t.accent() : t.textCol());
-                in.removeFromLeft (10);
-                auto tags = in.removeFromRight (200);
-                g.setColour (t.textCol());
-                g.setFont (style::font (14.0f, true));
-                g.drawText (juce::String (m->brand) + (*m->brand ? " " : "") + tr (juce::String::fromUTF8 (m->name)), in.removeFromTop (20), juce::Justification::centredLeft, true);
-                g.setColour (t.textDim());
-                g.setFont (style::font (11.5f));
-                g.drawText (m->series[0] ? "Série "_t + m->series : "Profil standard"_t, in, juce::Justification::centredLeft, true);
-                g.setFont (style::font (10.5f, true));
-                juce::StringArray caps;
-                if (m->dsd) caps.add (m->dop ? "DSD, DoP" : "DSD"); else caps.add ("PCM");
-                if (m->dxd) caps.add ("DXD");
-                g.setColour (t.accent2());
-                g.drawText (caps.joinIntoString (juce::String::fromUTF8 (" \xc2\xb7 ")).replace (",", juce::String::fromUTF8 (" \xc2\xb7")), tags, juce::Justification::centredRight, true);
-            }
-            if (results.empty())
-            {
-                g.setColour (t.textDim());
-                g.setFont (style::font (13.0f));
-                g.drawText ("Aucun équipement ne correspond."_t, list.removeFromTop (rowH), juce::Justification::centred);
-            }
         }
 
-        void mouseMove (const juce::MouseEvent&) override { repaint(); }
-        void mouseExit (const juce::MouseEvent&) override { repaint(); }
-
-        void mouseUp (const juce::MouseEvent& e) override
+        /** Applies a model (click on its row). */
+        void choose (const DeviceModel& m)
         {
-            for (auto& rw : rows)
-                if (rw.first.contains (e.getPosition()))
-                {
-                    auto s = ctx.engine().getSettings();
-                    applyDeviceModel (s, *rw.second);
-                    ctx.engine().setSettings (s);
-                    ctx.applyEngineSettings();
-                    ctx.showMessage ("Équipement appliqué : "_t + juce::String (rw.second->brand) + " " + tr (juce::String::fromUTF8 (rw.second->name)));
-                    auto cb = onApplied;
-                    juce::MessageManager::callAsync ([cb] { if (cb) cb(); });
-                    return;
-                }
+            auto s = ctx.engine().getSettings();
+            applyDeviceModel (s, m);
+            ctx.engine().setSettings (s);
+            ctx.applyEngineSettings();
+            ctx.showMessage ("Équipement appliqué : "_t + juce::String (m.brand) + (*m.brand ? " " : "") + tr (juce::String::fromUTF8 (m.name)));
+            auto cb = onApplied;
+            juce::MessageManager::callAsync ([cb] { if (cb) cb(); });
         }
 
     private:
+        void setResults (std::vector<const DeviceModel*> r)
+        {
+            results = std::move (r);
+            resized();
+            list.repaint();
+        }
+
+        struct List : juce::Component
+        {
+            DeviceCatalogPanel& owner;
+            int hover = -1;
+            explicit List (DeviceCatalogPanel& o) : owner (o) {}
+            void paint (juce::Graphics& g) override
+            {
+                const auto& t = owner.ctx.theme();
+                const auto current = canonicalModelId (owner.ctx.engine().getSettings().deviceModel);
+                if (owner.results.empty())
+                {
+                    g.setColour (t.textDim());
+                    g.setFont (style::font (13.0f));
+                    g.drawText ("Aucun équipement ne correspond."_t, getLocalBounds().removeFromTop (rowH), juce::Justification::centred);
+                    return;
+                }
+                for (int i = 0; i < (int) owner.results.size(); ++i)
+                {
+                    const auto* m = owner.results[(size_t) i];
+                    auto row = juce::Rectangle<int> (0, i * rowH, getWidth(), rowH).reduced (0, 2);
+                    if (! row.intersects (g.getClipBounds())) continue;
+                    const bool on = current == m->id;
+                    g.setColour (on ? t.accent().withAlpha (0.16f) : juce::Colours::white.withAlpha (i == hover ? 0.07f : 0.025f));
+                    g.fillRoundedRectangle (row.toFloat(), 7.0f);
+                    if (on) { g.setColour (t.accent().withAlpha (0.8f)); g.drawRoundedRectangle (row.toFloat().reduced (0.5f), 7.0f, 1.0f); }
+                    auto in = row.reduced (10, 3);
+                    deviceart::drawLogo (g, m->id, in.removeFromLeft (28).toFloat(), on ? t.accent() : t.textCol().withAlpha (0.9f));
+                    in.removeFromLeft (10);
+                    auto tags = in.removeFromRight (130);
+                    const auto sub = juce::String::fromUTF8 (m->subtitle);
+                    g.setColour (t.textCol());
+                    g.setFont (style::font (13.0f, true));
+                    g.drawText (juce::String (m->brand) + (*m->brand ? " " : "") + tr (juce::String::fromUTF8 (m->name)), in.removeFromTop (17), juce::Justification::centredLeft, true);
+                    g.setColour (t.textDim());
+                    g.setFont (style::font (11.0f));
+                    g.drawText (sub.isNotEmpty() ? sub : m->series[0] ? "Série "_t + m->series : "Profil standard"_t, in, juce::Justification::centredLeft, true);
+                    g.setColour (t.accent2());
+                    g.setFont (style::font (10.5f, true));
+                    g.drawText (m->badges(), tags, juce::Justification::centredRight, true);
+                }
+            }
+            int rowAt (int y) const { const int i = y / rowH; return i >= 0 && i < (int) owner.results.size() ? i : -1; }
+            void mouseMove (const juce::MouseEvent& e) override { if (const int i = rowAt (e.y); i != hover) { hover = i; repaint(); } }
+            void mouseExit (const juce::MouseEvent&) override { hover = -1; repaint(); }
+            void mouseUp (const juce::MouseEvent& e) override
+            {
+                if (e.mouseWasDraggedSinceMouseDown()) return;                // a swipe, not a choice
+                if (const int i = rowAt (e.y); i >= 0) owner.choose (*owner.results[(size_t) i]);
+            }
+        };
+
         AppContext& ctx;
         std::function<void()> onApplied;
         juce::TextEditor search;
+        juce::Viewport viewport;
         std::vector<const DeviceModel*> results;
-        std::vector<std::pair<juce::Rectangle<int>, const DeviceModel*>> rows;
+        List list;
+    };
+}
+
+namespace
+{
+    /** One reassignable shortcut: click, then press the new combination (Escape cancels). */
+    class ShortcutButton : public juce::Component
+    {
+    public:
+        ShortcutButton (AppContext& c, shortcuts::Action a) : ctx (c), action (a)
+        {
+            setWantsKeyboardFocus (true);
+            setMouseCursor (juce::MouseCursor::PointingHandCursor);
+            setTitle (tr (juce::String::fromUTF8 (shortcuts::info (a).label)));
+        }
+        bool isListening() const noexcept { return listening; }
+        void mouseUp (const juce::MouseEvent&) override { listening = true; grabKeyboardFocus(); repaint(); }
+        void focusLost (FocusChangeType) override { listening = false; repaint(); }
+        void handleCommandMessage (int) override { listening = true; repaint(); }   // start capturing without a click (tests, accessibility)
+        bool keyPressed (const juce::KeyPress& k) override
+        {
+            if (! listening) return false;
+            listening = false;
+            if (k != juce::KeyPress (juce::KeyPress::escapeKey)) assign (k);
+            repaint();
+            return true;
+        }
+        /** Assigns a key (also used by the tests); refused if another action already uses it. */
+        bool assign (const juce::KeyPress& k)
+        {
+            if (auto other = shortcuts::match (ctx.settings(), k); other && *other != action)
+            {
+                ctx.showMessage (shortcuts::describe (k) + " : "_t + "déjà utilisé par « "_t
+                                 + tr (juce::String::fromUTF8 (shortcuts::info (*other).label)) + " »"_t);
+                return false;
+            }
+            shortcuts::set (ctx.settings(), action, k);
+            repaint();
+            return true;
+        }
+        void paint (juce::Graphics& g) override
+        {
+            const auto& t = ctx.theme();
+            auto r = getLocalBounds().toFloat().reduced (1.0f, 3.0f);
+            g.setColour (listening ? t.accent().withAlpha (0.18f) : juce::Colours::white.withAlpha (isMouseOver() ? 0.09f : 0.05f));
+            g.fillRoundedRectangle (r, 7.0f);
+            g.setColour (listening ? t.accent() : t.border().withMultipliedAlpha (1.5f));
+            g.drawRoundedRectangle (r.reduced (0.5f), 7.0f, 1.0f);
+            g.setColour (listening ? t.accent() : t.textCol());
+            g.setFont (style::font (13.0f, ! listening));
+            g.drawText (listening ? "Appuyez sur la combinaison… (Échap : annuler)"_t : shortcuts::describe (shortcuts::get (ctx.settings(), action)),
+                        r.reduced (10, 0), juce::Justification::centred, true);
+        }
+        void mouseEnter (const juce::MouseEvent&) override { repaint(); }
+        void mouseExit (const juce::MouseEvent&) override { repaint(); }
+    private:
+        AppContext& ctx;
+        shortcuts::Action action;
+        bool listening = false;
     };
 }
 
@@ -1487,7 +1580,7 @@ void SettingsPage::buildLibrary()
 
 void SettingsPage::buildInterface()
 {
-    section ("Langue & thème"_t);
+    section ("Apparence"_t);
     const juce::StringArray langs { juce::String::fromUTF8 ("Fran\xc3\xa7" "ais"), "English" };
     row ("Langue / Language"_t, makeCombo (langs, i18n::isEnglish() ? juce::String ("English") : langs[0], [this] (const juce::String& v)
     {
@@ -1503,6 +1596,17 @@ void SettingsPage::buildInterface()
             if (i >= 0) ctx.applyTheme (ids[i]);
         }), 36, "Plus de thèmes et plug-ins : barre latérale › Extensions & Thèmes."_t);
     }
+
+    section ("Raccourcis clavier"_t);
+    for (auto& sc : shortcuts::all())
+        row (tr (juce::String::fromUTF8 (sc.label)), new ShortcutButton (ctx, sc.action), 34,
+             sc.action == shortcuts::Action::PlayPause ? juce::String ("Cliquez sur un raccourci puis tapez la nouvelle combinaison. Elgato Stream Deck : action « Raccourci clavier » avec la même combinaison."_t) : juce::String());
+    row ("Raccourcis par défaut"_t, makeButton ("Réinitialiser par défaut"_t, [this]
+    {
+        shortcuts::resetAll (ctx.settings());
+        ctx.showMessage ("Raccourcis clavier réinitialisés"_t);
+        refresh();
+    }));
 
     section ("Disposition"_t);
     const auto layout = ctx.settings().get ("layout");
@@ -1645,8 +1749,10 @@ void SettingsPage::Labels::paint (juce::Graphics& g)
 {
     const auto& t = p.ctx.theme();
     if (! p.embedded) drawPageTitle (g, t, { 32, 24, getWidth() - 64, 54 }, "Réglages"_t);
+    const auto clip = g.getClipBounds();
     for (auto& [area, r] : p.painted)
     {
+        if (! area.expanded (0, 24).intersects (clip)) continue;     // only the rows being scrolled into view
         if (r.isSection)
         {
             g.setColour (t.accent());

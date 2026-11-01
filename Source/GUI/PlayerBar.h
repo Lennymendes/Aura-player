@@ -38,6 +38,10 @@ public:
     void refreshPlugins() { pluginSlot.refreshPlugins(); resized(); }
 
     // A-B loop (button, keys I / O / L, markers on the seek bar)
+    /** Keyboard shortcuts: volume ± (slider position, 0..1) and mute / unmute (back to the previous level). */
+    void stepVolume (double delta);
+    void toggleMute();
+    double getVolumePosition() const { return volume.getValue(); }
     void markLoopA();
     void markLoopB();
     void clearLoop();
@@ -67,6 +71,7 @@ private:
     void syncLoop();
     QualityBadge badge;
     juce::Slider volume;
+    double volumeBeforeMute = 1.0;
     juce::Label volumeLock;              // "Volume Fixe / DoP" over the greyed slider
     PluginSlot pluginSlot;
     juce::Rectangle<int> textArea;

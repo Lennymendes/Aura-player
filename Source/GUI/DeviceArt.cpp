@@ -281,51 +281,53 @@ void drawGlyph (juce::Graphics& g, DeviceFamily family, juce::Rectangle<float> r
     }
 }
 
-/** Original emblem per brand / series (geometric, drawn here: not the manufacturers' trademarks). */
+/** Minimal line icons of the devices themselves (original drawings, not the manufacturers' trademarks). */
 void drawLogo (juce::Graphics& g, const juce::String& modelId, juce::Rectangle<float> r, juce::Colour c)
 {
     auto b = r.withSizeKeepingCentre (juce::jmin (r.getWidth(), r.getHeight()), juce::jmin (r.getWidth(), r.getHeight())).reduced (1.5f);
-    const float s = juce::jmax (1.4f, b.getWidth() * 0.07f);
+    const float w = b.getWidth(), s = juce::jmax (1.3f, w * 0.06f);
     g.setColour (c);
+    auto circle = [&] (juce::Point<float> centre, float d, bool fill)
+    {
+        const auto e = juce::Rectangle<float> (d, d).withCentre (centre);
+        if (fill) g.fillEllipse (e); else g.drawEllipse (e, s);
+    };
     if (modelId.startsWith ("rme-adi2"))
     {
-        // ADI-2: rounded square holding a bar chart; Pro = 2 more bars, Pro AE = a ring on top
-        g.drawRoundedRectangle (b, b.getWidth() * 0.2f, s);
-        const int bars = modelId == "rme-adi2-dac" ? 3 : 5;
-        const float bw = b.getWidth() * 0.5f / (float) bars;
-        for (int i = 0; i < bars; ++i)
-        {
-            const float h = b.getHeight() * (0.22f + 0.14f * (float) ((i * 2) % 3));
-            g.fillRect (b.getX() + b.getWidth() * 0.25f + (float) i * bw, b.getBottom() - b.getHeight() * 0.22f - h, bw * 0.6f, h);
-        }
-        if (modelId == "rme-adi2-pro-ae") g.drawEllipse (b.getCentreX() - b.getWidth() * 0.12f, b.getY() + b.getHeight() * 0.1f, b.getWidth() * 0.24f, b.getWidth() * 0.24f, s * 0.7f);
+        // ADI-2: half-rack front panel, screen on the left, two knobs on the right
+        auto body = b.withSizeKeepingCentre (w, w * 0.46f);
+        g.drawRoundedRectangle (body, w * 0.07f, s);
+        g.fillRoundedRectangle (body.getX() + w * 0.1f, body.getY() + body.getHeight() * 0.28f, w * 0.3f, body.getHeight() * 0.44f, w * 0.03f);
+        circle ({ body.getX() + w * 0.6f, body.getCentreY() }, body.getHeight() * 0.42f, false);
+        circle ({ body.getX() + w * 0.83f, body.getCentreY() }, body.getHeight() * 0.42f, false);
     }
     else if (modelId.startsWith ("merging"))
     {
-        // Anubis: concentric network rings; Premium = full waves (DSD), Pro / SPS = rings only
-        g.drawEllipse (b.reduced (b.getWidth() * 0.04f), s);
-        g.drawEllipse (b.reduced (b.getWidth() * 0.26f), s);
-        g.fillEllipse (b.withSizeKeepingCentre (b.getWidth() * 0.16f, b.getHeight() * 0.16f));
-        if (modelId == "merging-anubis-premium")
-        {
-            juce::Path w;
-            w.startNewSubPath (b.getX(), b.getCentreY());
-            for (int i = 1; i <= 16; ++i)
-                w.lineTo (b.getX() + b.getWidth() * (float) i / 16.0f, b.getCentreY() - std::sin ((float) i * 0.8f) * b.getHeight() * 0.1f);
-            g.strokePath (w, juce::PathStrokeType (s * 0.7f));
-        }
+        // Anubis: compact box with its large central knob; Premium = lit knob (DSD), Pro / SPS = ring only
+        auto body = b.withSizeKeepingCentre (w, w * 0.62f);
+        g.drawRoundedRectangle (body, w * 0.12f, s);
+        const auto centre = body.getCentre();
+        circle (centre, body.getHeight() * 0.62f, false);
+        if (modelId == "merging-anubis-premium") circle (centre, body.getHeight() * 0.26f, true);
+        else g.drawLine (centre.x, centre.y - body.getHeight() * 0.24f, centre.x, centre.y - body.getHeight() * 0.06f, s);
     }
     else if (modelId.startsWith ("fiio"))
     {
-        // KA: pill body with a volume wheel
-        auto pill = b.withSizeKeepingCentre (b.getWidth(), b.getHeight() * 0.5f);
-        g.drawRoundedRectangle (pill, pill.getHeight() * 0.5f, s);
-        g.drawEllipse (juce::Rectangle<float> (pill.getHeight() * 0.6f, pill.getHeight() * 0.6f).withCentre ({ pill.getRight() - pill.getHeight() * 0.5f, pill.getCentreY() }), s * 0.8f);
-        g.fillEllipse (juce::Rectangle<float> (pill.getHeight() * 0.22f, pill.getHeight() * 0.22f).withCentre ({ pill.getX() + pill.getHeight() * 0.5f, pill.getCentreY() }));
+        // KA17: USB-C dongle, slim body, connector on top, small screen
+        auto body = b.withSizeKeepingCentre (w * 0.4f, w * 0.78f).translated (0, w * 0.08f);
+        g.drawRoundedRectangle (body, w * 0.1f, s);
+        g.fillRoundedRectangle (juce::Rectangle<float> (w * 0.16f, w * 0.12f).withCentre ({ body.getCentreX(), body.getY() - w * 0.07f }), w * 0.03f);
+        g.fillRoundedRectangle (body.getX() + w * 0.08f, body.getY() + w * 0.12f, body.getWidth() - w * 0.16f, w * 0.18f, w * 0.03f);
+        circle ({ body.getCentreX(), body.getBottom() - w * 0.17f }, w * 0.12f, false);
     }
     else
     {
-        deviceart::drawGlyph (g, DeviceFamily::None, b, c);
+        // any DAC: box, status LED, output jack
+        auto body = b.withSizeKeepingCentre (w, w * 0.5f);
+        g.drawRoundedRectangle (body, w * 0.09f, s);
+        circle ({ body.getX() + w * 0.18f, body.getCentreY() }, w * 0.09f, true);
+        circle ({ body.getRight() - w * 0.22f, body.getCentreY() }, body.getHeight() * 0.42f, false);
+        circle ({ body.getRight() - w * 0.22f, body.getCentreY() }, body.getHeight() * 0.12f, true);
     }
 }
 

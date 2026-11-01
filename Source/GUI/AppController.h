@@ -100,6 +100,9 @@ public:
     bool isSleepBlocked() override { return sleepBlocker.isActive(); }
     bool isStreamerMode() override { return perf::streamer(); }
     void setStreamerMode (bool on) override;
+    void unlockZeynTheme() override;
+    bool isZeynUnlocked() override;
+    bool handleShortcutKey (const juce::KeyPress& k) override;
     void showOnboarding() override;
     void setImmersive (bool on) override;
     void sendToAuraEngine (const std::vector<TrackInfo>& tracks) override;

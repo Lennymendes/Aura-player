@@ -116,6 +116,11 @@ public:
     /** Streamer / Gaming mode: interface refresh reduced to a minimum (saved in the settings). */
     virtual bool isStreamerMode() = 0;
     virtual void setStreamerMode (bool on) = 0;
+    /** Easter egg (three clicks on the logo): adds the hidden ZEYN theme to the list (not applied), remembered. */
+    virtual void unlockZeynTheme() = 0;
+    virtual bool isZeynUnlocked() = 0;
+    /** A reassignable shortcut typed in another window (mini player): true if it was one. */
+    virtual bool handleShortcutKey (const juce::KeyPress&) { return false; }
     /** First-run assistant (also from Réglages › Interface). */
     virtual void showOnboarding() = 0;
     virtual void setImmersive (bool on) = 0;

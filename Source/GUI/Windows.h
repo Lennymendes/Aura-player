@@ -16,6 +16,7 @@ public:
     void mouseDown (const juce::MouseEvent& e) override { dragger.startDraggingComponent (getTopLevelComponent(), e.getEventRelativeTo (getTopLevelComponent())); }
     void mouseDrag (const juce::MouseEvent& e) override { dragger.dragComponent (getTopLevelComponent(), e.getEventRelativeTo (getTopLevelComponent()), nullptr); }
     void mouseDoubleClick (const juce::MouseEvent&) override { ctx.toggleMiniPlayer(); }
+    bool keyPressed (const juce::KeyPress& k) override { return ctx.handleShortcutKey (k); }   // the same shortcuts as the main window
 private:
     void timerCallback() override;
     AppContext& ctx;
