@@ -1,6 +1,6 @@
 // NX Player — MIT License
 // DSD file readers: DSF (Sony) and DSDIFF / DFF (Philips). Both deliver MSB-first bytes interleaved
-// by byte, the layout DoP and ASIO DSD (MSB1) expect. DST-compressed DFF files are refused.
+// by byte, the layout DoP and ASIO DSD (MSB1) expect. DST-compressed DFF files are decompressed (Dst.h).
 #pragma once
 
 #include "AudioDecoder.h"

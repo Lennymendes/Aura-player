@@ -4,7 +4,7 @@
 // (SACDTTxt). Each track is exposed as a virtual path "<file>.iso#area=<0|1>&track=<n>" (area 0 = 2ch,
 // area 1 = multichannel, tracks from 1) and played as raw DSD64: the audio sectors are demultiplexed (packet
 // headers removed) into the MSB-first, byte-interleaved stream the DSF / DFF decoders also deliver.
-// DST-compressed areas are listed but not decoded: opening one returns a clear error.
+// DST-compressed areas (most commercial discs) are decompressed on the fly (Dst.h).
 #pragma once
 
 #include "AudioDecoder.h"
@@ -54,7 +54,7 @@ bool parseVirtualUri (const juce::String& uri, juce::File& iso, int& area, int& 
 /** The file on disk behind a path (the .iso for a virtual track, the path itself otherwise). */
 juce::File realFile (const juce::String& pathOrUri);
 
-/** Decoder for one track of the image (DSD64, raw). Null + error for DST areas or a bad track. */
+/** Decoder for one track of the image (DSD64, raw; DST decompressed). Null + error for a bad track. */
 std::unique_ptr<AudioDecoder> openTrack (std::unique_ptr<juce::InputStream> in, int area, int track, juce::String& error);
 std::unique_ptr<AudioDecoder> openTrack (const juce::String& uri, juce::String& error);
 

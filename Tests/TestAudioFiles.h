@@ -248,6 +248,41 @@ inline bool writeDff (const juce::File& f, const std::vector<uint8_t>& bytes, in
     return w.save (f);
 }
 
+/** DSDIFF with DST compression: "DST " chunk = FRTE + one DSTF chunk per frame; optional DSTI index. */
+inline bool writeDffDst (const juce::File& f, const std::vector<std::vector<uint8_t>>& frames, int channels, bool withIndex)
+{
+    static const char* ids6[] = { "MLFT", "MRGT", "C   ", "LFE ", "LS  ", "RS  " };
+    ByteWriter w;
+    w.tag ("FRM8"); w.be64 (0); w.tag ("DSD ");
+    w.tag ("FVER"); w.be64 (4); w.be32 (0x01050000);
+    const size_t propStart = w.size();
+    w.tag ("PROP"); w.be64 (0); w.tag ("SND ");
+    w.tag ("FS  "); w.be64 (4); w.be32 (2822400);
+    w.tag ("CHNL"); w.be64 (2 + 4 * (uint64_t) channels); w.be16 ((uint32_t) channels);
+    for (int c = 0; c < channels; ++c) w.tag (channels == 2 ? (c == 0 ? "SLFT" : "SRGT") : ids6[c]);
+    w.tag ("CMPR"); w.be64 (16); w.tag ("DST "); w.u8 (11); w.raw ("DST Encoded", 11);
+    w.patchBe64 (propStart + 4, w.size() - propStart - 12);
+    const size_t dstStart = w.size();
+    w.tag ("DST "); w.be64 (0);
+    w.tag ("FRTE"); w.be64 (6); w.be32 ((uint32_t) frames.size()); w.be16 (75);
+    std::vector<std::pair<uint64_t, uint32_t>> index;
+    for (auto& fr : frames)
+    {
+        w.tag ("DSTF"); w.be64 (fr.size());
+        index.emplace_back ((uint64_t) w.size(), (uint32_t) fr.size());
+        w.raw (fr.data(), fr.size());
+        if (fr.size() & 1) w.u8 (0);
+    }
+    w.patchBe64 (dstStart + 4, w.size() - dstStart - 12);
+    if (withIndex)
+    {
+        w.tag ("DSTI"); w.be64 (12 * (uint64_t) index.size());
+        for (auto& [off, len] : index) { w.be64 (off); w.be32 (len); }
+    }
+    w.patchBe64 (4, w.size() - 12);
+    return w.save (f);
+}
+
 /** ALAC in a minimal M4A: encoded with Apple's reference encoder, our own MP4 boxes. */
 inline bool writeAlacM4a (const juce::File& f, const std::vector<int32_t>& pcm, int channels, double rate, int bits)
 {

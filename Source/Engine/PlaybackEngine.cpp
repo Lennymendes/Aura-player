@@ -637,6 +637,26 @@ void PlaybackEngine::writeAll (const void* data, size_t numBytes)
     }
 }
 
+/** Multichannel -> stereo, in place over `frames` interleaved frames of srcCh channels (out: 2 channels).
+    6 ch = FL FR C LFE SL SR, 5 ch = FL FR C SL SR, 4 ch = FL FR SL SR, 3 ch = FL FR C. LFE is left out;
+    L = FL + 0.707 C + 0.707 SL, R = FR + 0.707 C + 0.707 SR, scaled by 1 / (1 + 0.707 + 0.707): no clipping possible. */
+void PlaybackEngine::foldToStereo (double* pcm, int frames, int srcCh) noexcept
+{
+    constexpr double k = 0.70710678118654752;
+    const bool hasC = srcCh == 3 || srcCh == 5 || srcCh == 6;
+    const int sl = srcCh == 6 ? 4 : srcCh == 5 ? 3 : srcCh == 4 ? 2 : -1;
+    const double g = 1.0 / (1.0 + (hasC ? k : 0.0) + (sl >= 0 ? k : 0.0));
+    for (int i = 0; i < frames; ++i)
+    {
+        const double* in = pcm + (size_t) i * (size_t) srcCh;
+        const double c = hasC ? k * in[2] : 0.0;
+        const double l = in[0] + c + (sl >= 0 ? k * in[sl] : 0.0);
+        const double r = in[1] + c + (sl >= 0 ? k * in[sl + 1] : 0.0);
+        pcm[(size_t) i * 2] = g * l;
+        pcm[(size_t) i * 2 + 1] = g * r;
+    }
+}
+
 int PlaybackEngine::produce (int writableBytes)
 {
     const auto& plan = decPlan;
@@ -647,23 +667,41 @@ int PlaybackEngine::produce (int writableBytes)
     const int maxOutFrames = juce::jmin (kChunkFrames, writableBytes / frameBytes - 4);
     if (maxOutFrames <= 0) return 1;
 
+    auto doublesToRing = [&] (double* in, int frames)
+    {
+        auto* out = tmpInt.data();
+        if (plan.downmix)
+        {
+            foldToStereo (in, frames, srcCh);
+            for (int i = 0; i < frames * 2; ++i) out[(size_t) i] = doubleToInt32 (in[(size_t) i]);
+            writeAll (out, (size_t) frames * 2 * 4);
+            return;
+        }
+        for (int i = 0; i < frames; ++i)
+            for (int c = 0; c < srcCh; ++c)
+                out[(size_t) i * srcCh + c] = doubleToInt32 (in[(size_t) i * srcCh + c]);
+        if (srcCh == outCh) { writeAll (out, (size_t) frames * (size_t) outCh * 4); return; }
+        auto* exp = reinterpret_cast<int32_t*> (tmpBytes.data());
+        for (int i = 0; i < frames; ++i)
+            for (int c = 0; c < outCh; ++c)
+                exp[(size_t) i * outCh + c] = out[(size_t) i * srcCh + juce::jmin (c, srcCh - 1)];
+        writeAll (exp, (size_t) frames * (size_t) outCh * 4);
+    };
+
     auto expandAndWriteInt = [&] (const int32_t* in, int frames)
     {
+        if (plan.downmix)
+        {
+            for (int i = 0; i < frames * srcCh; ++i) tmpDouble[(size_t) i] = in[(size_t) i] * (1.0 / 2147483648.0);
+            doublesToRing (tmpDouble.data(), frames);
+            return;
+        }
         if (srcCh == outCh) { writeAll (in, (size_t) frames * (size_t) outCh * 4); return; }
         auto* out = reinterpret_cast<int32_t*> (tmpBytes.data());
         for (int i = 0; i < frames; ++i)
             for (int c = 0; c < outCh; ++c)
                 out[(size_t) i * outCh + c] = in[(size_t) i * srcCh + juce::jmin (c, srcCh - 1)];
         writeAll (out, (size_t) frames * (size_t) outCh * 4);
-    };
-
-    auto doublesToRing = [&] (const double* in, int frames)
-    {
-        auto* out = tmpInt.data();
-        for (int i = 0; i < frames; ++i)
-            for (int c = 0; c < srcCh; ++c)
-                out[(size_t) i * srcCh + c] = doubleToInt32 (in[(size_t) i * srcCh + c]);
-        expandAndWriteInt (out, frames);
     };
 
     if (plan.wire != WireFormat::Pcm)
@@ -748,9 +786,16 @@ void PlaybackEngine::drainConverters()
     const int srcCh = decPlan.source.numChannels;
     const int outCh = decPlan.channels;
 
-    auto writeDoubles = [&] (const std::vector<double>& pcm, int frames)
+    auto writeDoubles = [&] (std::vector<double>& pcm, int frames)
     {
         std::vector<int32_t> ints ((size_t) frames * (size_t) outCh);
+        if (decPlan.downmix)
+        {
+            foldToStereo (pcm.data(), frames, srcCh);
+            for (size_t i = 0; i < ints.size(); ++i) ints[i] = doubleToInt32 (pcm[i]);
+            writeAll (ints.data(), ints.size() * 4);
+            return;
+        }
         for (int i = 0; i < frames; ++i)
             for (int c = 0; c < outCh; ++c)
                 ints[(size_t) i * outCh + c] = doubleToInt32 (pcm[(size_t) i * srcCh + juce::jmin (c, srcCh - 1)]);
@@ -1330,6 +1375,16 @@ SignalPath PlaybackEngine::getSignalPath() const
     else
         path.add ("Décodage"_t, src.codec + " -> entiers " + juce::String (src.bitsPerSample) + " bits", "Bit à bit, sans passer par le flottant"_t,
                   PathQuality::BitPerfect);
+
+    if (plan.downmix)
+    {
+        if (plan.wire == WireFormat::Pcm)
+            path.add ("Canaux"_t, juce::String (src.numChannels) + " -> 2 (mixage stéréo)"_t,
+                      "L = AvG + 0,707 C + 0,707 SurrG (idem à droite), 64 bits, normalisé : sans écrêtage"_t, PathQuality::Enhanced);
+        else
+            path.add ("Canaux"_t, juce::String (src.numChannels) + " -> 2 (avant gauche / droit)"_t,
+                      "Sortie stéréo : canaux avant transmis tels quels"_t, PathQuality::BitPerfect);
+    }
 
     switch (plan.conversion)
     {

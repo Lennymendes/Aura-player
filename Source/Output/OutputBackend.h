@@ -57,6 +57,7 @@ struct DeviceCapabilities
     int maxBits = 24;
     juce::Array<double> nativeDsdRates; // empty if the backend has no native DSD
     bool exclusiveAvailable = false;
+    int outputChannels = 0;           // output channels of the device (0 = unknown: as many as the source)
 };
 
 class OutputBackend

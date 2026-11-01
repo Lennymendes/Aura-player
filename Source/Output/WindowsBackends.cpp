@@ -53,6 +53,7 @@ public:
         for (auto r : c.sampleRates) caps.sampleRates.add (r);
         caps.maxBits = c.maxValidBits > 0 ? c.maxValidBits : 24;
         caps.exclusiveAvailable = ! c.sampleRates.empty();
+        caps.outputChannels = nxwin::probeExclusive (idFor (name), 6).sampleRates.empty() ? 2 : 6;   // 5.1 endpoint or stereo
         return caps;
     }
 
@@ -128,6 +129,7 @@ public:
         for (auto r : c.dsdRates) caps.nativeDsdRates.add (r);
         caps.maxBits = c.sampleBits == 0 ? 24 : juce::jmax (16, c.sampleBits);
         caps.exclusiveAvailable = true;
+        caps.outputChannels = c.outputs;
         return caps;
     }
 

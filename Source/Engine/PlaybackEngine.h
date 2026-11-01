@@ -200,6 +200,7 @@ private:
 
     bool consumeEvents (const PlanWire& active) noexcept;   // audio thread
     bool checkPreroll (size_t unitBytes, double unitsPerSecond, int requestedUnits) noexcept;
+    static void foldToStereo (double* interleaved, int frames, int srcCh) noexcept;
     void outputSilenceInt (int32_t* const* ch, int numCh, int n) noexcept;
 
     std::unique_ptr<OutputBackend> backend;

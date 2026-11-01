@@ -72,6 +72,7 @@ struct PlaybackPlan
     WireFormat wire = WireFormat::Pcm;
     double deviceRate = 44100.0;         // PCM / DoP word rate, DSD bit rate in native DSD
     int channels = 2;                    // channels sent to the device (mono is doubled)
+    bool downmix = false;                // multichannel source on a stereo output: front L / R (DSD), 5.1 -> 2.0 mix (PCM)
     int ringBitsHint = 24;               // significant bits stored in the ring (requested from the device)
 
     enum class Conversion { None, FloatToInt, Resample, DsdToPcm } conversion = Conversion::None;

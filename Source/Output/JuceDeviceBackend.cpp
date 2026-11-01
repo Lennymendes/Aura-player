@@ -41,6 +41,7 @@ DeviceCapabilities JuceDeviceBackend::probe (const juce::String& name)
     if (dev == nullptr) return caps;
 
     caps.sampleRates = dev->getAvailableSampleRates();
+    caps.outputChannels = dev->getOutputChannelNames().size();
     caps.maxBits = juce::jmax (24, dev->getCurrentBitDepth());
    #if JUCE_MAC
     if (typeName == "CoreAudio")

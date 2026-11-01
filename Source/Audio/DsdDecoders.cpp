@@ -1,6 +1,8 @@
 // NX Player — MIT License
 #include <algorithm>
 #include "DsdDecoders.h"
+#include "Dst.h"
+#include <limits>
 #include <cstring>
 
 namespace nx
@@ -106,6 +108,85 @@ int DsfDecoder::readDsd (uint8_t* dest, int maxBytes)
 }
 
 //==============================================================================
+namespace
+{
+    /** DSDIFF with DST compression: "DST " chunk = "FRTE" (frame count) + one "DSTF" chunk per 1/75 s frame.
+        Frames are found through the "DSTI" index when present, otherwise by walking the chunks (as far as needed). */
+    class DffDstDecoder final : public AudioDecoder
+    {
+    public:
+        DffDstDecoder (std::unique_ptr<juce::InputStream> s, StreamFormat f, juce::int64 dstBody, juce::int64 dstEnd,
+                       juce::int64 frames, std::vector<std::pair<juce::int64, juce::uint32>> idx)
+            : stream (std::move (s)), format (f), scanPos (dstBody), end (dstEnd), numFrames (frames), index (std::move (idx)),
+              decoder (f.numChannels, (int) (f.sampleRate / 44100.0))
+        {
+            frameBytes = decoder.getBytesPerChannel();
+            if (! index.empty()) scanPos = index.back().first + index.back().second + (index.back().second & 1);   // walk on after the index
+            if (numFrames <= 0) { locate (std::numeric_limits<juce::int64>::max()); numFrames = (juce::int64) index.size(); }
+            lengthBytes = numFrames * frameBytes;
+            out.resize ((size_t) decoder.getOutputSize());
+        }
+
+        StreamFormat getFormat() const override  { return format; }
+        juce::int64 getLength() const override    { return lengthBytes; }
+        juce::int64 getPosition() const override  { return position; }
+        bool seek (juce::int64 p) override        { position = juce::jlimit<juce::int64> (0, lengthBytes, p); return true; }
+
+        int readDsd (uint8_t* dest, int maxBytes) override
+        {
+            const int ch = format.numChannels;
+            int done = 0;
+            while (done < maxBytes && position < lengthBytes)
+            {
+                const auto k = position / frameBytes;
+                if (k != outFrame && ! load (k)) break;
+                const int offset = (int) (position - k * frameBytes);
+                const int n = juce::jmin (maxBytes - done, frameBytes - offset, (int) (lengthBytes - position));
+                std::memcpy (dest + (size_t) done * (size_t) ch, out.data() + (size_t) offset * (size_t) ch, (size_t) n * (size_t) ch);
+                done += n;
+                position += n;
+            }
+            return done;
+        }
+
+    private:
+        /** Walks the "DST " chunk until frame k is indexed (or the end). */
+        bool locate (juce::int64 k)
+        {
+            while ((juce::int64) index.size() <= k && scanPos + 12 <= end)
+            {
+                uint8_t h[12];
+                if (! stream->setPosition (scanPos) || ! bytes::readExactly (*stream, h, 12)) return false;
+                const auto size = (juce::int64) bytes::be64 (h + 4);
+                if (size < 0 || scanPos + 12 + size > end + 1) return false;
+                if (std::memcmp (h, "DSTF", 4) == 0) index.emplace_back (scanPos + 12, (juce::uint32) size);
+                scanPos += 12 + size + (size & 1);
+            }
+            return (juce::int64) index.size() > k;
+        }
+
+        bool load (juce::int64 k)
+        {
+            if (! locate (k)) return false;
+            const auto [pos, size] = index[(size_t) k];
+            frame.resize (size);
+            if (size == 0 || ! stream->setPosition (pos) || ! bytes::readExactly (*stream, frame.data(), (int) size)) return false;
+            juce::String err;
+            if (! decoder.decode (frame.data(), frame.size(), out.data(), err)) lastError = err;   // silence for this frame
+            outFrame = k;
+            return true;
+        }
+
+        std::unique_ptr<juce::InputStream> stream;
+        StreamFormat format;
+        juce::int64 scanPos, end, numFrames, lengthBytes = 0, position = 0, outFrame = -1;
+        std::vector<std::pair<juce::int64, juce::uint32>> index;
+        dst::FrameDecoder decoder;
+        int frameBytes = 4704;
+        std::vector<uint8_t> frame, out;
+    };
+}
+
 std::unique_ptr<AudioDecoder> DffDecoder::open (std::unique_ptr<juce::InputStream>& s, juce::String& error)
 {
     uint8_t h[16];
@@ -118,7 +199,9 @@ std::unique_ptr<AudioDecoder> DffDecoder::open (std::unique_ptr<juce::InputStrea
     d->format.bitsPerSample = 1;
     d->format.codec = "DFF";
     const auto formEnd = 12 + (juce::int64) bytes::be64 (h + 4);
-    bool haveRate = false, haveData = false;
+    bool haveRate = false, haveData = false, isDst = false;
+    juce::int64 dstBody = 0, dstEnd = 0, dstFrames = 0;
+    std::vector<std::pair<juce::int64, juce::uint32>> dstIndex;
 
     juce::int64 pos = 16;
     while (pos + 12 <= formEnd)
@@ -152,11 +235,8 @@ std::unique_ptr<AudioDecoder> DffDecoder::open (std::unique_ptr<juce::InputStrea
                 }
                 else if (std::memcmp (sc, "CMPR", 4) == 0 && bytes::readExactly (*s, v, 4))
                 {
-                    if (std::memcmp (v, "DSD ", 4) != 0)
-                    {
-                        error = "DFF compressé en DST : non pris en charge (décompressez-le en DSD brut)"_t;
-                        return {};
-                    }
+                    isDst = std::memcmp (v, "DST ", 4) == 0;
+                    if (! isDst && std::memcmp (v, "DSD ", 4) != 0) { error = "DFF : compression inconnue"_t; return {}; }
                 }
                 p += 12 + subSize + (subSize & 1);
             }
@@ -169,8 +249,22 @@ std::unique_ptr<AudioDecoder> DffDecoder::open (std::unique_ptr<juce::InputStrea
         }
         else if (std::memcmp (ch, "DST ", 4) == 0)
         {
-            error = "DFF compressé en DST : non pris en charge"_t;
-            return {};
+            dstBody = body;
+            dstEnd = body + size;
+            haveData = true;
+            uint8_t fr[12 + 6];
+            if (bytes::readExactly (*s, fr, sizeof (fr)) && std::memcmp (fr, "FRTE", 4) == 0) dstFrames = (juce::int64) bytes::be32 (fr + 12);
+        }
+        else if (std::memcmp (ch, "DSTI", 4) == 0 && size >= 12 && size < ((juce::int64) 1 << 31))
+        {
+            // index of the frames: {u64 file offset of the frame data, u32 length}
+            juce::MemoryBlock mb;
+            if (s->readIntoMemoryBlock (mb, (ssize_t) size) == (size_t) size)
+                for (size_t i = 0; i + 12 <= mb.getSize(); i += 12)
+                {
+                    const auto* e = static_cast<const uint8_t*> (mb.getData()) + i;
+                    dstIndex.emplace_back ((juce::int64) bytes::be64 (e), bytes::be32 (e + 8));
+                }
         }
         else if (std::memcmp (ch, "ID3 ", 4) == 0)
         {
@@ -186,6 +280,17 @@ std::unique_ptr<AudioDecoder> DffDecoder::open (std::unique_ptr<juce::InputStrea
     {
         error = "DFF : en-tête incomplet ou format non pris en charge"_t;
         return {};
+    }
+    if (isDst)
+    {
+        if (dstBody == 0 || channels > dst::maxChannels) { error = "DFF DST : données absentes ou trop de canaux"_t; return {}; }
+        // an index that does not fit the "DST " chunk is ignored (the chunks are walked instead)
+        bool indexOk = ! dstIndex.empty();
+        for (auto& [off, len] : dstIndex) indexOk = indexOk && off >= dstBody && off + (juce::int64) len <= dstEnd;
+        if (! indexOk) dstIndex.clear();
+        auto f = d->format;
+        f.codec = "DFF DST";
+        return std::make_unique<DffDstDecoder> (std::move (s), f, dstBody, dstEnd, dstFrames, std::move (dstIndex));
     }
     d->lengthBytes /= channels;
     d->stream = std::move (s);

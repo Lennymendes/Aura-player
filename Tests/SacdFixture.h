@@ -4,6 +4,7 @@
 #pragma once
 
 #include <juce_core/juce_core.h>
+#include "DstEncoder.h"
 #include <algorithm>
 #include <cstring>
 #include <vector>
@@ -16,7 +17,7 @@ constexpr int kSector = 2048, kFrameBytes = 4704;
 inline uint8_t sample (int area, int track, int f, int i, int c) { return (uint8_t) (f * 131 + i * 7 + c * 29 + track * 53 + area * 97); }
 
 struct TrackSpec { int frames; const char* title; const char* performer; };
-struct AreaSpec { int channels; std::vector<TrackSpec> tracks; int frameFormat = 2; };
+struct AreaSpec { int channels; std::vector<TrackSpec> tracks; int frameFormat = 2; };   // 0 = DST (frames compressed, stored plain when smaller)
 
 struct Image
 {
@@ -99,10 +100,18 @@ inline std::vector<uint8_t> build (const std::vector<AreaSpec>& areas, const cha
                 for (int i = 0; i < kFrameBytes; ++i)
                     for (int c = 0; c < a.channels; ++c)
                         pf.bytes[(size_t) i * (size_t) a.channels + (size_t) c] = sample ((int) ai, (int) ti + 1, f, i, c);
+                if (a.frameFormat == 0)
+                {
+                    auto coded = dsttest::encodeFrame (pf.bytes.data(), a.channels);
+                    pf.bytes = coded.size() < pf.bytes.size() + 1 ? coded : dsttest::plainFrame (pf.bytes.data(), a.channels);
+                }
                 frames.push_back (std::move (pf));
             }
         }
         std::vector<int> frameSector (frames.size(), 0), frameEndSector (frames.size(), 0);
+        const bool dst = a.frameFormat == 0;
+        struct InfoPatch { int lsn; size_t offset; size_t frame; };
+        std::vector<InfoPatch> patches;               // DST frame info: sector count, known once the frame is laid out
         size_t cur = 0;
         int sectorNo = 0;
         while (cur < frames.size())
@@ -110,6 +119,7 @@ inline std::vector<uint8_t> build (const std::vector<AreaSpec>& areas, const cha
             struct Packet { bool start; int type; size_t len; const uint8_t* src; };
             std::vector<Packet> packets;
             std::vector<int> frameTcs;
+            std::vector<size_t> frameIds;
             int budget = kSector - 1;
             static const uint8_t supplementary[24] = { 0xEE };
             if (sectorNo % 5 == 0) { packets.push_back ({ false, 3, sizeof (supplementary), supplementary }); budget -= 2 + (int) sizeof (supplementary); }
@@ -117,18 +127,18 @@ inline std::vector<uint8_t> build (const std::vector<AreaSpec>& areas, const cha
             {
                 auto& f = frames[cur];
                 const bool start = f.used == 0;
-                const int overhead = 2 + (start ? 3 : 0);
+                const int overhead = 2 + (start ? (dst ? 4 : 3) : 0);
                 if (start && frameTcs.size() >= 7) break;
                 if (budget <= overhead + 16) break;
                 const size_t len = std::min ({ f.bytes.size() - f.used, (size_t) (budget - overhead), (size_t) 2047 });
                 packets.push_back ({ start, 2, len, f.bytes.data() + f.used });
-                if (start) { frameTcs.push_back (f.tc); frameSector[cur] = lsn; }
+                if (start) { frameTcs.push_back (f.tc); frameIds.push_back (cur); frameSector[cur] = lsn; }
                 f.used += len;
                 budget -= overhead + (int) len;
                 if (f.used == f.bytes.size()) { frameEndSector[cur] = lsn; ++cur; }
             }
             auto* s = img.sector (lsn);
-            s[0] = (uint8_t) ((packets.size() << 5) | (frameTcs.size() << 2));
+            s[0] = (uint8_t) ((packets.size() << 5) | (frameTcs.size() << 2) | (dst ? 1 : 0));
             size_t pos = 1;
             for (auto& p : packets)
             {
@@ -136,11 +146,23 @@ inline std::vector<uint8_t> build (const std::vector<AreaSpec>& areas, const cha
                 s[pos + 1] = (uint8_t) p.len;
                 pos += 2;
             }
-            for (int tc : frameTcs) { Image::time (s + pos, tc); pos += 3; }
+            for (size_t k = 0; k < frameTcs.size(); ++k)
+            {
+                Image::time (s + pos, frameTcs[k]);
+                pos += 3;
+                if (dst)
+                {
+                    s[pos] = (uint8_t) (a.channels == 6 ? 0x02 : 0x00);   // channel bits: 6 channels
+                    patches.push_back ({ lsn, pos, frameIds[k] });
+                    ++pos;
+                }
+            }
             for (auto& p : packets) { std::memcpy (s + pos, p.src, p.len); pos += p.len; }
             ++lsn;
             ++sectorNo;
         }
+        for (auto& pt : patches)
+            img.sector (pt.lsn)[pt.offset] |= (uint8_t) (std::min (31, frameEndSector[pt.frame] - frameSector[pt.frame] + 1) << 2);
         for (size_t ti = 0; ti < a.tracks.size(); ++ti)
         {
             const int first = trackFirstFrame[ti], last = first + a.tracks[ti].frames - 1;

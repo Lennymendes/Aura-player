@@ -1,5 +1,6 @@
 // NX Player — MIT License
 #include "SacdIso.h"
+#include "Dst.h"
 #include "../Core/Text.h"
 #include <array>
 #include <cstring>
@@ -100,7 +101,8 @@ namespace
     }
 
     //==========================================================================
-    /** One track of the image, as raw DSD64 (packet headers removed, data types other than audio dropped). */
+    /** One track of the image, as raw DSD64 (packet headers removed, data types other than audio dropped,
+        DST frames decompressed). */
     class TrackDecoder final : public AudioDecoder
     {
     public:
@@ -111,7 +113,12 @@ namespace
             format.sampleRate = 2822400.0;
             format.bitsPerSample = 1;
             format.numChannels = channels;
-            format.codec = "SACD";
+            format.codec = a.isDst() ? "SACD DST" : "SACD";
+            if (a.isDst())
+            {
+                dst = std::make_unique<dst::FrameDecoder> (channels);
+                decoded.resize ((size_t) dst->getOutputSize());
+            }
             firstSector = t.startSector;
             endSector = t.startSector + juce::jmax<juce::uint32> (1, t.sectorCount);
             lengthBytes = t.frameCount > 0 ? t.frameCount * bytesPerFrame
@@ -183,6 +190,9 @@ namespace
     private:
         void restart (juce::uint32 sector, juce::int64 targetFrame)
         {
+            fromTrackStart = sector <= firstSector;
+            frameBuf.clear();
+            collecting = false;
             next = sector;
             target = targetFrame;
             started = overshoot = false;
@@ -192,17 +202,32 @@ namespace
             primed = true;
         }
 
+        /** DST: the frame collected so far is complete; decompress it after the DSD already pending. */
+        void flushFrame()
+        {
+            if (dst == nullptr || ! collecting || frameBuf.empty()) { frameBuf.clear(); return; }
+            juce::String err;
+            if (! dst->decode (frameBuf.data(), frameBuf.size(), decoded.data(), err)) { lastError = err; ++badFrames; }   // silence, playback goes on
+            pending.insert (pending.end(), decoded.begin(), decoded.end());
+            frameBuf.clear();
+        }
+
         /** Demultiplexes one sector into `pending`. False at the end of the track (or past a read error). */
         bool pump()
         {
-            if (next >= endSector + 64) return false;     // a frame may end a few sectors after the listed area
             uint8_t s[sectorSize];
-            if (! readSector (*in, next++, s)) return false;
-            const bool dst = (s[0] & 1) != 0;
-            if (dst) { lastError = "SACD : secteur DST"; return false; }
+            if (next >= endSector + 64 || ! readSector (*in, next, s))   // a frame may end a few sectors after the listed area
+            {
+                if (! frameBuf.empty()) { flushFrame(); collecting = false; return true; }   // the last DST frame of the track
+                return false;
+            }
+            ++next;
+            // sector header: bit 0 DST, bits 2-4 frame starts, bits 5-7 packets; frame info is 4 bytes in DST sectors
+            const bool dstSector = (s[0] & 1) != 0;
             const int packets = (s[0] >> 5) & 7, frames = (s[0] >> 2) & 7;
-            const int frameInfoSize = 3;
+            const int frameInfoSize = dstSector ? 4 : 3;
             size_t pos = 1 + (size_t) packets * 2 + (size_t) frames * (size_t) frameInfoSize;
+            if (pos > (size_t) sectorSize) return true;                      // corrupt header: skip the sector
             int frameIndex = 0;
             for (int i = 0; i < packets; ++i)
             {
@@ -210,23 +235,41 @@ namespace
                 const bool frameStart = (pi[0] & 0x80) != 0;
                 const int type = (pi[0] >> 3) & 7;
                 const size_t length = (size_t) (((pi[0] & 7) << 8) | pi[1]);
-                if (pos + length > (size_t) sectorSize) return false;   // corrupt sector
+                if (pos + length > (size_t) sectorSize) break;                // corrupt packet list: keep what was read
                 if (type == 2)
                 {
                     if (frameStart)
                     {
+                        flushFrame();
                         const uint8_t* fi = s + 1 + packets * 2 + frameIndex * frameInfoSize;
                         const bool timed = frameIndex < frames && track.startFrame >= 0;
-                        const juce::int64 rel = timed ? timeToFrames (fi) - track.startFrame : 0;   // < 0: end of the previous track
+                        juce::int64 rel = timed ? timeToFrames (fi) - track.startFrame - relBias : 0;   // < 0: end of the previous track
                         ++frameIndex;
                         if (! started)
                         {
-                            if (! timed)                 { started = true; startedFrame = target; }   // no time code: trust the estimate
+                            // at the start of the track, time codes that disagree with the track list (after its start,
+                            // or more than 2 s before it) are not trusted: the first frame found is the start
+                            const bool untrusted = fromTrackStart && target == 0 && (rel > 0 || rel < -150);
+                            if (untrusted && timed)      { relBias += rel; rel = 0; }             // learnt once: later seeks use it
+                            if (! timed || untrusted)    { started = true; startedFrame = target; }
                             else if (rel == target)      { started = true; startedFrame = rel; }
                             else if (rel > target)       { overshoot = true; return true; }
                         }
+                        // frames past the end of the track (time code) are not collected
+                        collecting = started && ! (timed && track.frameCount > 0 && rel >= track.frameCount);
+                        // DST frame info: the number of sectors (= packets) the frame spans, bits 2-6 of the 4th byte
+                        packetsLeft = dstSector && frameIndex - 1 < frames ? (fi[3] >> 2) & 31 : 0;
                     }
-                    if (started) pending.insert (pending.end(), s + pos, s + pos + length);
+                    if (started && collecting)
+                    {
+                        if (dst == nullptr) pending.insert (pending.end(), s + pos, s + pos + length);
+                        else if (frameBuf.size() + length <= (size_t) 1 << 20)
+                        {
+                            frameBuf.insert (frameBuf.end(), s + pos, s + pos + length);
+                            // complete: decode now (the last frame of an area is not followed by another frame start)
+                            if (packetsLeft > 0 && --packetsLeft == 0) { flushFrame(); collecting = false; }
+                        }
+                    }
                 }
                 pos += length;
             }
@@ -239,8 +282,12 @@ namespace
         Track track;
         juce::uint32 firstSector = 0, endSector = 0, next = 0;
         juce::int64 lengthBytes = 0, position = 0, totalFrames = 1, target = 0, startedFrame = 0;
-        bool started = false, overshoot = false, primed = false;
+        bool started = false, overshoot = false, primed = false, fromTrackStart = true, collecting = false;
         std::vector<uint8_t> pending;
+        std::unique_ptr<dst::FrameDecoder> dst;    // DST areas
+        std::vector<uint8_t> frameBuf, decoded;     // compressed frame being collected, one decoded frame
+        int badFrames = 0, packetsLeft = 0;
+        juce::int64 relBias = 0;                    // sector time codes minus the track list's (0 when they agree)
         size_t readPos = 0, skip = 0;
     };
 }
@@ -329,11 +376,6 @@ std::unique_ptr<AudioDecoder> openTrack (std::unique_ptr<juce::InputStream> in, 
     {
         if (a.index != areaIndex) continue;
         if (trackNumber < 1 || trackNumber > (int) a.tracks.size()) break;
-        if (a.isDst())
-        {
-            error = "SACD : zone compressée en DST, décompression non prise en charge (convertissez l'ISO en DSF / DFF non compressé)"_t;
-            return {};
-        }
         if (a.fsCode != 4)
         {
             error = "SACD : fréquence d'échantillonnage inconnue"_t;

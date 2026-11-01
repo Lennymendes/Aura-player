@@ -39,6 +39,10 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
     PlaybackPlan p;
     p.source = src;
     p.channels = src.numChannels == 1 ? 2 : src.numChannels;
+    // more channels than the output has (a stereo DAC, a 2-channel profile): stereo, never a refusal
+    const int outputs = juce::jmin (caps.outputChannels > 0 ? caps.outputChannels : 8, juce::jlimit (1, 8, s.maxChannels));
+    if (src.numChannels > 2 && src.numChannels > outputs) { p.channels = 2; p.downmix = true; }
+    const juce::String foldNote = p.downmix ? " · "_t + juce::String (src.numChannels) + " canaux -> stéréo"_t : juce::String();
     p.filterShape = s.filterShape;
     p.profileTag = s.profileTag;
     const juce::String filterName = s.filterShape == FilterShape::MinimumPhase ? juce::String ("filtre à phase minimale 64 bits"_t)
@@ -54,7 +58,7 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
             p.wire = WireFormat::NativeDsd;
             p.deviceRate = src.sampleRate;
             p.ringBitsHint = 1;
-            p.reason = "DSD natif (ASIO) : le flux 1 bit part tel quel vers le DAC";
+            p.reason = "DSD natif (ASIO) : le flux 1 bit part tel quel vers le DAC" + foldNote;
             return p;
         }
         if ((s.dsdMode == DsdMode::Auto || s.dsdMode == DsdMode::DoP || (s.dsdMode == DsdMode::Native && ! nativeOk)) && dopOk)
@@ -62,7 +66,7 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
             p.wire = WireFormat::DoP;
             p.deviceRate = src.sampleRate / 16.0;
             p.ringBitsHint = 24;
-            p.reason = "DoP : le flux DSD voyage intact dans des mots PCM de 24 bits à "_t + formatRate (p.deviceRate);
+            p.reason = "DoP : le flux DSD voyage intact dans des mots PCM de 24 bits à "_t + formatRate (p.deviceRate) + foldNote;
             return p;
         }
 
@@ -89,7 +93,7 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
                                  : s.profileTag.isNotEmpty() ? "Profil "_t + s.profileTag + " : "
                                  : caps.nativeDsdRates.isEmpty() && ! dopOk ? "Le DAC n'accepte ni DSD natif ni DoP à ce débit : "_t
                                                                             : "Conversion demandée : "_t)
-                   + "DSD -> PCM " + formatRate (p.deviceRate) + " (" + filterName + ")";
+                   + "DSD -> PCM " + formatRate (p.deviceRate) + " (" + filterName + ")" + foldNote;
         return p;
     }
 
@@ -126,6 +130,13 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
         p.needsRequantize = src.bitsPerSample > caps.maxBits;
         p.reason = p.needsRequantize ? "Le DAC est limité à "_t + juce::String (caps.maxBits) + " bits"
                                      : "Bit-perfect : aucun traitement";
+    }
+    if (p.downmix)
+    {
+        // the 5.1 -> 2.0 mix is computed in 64-bit float, then dithered to the DAC's word
+        p.ringBitsHint = 32;
+        p.needsRequantize = true;
+        p.reason += foldNote;
     }
     return p;
 }

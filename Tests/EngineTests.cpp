@@ -16,9 +16,13 @@
 #include "../Source/Output/CaptureBackend.h"
 #include "../Source/Audio/SacdIso.h"
 #include "SacdFixture.h"
+#include "DstEncoder.h"
+#include "DstGolden.h"
+#include "../Source/Audio/Dst.h"
 #include <cmath>
 #include <set>
 #include <thread>
+#include <tuple>
 
 extern thread_local bool nxtest_countAllocations;
 extern std::atomic<long> nxtest_allocationCount;
@@ -926,27 +930,6 @@ NX_TEST_SECTION (112, "Étape 6 : images SACD (.iso) : TOC, SACD Text, zones 2ch
         t.check (same, "recherche (seek) au milieu d'une trame : octets exacts"_t);
     }
     {
-        // a DST area is listed but never decoded: a clear message, no crash
-        auto dst = bytes;
-        dst[(size_t) 540 * kSector + 0x15] = 0;
-        const auto f = dir.getChildFile ("dst").getChildFile ("DST.iso");
-        f.getParentDirectory().createDirectory();
-        f.replaceWithData (dst.data(), dst.size());
-        juce::String e;
-        auto d = nx::openDecoder (juce::File (nx::sacd::virtualUri (f, 0, 1)), e);
-        nx::sacd::Disc dd;
-        t.check (d == nullptr && e.contains ("DST") && nx::sacd::readDisc (f, dd, e) && dd.areas[0].isDst(), "zone DST : refusée proprement avec un message ("_t + e + ")");
-        EngineRig rig;
-        auto item = EngineRig::item (f);
-        item.uri = nx::sacd::virtualUri (f, 0, 1);
-        juce::String reported;
-        rig.engine->onError = [&reported] (const juce::String& m) { reported = m; };
-        rig.engine->setQueue ({ item }, 0, true);
-        for (int i = 0; i < 100 && reported.isEmpty(); ++i) { rig.engine->serviceMessageThread(); juce::Thread::sleep (5); }
-        t.check (reported.contains ("DST") && rig.cap->capturedDsd.empty() && rig.cap->capturedInt.empty(),
-                 "lecteur : piste DST non jouée, message d'erreur affiché, pas de plantage"_t);
-    }
-    {
         // not a SACD image / bad paths
         const auto junk = dir.getChildFile ("data.iso");
         junk.replaceWithData (std::vector<uint8_t> (600 * kSector, 0).data(), 600 * kSector);
@@ -1073,5 +1056,243 @@ NX_TEST_SECTION (113, "Ordre de lecture : répétition (piste / file) et lecture
             at += ref.size();
         }
         t.check (exact, "aléatoire : les échantillons joués suivent l'ordre mélangé, sans trou"_t);
+    }
+}
+
+//==============================================================================
+NX_TEST_SECTION (114, "Partie 2/3 : décodeur DST (MPEG-4), SACD / DFF compressés, 6 canaux sur une sortie stéréo")
+{
+    auto fnv = [] (const uint8_t* p, size_t n) { unsigned long long h = 0xcbf29ce484222325ull; for (size_t i = 0; i < n; ++i) { h ^= p[i]; h *= 0x100000001b3ull; } return h; };
+    const int fb = dsttest::frameBytesPerChannel;
+
+    // 1. reference frames (checked with the MPEG-4 reference decoder and FFmpeg)
+    for (auto [b64, ch, hash, name] : { std::make_tuple (dstgolden::stereoFrame, dstgolden::stereoChannels, dstgolden::stereoDsdHash, "2 canaux, Rice, une table par canal"),
+                                        std::make_tuple (dstgolden::multichannelFrame, dstgolden::multichannelChannels, dstgolden::multichannelDsdHash, "6 canaux, 2 segments") })
+    {
+        juce::MemoryOutputStream mo;
+        juce::Base64::convertFromBase64 (mo, b64);
+        nx::dst::FrameDecoder d (ch);
+        std::vector<uint8_t> out ((size_t) d.getOutputSize());
+        juce::String err;
+        const bool ok = d.decode (static_cast<const uint8_t*> (mo.getData()), mo.getDataSize(), out.data(), err);
+        t.check (ok && fnv (out.data(), out.size()) == hash, "trame DST de référence ("_t + juce::String (name) + ") : DSD64 identique au bit près"_t + " " + err);
+    }
+
+    // 2. frames from the encoder: every coding option, lossless
+    const auto dsd2 = dsttest::sigmaDelta (2, 3, 0.5, 9), dsd6 = dsttest::sigmaDelta (6, 2, 0.5, 9);
+    {
+        struct Case { const char* name; int ch; dsttest::Options o; };
+        std::vector<Case> cases;
+        cases.push_back ({ "par défaut", 2, {} });
+        { dsttest::Options o; o.perChannelTables = false; o.halfProbOddChannels = false; cases.push_back ({ "tables communes", 2, o }); }
+        { dsttest::Options o; o.allowRice = false; o.filterOrder = 128; o.ptableLength = 64; cases.push_back ({ "filtre 128 coefficients, tables non codées", 2, o }); }
+        { dsttest::Options o; o.twoSegments = true; cases.push_back ({ "2 segments", 2, o }); }
+        { dsttest::Options o; o.filterOrder = 13; o.ptableLength = 7; cases.push_back ({ "6 canaux", 6, o }); }
+        { dsttest::Options o; o.twoSegments = true; o.perChannelTables = false; cases.push_back ({ "6 canaux, 2 segments", 6, o }); }
+        bool allOk = true;
+        size_t coded = 0, plainSize = 0;
+        juce::String failed;
+        for (auto& c : cases)
+        {
+            const auto& src = c.ch == 2 ? dsd2 : dsd6;
+            nx::dst::FrameDecoder d (c.ch);
+            std::vector<uint8_t> out ((size_t) d.getOutputSize());
+            const auto frame = dsttest::encodeFrame (src.data(), c.ch, c.o);
+            juce::String err;
+            const bool ok = d.decode (frame.data(), frame.size(), out.data(), err) && std::equal (out.begin(), out.end(), src.begin());
+            if (! ok) failed << juce::String::fromUTF8 (c.name) << " (" << err << ") ";
+            allOk = allOk && ok;
+            coded += frame.size();
+            plainSize += out.size();
+        }
+        t.check (allOk, "trames DST codées : segmentation, correspondances, Ptables, coefficients Rice, demi-probabilité, sans perte "_t + failed);
+        t.check (coded < plainSize * 6 / 10, "compression réelle : "_t + juce::String ((double) coded / (double) plainSize, 2) + " de la taille DSD");
+
+        nx::dst::FrameDecoder d (2);
+        std::vector<uint8_t> out ((size_t) d.getOutputSize());
+        const auto plain = dsttest::plainFrame (dsd2.data(), 2);
+        juce::String err;
+        t.check (d.decode (plain.data(), plain.size(), out.data(), err) && d.lastFrameWasPlain() && std::equal (out.begin(), out.end(), dsd2.begin()),
+                 "trame non compressée (DST_Coded = 0) : DSD recopié tel quel"_t);
+
+        // corrupt / truncated frames: an error and DSD silence, never a crash
+        auto bad = dsttest::plainFrame (dsd2.data(), 2);
+        bad[0] = 0x05;                                  // stuffing bits must be 0
+        const bool e1 = ! d.decode (bad.data(), bad.size(), out.data(), err) && out[100] == 0x69;
+        auto cut = dsttest::encodeFrame (dsd2.data(), 2);
+        cut.resize (12);                                // the tables are cut off
+        const bool e2 = ! d.decode (cut.data(), cut.size(), out.data(), err);
+        const bool e3 = ! d.decode (nullptr, 0, out.data(), err);
+        t.check (e1 && e2 && e3, "trame corrompue ou tronquée : erreur signalée, silence DSD, pas de plantage"_t);
+
+        // real time: a 6-channel frame (1/75 s) decodes much faster than it plays
+        const auto f6 = dsttest::encodeFrame (dsd6.data(), 6);
+        nx::dst::FrameDecoder d6 (6);
+        std::vector<uint8_t> o6 ((size_t) d6.getOutputSize());
+        double best = 1e9;
+        for (int k = 0; k < 3; ++k)
+        {
+            const auto t0 = juce::Time::getMillisecondCounterHiRes();
+            d6.decode (f6.data(), f6.size(), o6.data(), err);
+            best = juce::jmin (best, juce::Time::getMillisecondCounterHiRes() - t0);
+        }
+        t.check (best < 1000.0 / 75.0, "temps réel : une trame 6 canaux (13,3 ms de musique) décodée en "_t + juce::String (best, 2) + " ms");
+    }
+
+    // 3. DSDIFF files compressed in DST (with and without the DSTI index)
+    {
+        std::vector<std::vector<uint8_t>> frames;
+        for (int k = 0; k < 3; ++k) frames.push_back (k == 1 ? dsttest::plainFrame (dsd2.data() + (size_t) k * fb * 2, 2)
+                                                             : dsttest::encodeFrame (dsd2.data() + (size_t) k * fb * 2, 2));
+        bool ok = true;
+        for (bool index : { true, false })
+        {
+            auto f = t.tempDir.getChildFile (index ? "dst_index.dff" : "dst_walk.dff");
+            writeDffDst (f, frames, 2, index);
+            nx::StreamFormat fmt;
+            const auto back = decodeAllDsd (f, &fmt);
+            ok = ok && back == dsd2 && fmt.codec == "DFF DST";
+            juce::String err;
+            auto d = nx::openDecoder (f, err);
+            std::vector<uint8_t> buf (2 * 3000);
+            ok = ok && d != nullptr && d->getLength() == 3 * fb && d->seek (2 * fb - 1000) && d->readDsd (buf.data(), 3000) == 3000
+                 && std::equal (buf.begin(), buf.end(), dsd2.begin() + (2 * fb - 1000) * 2);
+        }
+        t.check (ok, "DFF compressé en DST : décodé à l'octet près, recherche à cheval sur deux trames (avec / sans index DSTI)"_t);
+
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0 }; });
+        rig.engine->setQueue ({ EngineRig::item (t.tempDir.getChildFile ("dst_index.dff")) }, 0, true);
+        rig.runToEnd (512);
+        const auto& got = rig.cap->capturedDsd;
+        t.check (rig.cap->config.wire == nx::WireFormat::NativeDsd && got.size() >= dsd2.size() && std::equal (dsd2.begin(), dsd2.end(), got.begin()),
+                 "moteur : DFF DST en DSD natif, flux identique au DSD d'origine"_t);
+    }
+
+    // 4. SACD images with DST areas (frames across sectors, 4-byte frame info)
+    using namespace sacdfixture;
+    std::vector<AreaSpec> areas { { 2, { { 6, "Allegro", "Quatuor" }, { 4, "Adagio", "Quatuor" } } },
+                                  { 6, { { 3, "Allegro (5.1)", "Quatuor" } } } };
+    areas[0].frameFormat = 0;
+    areas[1].frameFormat = 0;
+    const auto img = build (areas, "Quatuors DST", "Quatuor");
+    const auto iso = t.tempDir.getChildFile ("sacd_dst").getChildFile ("Quatuors.iso");
+    iso.getParentDirectory().createDirectory();
+    iso.replaceWithData (img.data(), img.size());
+    {
+        nx::sacd::Disc disc;
+        juce::String err;
+        const bool toc = nx::sacd::readDisc (iso, disc, err) && disc.areas.size() == 2 && disc.areas[0].isDst() && disc.areas[1].isDst();
+        auto readAll = [] (nx::AudioDecoder& d)
+        {
+            std::vector<uint8_t> out, buf ((size_t) 4096 * (size_t) d.getFormat().numChannels);
+            for (int n; (n = d.readDsd (buf.data(), 4096)) > 0;) out.insert (out.end(), buf.begin(), buf.begin() + n * d.getFormat().numChannels);
+            return out;
+        };
+        auto a = nx::openDecoder (juce::File (nx::sacd::virtualUri (iso, 0, 2)), err);
+        const bool st = a != nullptr && a->getFormat().codec == "SACD DST" && readAll (*a) == expected (0, 2, 2, 4);
+        auto m = nx::openDecoder (juce::File (nx::sacd::virtualUri (iso, 1, 1)), err);
+        const bool mc = m != nullptr && m->getFormat().numChannels == 6 && readAll (*m) == expected (1, 1, 6, 3);
+        t.check (toc && st && mc, "ISO SACD en DST : zones 2ch et 6ch décompressées à la volée, DSD64 identique "_t + err
+                 + " [" + juce::String ((int) toc) + juce::String ((int) st) + juce::String ((int) mc) + "]");
+
+        auto s = nx::openDecoder (juce::File (nx::sacd::virtualUri (iso, 0, 1)), err);
+        const auto ref = expected (0, 1, 2, 6);
+        bool same = s != nullptr;
+        for (juce::int64 pos : { (juce::int64) 4 * kFrameBytes + 77, (juce::int64) 0, (juce::int64) 2 * kFrameBytes + 4700 })
+        {
+            std::vector<uint8_t> buf (2 * 800);
+            same = same && s->seek (pos) && s->readDsd (buf.data(), 800) == 800 && std::equal (buf.begin(), buf.end(), ref.begin() + pos * 2);
+        }
+        t.check (same, "ISO DST : recherche au milieu d'une trame compressée, octets exacts"_t);
+
+        // track list whose start times disagree with the sectors' time codes (seen on some rips): still plays from its first frame
+        bool tolerant = true;
+        for (int shift : { 60 * 75, -7 })
+        {
+            auto bad = img;
+            auto* t2 = bad.data() + (size_t) 542 * kSector + 8;           // SACDTRL2 of the 2ch area, track 1 start time
+            Image::time (t2, juce::jmax (0, 150 + shift));
+            const auto f = t.tempDir.getChildFile ("sacd_dst").getChildFile ("Decale" + juce::String (shift) + ".iso");
+            f.replaceWithData (bad.data(), bad.size());
+            auto d = nx::openDecoder (juce::File (nx::sacd::virtualUri (f, 0, 1)), err);
+            tolerant = tolerant && d != nullptr && readAll (*d) == expected (0, 1, 2, 6);
+        }
+        t.check (tolerant, "pistes 2ch dont la liste des pistes ne correspond pas aux codes temporels : lues depuis leur première trame"_t);
+    }
+
+    // 5. a 6-channel track on a DAC with 2 outputs: never refused
+    auto mcItem = EngineRig::item (iso);
+    mcItem.uri = nx::sacd::virtualUri (iso, 1, 1);
+    const auto mcRef = expected (1, 1, 6, 3);
+    {
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0 }; c.capabilities.outputChannels = 2; });
+        rig.engine->setQueue ({ mcItem }, 0, true);
+        rig.runToEnd (512);
+        const auto& got = rig.cap->capturedDsd;
+        bool front = rig.cap->config.numChannels == 2 && got.size() >= mcRef.size() / 3;
+        for (size_t i = 0; front && i < mcRef.size() / 6; ++i) front = got[i * 2] == mcRef[i * 6] && got[i * 2 + 1] == mcRef[i * 6 + 1];
+        t.check (front, "6 canaux DSD sur un DAC stéréo (DSD natif) : avant gauche / droit transmis au bit près"_t);
+    }
+    {
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.sampleRates = { 44100.0, 88200.0, 176400.0 }; c.capabilities.outputChannels = 2; });
+        rig.engine->setQueue ({ mcItem }, 0, true);
+        rig.runToEnd (512);
+        t.check (rig.cap->config.wire == nx::WireFormat::DoP && rig.cap->config.numChannels == 2 && rig.cap->capturedInt.size() > 1000,
+                 "6 canaux DSD sur un DAC stéréo (DoP) : flux stéréo valide"_t);
+    }
+    {
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.sampleRates = { 88200.0 }; c.capabilities.outputChannels = 2; });
+        nx::SignalPath path;
+        rig.engine->setQueue ({ mcItem }, 0, true);
+        rig.runToEnd (512, 60.0, [&] (int block) { if (block == 5) path = rig.engine->getSignalPath(); });
+        bool stage = false;
+        for (auto& n : path.nodes) stage = stage || n.title.contains ("-> 2");
+        t.check (rig.cap->config.wire == nx::WireFormat::Pcm && rig.cap->config.numChannels == 2 && rig.engine->getCurrentPlan().downmix && stage
+                 && rig.cap->capturedInt.size() > 1000,
+                 "6 canaux DSD -> PCM sur un DAC stéréo : mixage 5.1 -> 2.0, étape affichée dans le chemin du signal"_t);
+    }
+
+    // PCM 5.1: the 2.0 mix follows L = FL + 0,707 C + 0,707 SL (normalised), never clips; 6 outputs: 6 channels as they are
+    {
+        const int frames = 24000;
+        std::vector<int32_t> pcm ((size_t) frames * 6);
+        std::vector<double> src ((size_t) frames * 6);
+        for (int i = 0; i < frames; ++i)
+            for (int c = 0; c < 6; ++c)
+            {
+                // FL, C and SL in phase at 0.99 of full scale: the worst case for the left mix
+                const double amp = (c == 0 || c == 2 || c == 4) ? 0.99 : 0.3 + 0.05 * c;
+                const double v = amp * std::sin (2.0 * juce::MathConstants<double>::pi * (c == 0 || c == 2 || c == 4 ? 500.0 : 700.0 + 50 * c) * i / 48000.0);
+                const auto q = (int32_t) std::lround (v * 8388607.0) * 256;
+                pcm[(size_t) i * 6 + (size_t) c] = q;
+                src[(size_t) i * 6 + (size_t) c] = q / 2147483648.0;
+            }
+        auto f = t.tempDir.getChildFile ("surround51.wav");
+        writeWav (f, &pcm, nullptr, 6, 48000, 24, 24, false);
+
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.outputChannels = 2; });
+        rig.engine->setQueue ({ EngineRig::item (f) }, 0, true);
+        rig.runToEnd (1024);
+        const auto& got = rig.cap->capturedInt;
+        const double k = 0.70710678118654752, g = 1.0 / (1.0 + 2.0 * k);
+        double maxErr = 0.0, peak = 0.0;
+        bool ok = rig.cap->config.numChannels == 2 && got.size() >= (size_t) frames * 2;
+        for (int i = 0; ok && i < frames; ++i)
+        {
+            const double* s6 = src.data() + (size_t) i * 6;
+            const double l = g * (s6[0] + k * s6[2] + k * s6[4]), r = g * (s6[1] + k * s6[2] + k * s6[5]);
+            maxErr = juce::jmax (maxErr, std::abs (got[(size_t) i * 2] / 2147483648.0 - l), std::abs (got[(size_t) i * 2 + 1] / 2147483648.0 - r));
+            peak = juce::jmax (peak, std::abs (got[(size_t) i * 2] / 2147483648.0));
+        }
+        t.check (ok && maxErr < 4.0 / 8388608.0 && peak < 1.0 && peak > 0.97,
+                 "PCM 5.1 sur une sortie stéréo : mixage exact à 4 LSB près (24 bits), crête "_t + juce::String (peak, 4) + ", sans écrêtage"_t);
+
+        EngineRig six ([] (nx::CaptureBackend& c) { c.capabilities.outputChannels = 8; });
+        six.engine->setQueue ({ EngineRig::item (f) }, 0, true);
+        six.runToEnd (1024);
+        const auto& g6 = six.cap->capturedInt;
+        t.check (six.cap->config.numChannels == 6 && ! six.engine->getCurrentPlan().downmix && g6.size() >= pcm.size()
+                 && std::equal (pcm.begin(), pcm.end(), g6.begin()),
+                 "PCM 5.1 sur une interface 6+ sorties : 6 canaux directs, bit-perfect"_t);
     }
 }
