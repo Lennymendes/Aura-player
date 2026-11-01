@@ -9,3 +9,7 @@ Plugins/DSP/*/bin/
 Plugins/DSP/*/*.so
 Plugins/DSP/*/*.dylib
 Plugins/DSP/*/*.dll
+
+# Licence signing keys: never commit a private key
+*.key
+*.nxkey

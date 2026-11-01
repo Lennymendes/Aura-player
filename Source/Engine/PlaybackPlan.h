@@ -41,6 +41,7 @@ struct EngineSettings
     double maxDsdToPcmRate = 352800.0;
     bool exclusive = true;               // hog mode / WASAPI exclusive
     int bufferMilliseconds = 0;          // 0 = backend default
+    bool freeEdition = false;            // NX Player Free: no DSD / DXD / SACD, no exclusive mode, no device profiles
     bool memoryPlay = true;              // Memory Play: each local file is copied into RAM, the disk is idle while it plays
     int memoryPlayMaxMb = 1536;          // larger files are read from the disk
     bool dspNeedsPcm = false;            // studio tools on: DSD is converted to PCM so that they can apply (not saved)

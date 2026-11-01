@@ -56,6 +56,7 @@ void promptNewPlaylist (AppContext& ctx, std::vector<juce::int64> ids)
 
 void editAlbum (AppContext& ctx, const AlbumInfo& album)
 {
+    if (! ctx.isPremium()) { ctx.showUpsell (UpsellReason::MetadataEditor); return; }   // a Premium feature
     auto* w = new juce::AlertWindow ("Modifier l'album"_t, "Les fichiers audio ne sont pas modifiés : seule la bibliothèque est mise à jour."_t, juce::MessageBoxIconType::NoIcon);
     w->addTextEditor ("album", album.title, "Album"_t);
     w->addTextEditor ("artist", album.artist, "Artiste"_t);
@@ -96,6 +97,7 @@ void editAlbum (AppContext& ctx, const AlbumInfo& album)
 
 void editTrack (AppContext& ctx, const TrackInfo& track)
 {
+    if (! ctx.isPremium()) { ctx.showUpsell (UpsellReason::MetadataEditor); return; }
     auto* w = new juce::AlertWindow ("Modifier le morceau"_t, "Les fichiers audio ne sont pas modifiés : seule la bibliothèque est mise à jour."_t, juce::MessageBoxIconType::NoIcon);
     w->addTextEditor ("title", track.title, "Titre"_t);
     w->addTextEditor ("artist", track.artist, "Artiste"_t);

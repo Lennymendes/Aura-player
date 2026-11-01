@@ -81,6 +81,13 @@ AppController::AppController (Options options)
     eng->streamResolver = [this] (const PlayableItem& item) { return unified->openStream (item); };
     loadEngineSettings();
 
+    // Free / Premium: one binary; the key saved in the settings (it survives application updates)
+    licenseManager = options.licensePublicKey ? std::make_unique<LicenseManager> (*options.licensePublicKey) : std::make_unique<LicenseManager>();
+    licenseManager->restore (appSettings.get ("licenseKey").toString());
+    applyEdition();
+    updateChecker = std::make_unique<UpdateChecker> (NX_VERSION);
+    updateChecker->setUrl (appSettings.get ("updateUrl", UpdateChecker::defaultUrl).toString());
+
     audioAnalyzer = std::make_unique<AudioAnalyzer> (eng->getAnalyzer());
     artworkCache = std::make_unique<ArtworkCache> (lib, dataDir.getChildFile ("ArtworkWeb"));
 
@@ -154,7 +161,11 @@ AppController::AppController (Options options)
     eng->onSignalPathChanged = [this] { if (auto* m = getMainComponent()) m->stateChanged(); };
     eng->setShuffle ((bool) appSettings.get ("shuffle", false));
     eng->setRepeat ((PlaybackEngine::Repeat) juce::jlimit (0, 2, (int) appSettings.get ("repeat", 0)));
-    eng->onError = [this] (const juce::String& e) { showMessage (e); };
+    eng->onError = [this] (const juce::String& e)
+    {
+        if (e.startsWith (PlaybackEngine::studioMasterError)) showUpsell (UpsellReason::StudioMaster);   // NX Player Free
+        else showMessage (e);
+    };
 
     lib.onChanged = [this]
     {
@@ -218,12 +229,120 @@ AppController::AppController (Options options)
     }
 
     lastFrame = juce::Time::getMillisecondCounterHiRes() / 1000.0;
-    if ((bool) appSettings.get ("remoteEnabled", false)) setRemoteEnabled (true);   // left on: the saved link works again at once
+    if ((bool) appSettings.get ("remoteEnabled", false) && isPremium()) setRemoteEnabled (true);   // left on: the saved link works again at once
+    if (options.createWindow && (bool) appSettings.get ("autoUpdateCheck", true))
+    {
+        // 3 s after the launch, in the background: only an available update is announced
+        std::weak_ptr<int> weak = alive;
+        juce::Timer::callAfterDelay (3000, [this, weak] { if (! weak.expired()) checkForUpdates (false); });
+    }
     startTimerHz (30);
+}
+
+//==============================================================================
+bool AppController::isPremium() { return licenseManager != nullptr && licenseManager->isPremium(); }
+
+void AppController::applyEdition()
+{
+    auto st = eng->getSettings();
+    st.freeEdition = ! isPremium();
+    eng->setSettings (st);
+    if (! isPremium() && remoteServer != nullptr && remoteServer->isRunning()) remoteServer->stop();
+    if (auto* m = getMainComponent()) { m->sidebar.repaint(); m->refreshCurrentPage(); m->stateChanged(); }
+}
+
+bool AppController::activateLicense (const juce::String& key, juce::String& error)
+{
+    if (! licenseManager->activate (key, error)) return false;
+    appSettings.set ("licenseKey", licenseManager->getKey());
+    applyEdition();
+    showMessage ("NX Player Premium activé — merci !"_t);
+    return true;
+}
+
+void AppController::deactivateLicense()
+{
+    licenseManager->deactivate();
+    appSettings.set ("licenseKey", juce::String());
+    applyEdition();
+    showMessage ("Licence retirée de cet appareil : NX Player Free"_t);
+}
+
+juce::String AppController::upsellTitle (UpsellReason why)
+{
+    switch (why)
+    {
+        case UpsellReason::StudioMaster:   return "Format Studio Master (DXD / DSD / SACD)"_t;
+        case UpsellReason::ExclusiveMode:  return "Mode exclusif (Hog Mode) — NX Player Premium"_t;
+        case UpsellReason::DeviceProfiles: return "Profils matériels dédiés — NX Player Premium"_t;
+        case UpsellReason::Remote:         return "NX Remote — NX Player Premium"_t;
+        case UpsellReason::MetadataEditor: return "Éditeur de métadonnées — NX Player Premium"_t;
+    }
+    return {};
+}
+
+juce::String AppController::upsellMessage (UpsellReason why)
+{
+    if (why == UpsellReason::StudioMaster)
+        return "Passez à NX Player Premium pour débloquer la lecture haute résolution au-delà de 192 kHz."_t;
+    return "Cette fonction fait partie de NX Player Premium. L'édition Free lit tout le PCM jusqu'à 24 bits / 192 kHz."_t;
+}
+
+void AppController::showUpsell (UpsellReason why)
+{
+    ++upsellCount;
+    lastUpsell = why;
+    if (upsellOpen) return;
+    upsellOpen = true;
+    auto* w = new juce::AlertWindow (upsellTitle (why), upsellMessage (why), juce::MessageBoxIconType::NoIcon);
+    w->addButton ("Entrer une clé de licence"_t, 1);
+    w->addButton ("Acheter NX Player Premium"_t, 2);
+    w->addButton ("Plus tard"_t, 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    std::weak_ptr<int> weak = alive;
+    w->enterModalState (true, juce::ModalCallbackFunction::create ([this, weak] (int result)
+    {
+        if (weak.expired()) return;
+        upsellOpen = false;
+        if (result == 1) navigate ({ PageId::Settings, "apropos" });
+        if (result == 2) juce::URL (appSettings.get ("purchaseUrl", "https://github.com/Lennymendes/NX-Player#nx-player-premium").toString()).launchInDefaultBrowser();
+    }), true);
+}
+
+void AppController::checkForUpdates (bool userAsked)
+{
+    std::weak_ptr<int> weak = alive;
+    updateChecker->checkNow ([this, weak, userAsked] (const UpdateChecker::Status& s)
+    {
+        if (weak.expired()) return;
+        if (s.state == UpdateChecker::State::Available)
+            showMessage ("Mise à jour disponible : NX Player "_t + s.info.latestVersion + " — Réglages › À propos"_t);
+        else if (userAsked && s.state == UpdateChecker::State::UpToDate)
+            showMessage ("NX Player est à jour (v"_t + juce::String (NX_VERSION) + ")");
+        else if (userAsked)
+            showMessage ("Vérification des mises à jour impossible : "_t + s.error);
+        if (auto* m = getMainComponent()) m->refreshCurrentPage();
+    });
+}
+
+std::vector<TrackInfo> AppController::withoutStudioMasters (const std::vector<TrackInfo>& tracks, int& startIndex)
+{
+    if (isPremium()) return tracks;
+    std::vector<TrackInfo> out;
+    int newStart = 0;
+    for (int i = 0; i < (int) tracks.size(); ++i)
+    {
+        const auto& t = tracks[(size_t) i];
+        if (LicenseManager::isStudioMaster (t.isDsd, t.sampleRate, t.uri)) continue;
+        if (i <= startIndex) newStart = (int) out.size();
+        out.push_back (t);
+    }
+    startIndex = juce::jlimit (0, juce::jmax (0, (int) out.size() - 1), newStart);
+    return out;
 }
 
 AppController::~AppController()
 {
+    alive.reset();
     stopTimer();
     remoteServer->stop();
     sleepBlocker.setActive (false);
@@ -390,10 +509,18 @@ void AppController::restartApplication()
 }
 
 //==============================================================================
-void AppController::playTracks (const std::vector<TrackInfo>& tracks, int startIndex)
+void AppController::playTracks (const std::vector<TrackInfo>& requested, int startIndex)
 {
+    if (requested.empty()) return;
+    startIndex = juce::jlimit (0, (int) requested.size() - 1, startIndex);
+    if (! isPremium())
+    {
+        // NX Player Free: a Studio Master track asked for -> the Premium window; others in the list are skipped
+        const auto& wanted = requested[(size_t) startIndex];
+        if (LicenseManager::isStudioMaster (wanted.isDsd, wanted.sampleRate, wanted.uri)) { showUpsell (UpsellReason::StudioMaster); return; }
+    }
+    const auto tracks = withoutStudioMasters (requested, startIndex);
     if (tracks.empty()) return;
-    startIndex = juce::jlimit (0, (int) tracks.size() - 1, startIndex);
     const auto& chosen = tracks[(size_t) startIndex];
 
     if (unified->routeFor (chosen) == PlaybackRoute::External)
@@ -433,7 +560,8 @@ void AppController::playTracks (const std::vector<TrackInfo>& tracks, int startI
 
 std::vector<TrackInfo> AppController::collectionTracks (const juce::String& scope)
 {
-    return scope == "favourites" ? lib.getFavouriteTracks() : lib.getTracks ("artist", 1000000);
+    int ignored = 0;
+    return withoutStudioMasters (scope == "favourites" ? lib.getFavouriteTracks() : lib.getTracks ("artist", 1000000), ignored);
 }
 
 void AppController::playCollection (const juce::String& scope, bool shuffle)
@@ -486,8 +614,12 @@ void AppController::extendShuffle()
     if (! items.empty()) eng->appendToQueue (std::move (items));
 }
 
-void AppController::enqueue (const std::vector<TrackInfo>& tracks)
+void AppController::enqueue (const std::vector<TrackInfo>& requested)
 {
+    int ignored = 0;
+    const auto tracks = withoutStudioMasters (requested, ignored);
+    if (tracks.size() < requested.size()) showUpsell (UpsellReason::StudioMaster);
+    if (tracks.empty()) return;
     std::vector<PlayableItem> items;
     for (auto& t : tracks)
         if (unified->routeFor (t) == PlaybackRoute::Engine) { queueTracks.push_back (t); items.push_back (unified->toPlayable (t)); }
@@ -738,6 +870,7 @@ double AppController::getUserVolume() { return (double) appSettings.get ("volume
 
 bool AppController::setRemoteEnabled (bool on)
 {
+    if (on && ! isPremium()) { showUpsell (UpsellReason::Remote); return false; }
     appSettings.set ("remoteEnabled", on);
     if (! on) { remoteServer->stop(); return true; }
     juce::String err;

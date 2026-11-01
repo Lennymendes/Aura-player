@@ -30,6 +30,7 @@ void IconButton::paintButton (juce::Graphics& g, bool hi, bool down)
     const float s = juce::jmin (r.getWidth(), r.getHeight()) * 0.62f;
     style::drawIcon (g, icon, r.withSizeKeepingCentre (s, s),
                      ! isEnabled() ? t.textCol().withAlpha (0.28f) : active ? t.accent() : (hi ? t.textCol() : t.textCol().withAlpha (0.82f)));
+    if (pro) style::drawProBadge (g, { r.getRight(), r.getY() }, t.accent(), t.bg());
     if (one)
     {
         g.setColour (t.accent());
@@ -515,6 +516,7 @@ void AlbumGrid::paint (juce::Graphics& g)
             g.setColour (juce::Colours::black.withAlpha (0.6f));
             g.fillEllipse (er);
             style::drawIcon (g, style::Icon::Edit, er.reduced (7.0f), juce::Colours::white, 2.0f);
+            if (! ctx.isPremium()) style::drawProBadge (g, { er.getRight() + 6.0f, er.getY() - 6.0f }, t.accent(), t.bg());
         }
 
         card.removeFromTop (8);
@@ -573,6 +575,7 @@ void AlbumGrid::paintRow (juce::Graphics& g, int i, juce::Rectangle<int> row)
         g.setColour (juce::Colours::black.withAlpha (0.45f));
         g.fillEllipse (er);
         style::drawIcon (g, style::Icon::Edit, er.reduced (7.0f), juce::Colours::white, 2.0f);
+        if (! ctx.isPremium()) style::drawProBadge (g, { er.getRight() + 6.0f, er.getY() - 6.0f }, t.accent(), t.bg());
     }
 }
 
@@ -856,6 +859,7 @@ void TrackList::paint (juce::Graphics& g)
             auto cell = r.removeFromRight (30).withSizeKeepingCentre (20, 20);
             editButtons[(size_t) i] = cell.expanded (4);
             style::drawIcon (g, style::Icon::Edit, cell.toFloat(), i == hover ? t.textCol() : t.textDim());
+            if (! ctx.isPremium()) style::drawProBadge (g, { (float) cell.getRight() + 8.0f, (float) cell.getY() - 7.0f }, t.accent().withAlpha (0.85f), t.bg());
         }
 
         // favourite heart (click)

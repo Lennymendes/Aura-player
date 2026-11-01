@@ -147,6 +147,8 @@ public:
     /** Message thread notifications. */
     std::function<void()> onTrackChanged, onStateChanged, onQueueFinished, onSignalPathChanged;
     std::function<void (const juce::String&)> onError;
+    /** Start of the error reported when NX Player Free meets a Studio Master track (DSD, DXD > 192 kHz, SACD). */
+    static constexpr const char* studioMasterError = "[Premium] ";
 
     /** Opens network / provider streams (Brique 2). Called on the decoder thread. Files are opened directly. */
     std::function<std::unique_ptr<juce::InputStream> (const PlayableItem&)> streamResolver;

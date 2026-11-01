@@ -2,6 +2,10 @@
 // Owns every service and the windows; implements AppContext for the interface.
 #pragma once
 
+#include <optional>
+#include "../Core/LicenseManager.h"
+#include "../Core/UpdateChecker.h"
+
 #include "AppContext.h"
 #include "Waveform.h"
 #include "../Core/Perf.h"
@@ -39,6 +43,7 @@ public:
         juce::File resourcesDir;                     // empty = next to the executable / bundle Resources
         std::unique_ptr<OutputBackend> backend;      // tests: virtual DAC
         bool createWindow = true;
+        std::optional<licensing::PublicKey> licensePublicKey;   // tests: their own key pair (default: the embedded key)
     };
 
     AppController();
@@ -103,6 +108,17 @@ public:
     void unlockZeynTheme() override;
     bool isZeynUnlocked() override;
     bool handleShortcutKey (const juce::KeyPress& k) override;
+    LicenseManager& license() override { return *licenseManager; }
+    bool isPremium() override;
+    bool activateLicense (const juce::String& key, juce::String& error) override;
+    void deactivateLicense() override;
+    void showUpsell (UpsellReason why) override;
+    UpdateChecker& updates() override { return *updateChecker; }
+    void checkForUpdates (bool userAsked) override;
+    int getUpsellCount() const noexcept { return upsellCount; }   // tests
+    UpsellReason getLastUpsell() const noexcept { return lastUpsell; }
+    static juce::String upsellTitle (UpsellReason why);
+    static juce::String upsellMessage (UpsellReason why);
     void showOnboarding() override;
     void setImmersive (bool on) override;
     void sendToAuraEngine (const std::vector<TrackInfo>& tracks) override;
@@ -161,6 +177,14 @@ private:
     std::unique_ptr<MainWindow> mainWindow;
     std::unique_ptr<MiniWindow> miniWindow;
     std::unique_ptr<MainComponent> headlessMain;   // tests without a window
+    std::unique_ptr<LicenseManager> licenseManager;
+    std::unique_ptr<UpdateChecker> updateChecker;
+    int upsellCount = 0;
+    UpsellReason lastUpsell = UpsellReason::StudioMaster;
+    bool upsellOpen = false;
+    void applyEdition();
+    /** NX Player Free: the Studio Master tracks are left out of a list (the start index follows). */
+    std::vector<TrackInfo> withoutStudioMasters (const std::vector<TrackInfo>& tracks, int& startIndex);
 
     std::vector<TrackInfo> queueTracks;            // parallel to the engine queue
     TrackInfo externalTrack;                        // Spotify / YouTube hand-off

@@ -197,6 +197,17 @@ inline bool iconIsFilled (Icon i)
     }
 }
 
+/** Small "PRO" pill (NX Player Free: a Premium feature), its top-right corner at `corner`. */
+inline void drawProBadge (juce::Graphics& g, juce::Point<float> corner, juce::Colour fill, juce::Colour text)
+{
+    const auto r = juce::Rectangle<float> (25.0f, 12.0f).withPosition (corner.x - 25.0f, corner.y);
+    g.setColour (fill);
+    g.fillRoundedRectangle (r, 6.0f);
+    g.setColour (text);
+    g.setFont (font (8.5f, true));
+    g.drawText ("PRO", r, juce::Justification::centred);
+}
+
 inline void drawIcon (juce::Graphics& g, Icon icon, juce::Rectangle<float> r, juce::Colour c, float stroke = 1.8f)
 {
     auto p = iconPath (icon);

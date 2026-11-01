@@ -7,6 +7,7 @@
 | Apple Lossless Audio Codec | macosforge/alac | Apache 2.0 | décodage ALAC (encodeur utilisé par le banc d'essai) | oui, `ThirdParty/alac` (détection de l'ordre des octets corrigée pour arm64 / MSVC) |
 | SQLite | système, ou amalgamation 3.38 | domaine public | bibliothèque | non (système, ou téléchargé sous Windows) |
 | QR Code generator (Project Nayuki) | C++ | MIT | QR code de NX Remote | oui, `ThirdParty/qrcodegen` (en-tête de licence conservé) |
+| Monocypher | 4.0.3 | BSD 2 clauses ou CC0 (au choix) | signatures Ed25519 des clés de licence (vérification ; signature dans `Tools/nx_keygen`) | oui, `ThirdParty/monocypher` (avec `LICENCE.md`) |
 | SDK ASIO de Steinberg | 2.3.x | licence Steinberg ASIO ou GPLv3 | sortie ASIO (PCM + DSD natif), Windows | non : à fournir via `NX_ASIO_SDK_DIR` |
 
 ## Conséquences pour une distribution

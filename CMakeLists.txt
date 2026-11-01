@@ -68,6 +68,13 @@ if(MSVC)
 else()
     target_compile_options(nx_imagedec PRIVATE -w)
 endif()
+# Monocypher 4.0.3 (BSD-2 / CC0): Ed25519 for the offline licence keys
+add_library(nx_monocypher STATIC ThirdParty/monocypher/monocypher.c ThirdParty/monocypher/monocypher-ed25519.c)
+target_include_directories(nx_monocypher PUBLIC ThirdParty/monocypher)
+# Licence key generator for the author (not shipped): see Tools/nx_keygen.cpp
+add_executable(nx_keygen Tools/nx_keygen.cpp)
+target_link_libraries(nx_keygen PRIVATE nx_monocypher)
+target_compile_features(nx_keygen PRIVATE cxx_std_17)
 add_library(nx_qrcodegen STATIC ThirdParty/qrcodegen/qrcodegen.cpp)
 target_include_directories(nx_qrcodegen PUBLIC ThirdParty/qrcodegen)
 target_include_directories(nx_alac PUBLIC ThirdParty/alac)
@@ -214,6 +221,7 @@ target_link_libraries(NXPlayer PRIVATE
     nx_alac
     nx_imagedec
     nx_qrcodegen
+    nx_monocypher
     ${NX_SQLITE_TARGET}
     juce::juce_core
     juce::juce_events

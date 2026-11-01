@@ -26,6 +26,7 @@ bool isFiioDevice (const juce::String& name)
 
 DeviceFamily activeFamily (const EngineSettings& s, const juce::String& deviceName)
 {
+    if (s.freeEdition) return DeviceFamily::None;           // device profiles are a Premium feature
     switch (s.hardwareProfile)
     {
         case HardwareProfile::Generic:        return DeviceFamily::None;
@@ -155,6 +156,7 @@ EngineSettings resolveProfile (const EngineSettings& in, const juce::String& dev
     s.profileTag = {};
     s.lockVolume = false;
 
+    if (in.freeEdition) s.exclusive = false;                // Hog Mode / exclusive access: Premium
     const auto family = activeFamily (in, deviceName);
     if (family == DeviceFamily::Rme)
     {

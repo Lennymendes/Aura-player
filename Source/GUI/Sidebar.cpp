@@ -289,6 +289,17 @@ void Sidebar::paint (juce::Graphics& g)
         g.setColour (t.textCol());
         g.setFont (style::font (19.0f, true));
         g.drawText ("NX Player", logo, juce::Justification::centredLeft);
+        if (ctx.isPremium())
+        {
+            // discreet edition badge after the name
+            const float x = (float) logo.getX() + juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), "NX Player") + 8.0f;
+            const auto pill = juce::Rectangle<float> (58.0f, 15.0f).withPosition (x, (float) logo.getCentreY() - 7.5f);
+            g.setColour (t.accent().withAlpha (0.16f));
+            g.fillRoundedRectangle (pill, 7.5f);
+            g.setColour (t.accent());
+            g.setFont (style::font (8.5f, true));
+            g.drawText ("PREMIUM", pill, juce::Justification::centred);
+        }
         style::drawIcon (g, style::Icon::Search, search.getBounds().toFloat().removeFromLeft (34).withSizeKeepingCentre (16, 16), t.textDim());
     }
     else

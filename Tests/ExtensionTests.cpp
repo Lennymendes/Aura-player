@@ -7,6 +7,10 @@
 #include "TestAudioFiles.h"
 #include "CoverFixtures.h"
 #include "../Source/Core/ImageDecode.h"
+#include "../Source/Core/LicenseManager.h"
+#include "../Source/Core/LicensePublicKey.h"
+#include "../Source/Core/UpdateChecker.h"
+#include "LicenseFixture.h"
 #include "../Source/GUI/Logo.h"
 #include "NXPlayerData.h"
 #include "../Source/Ext/ThemeEngine.h"
@@ -238,6 +242,124 @@ NX_TEST_SECTION (403, "Plug-in DSP en C (ABI nxplayer_dsp.h) dans la chaîne d'�
     t.check (hasDsp && path.overall == nx::PathQuality::Enhanced && differs, "Signal Path : « DSP · Crossfeed casque », plus bit-perfect"_t);
 }
 
+NX_TEST_SECTION (404, "Édition Free / Premium : clés de licence Ed25519, mises à jour")
+{
+    namespace L = nx::licensing;
+    // Ed25519 itself: RFC 8032, test 1 (empty message)
+    {
+        L::PublicKey pub {};
+        uint8_t sig[64];
+        L::fromHex ("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", pub.data(), 32);
+        L::fromHex ("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b", sig, 64);
+        std::array<uint8_t, 32> seed {};
+        L::fromHex ("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", seed.data(), 32);
+        L::SecretKey sk; L::PublicKey derived;
+        L::keyPairFromSeed (seed, sk, derived);
+        uint8_t mine[64];
+        crypto_ed25519_sign (mine, sk.data(), nullptr, 0);
+        t.check (derived == pub && crypto_ed25519_check (sig, pub.data(), nullptr, 0) == 0 && std::equal (mine, mine + 64, sig),
+                 "Ed25519 (Monocypher) : vecteur de test RFC 8032 n° 1, clé publique et signature identiques"_t);
+    }
+    // base32
+    {
+        std::vector<uint8_t> back;
+        const uint8_t data[] = { 'f', 'o', 'o', 'b', 'a', 'r' };
+        t.check (L::base32Encode (data, 6) == "MZXW6YTBOI" && L::base32Decode ("MZXW6YTBOI", back) && back == std::vector<uint8_t> (data, data + 6)
+                 && ! L::base32Decode ("MZXW6YTBO1", back), "Base32 (RFC 4648) : « foobar » -> MZXW6YTBOI, et retour"_t);
+    }
+    // keys
+    const auto pub = licensefixture::publicKey();
+    const auto key = licensefixture::key ("Élodie Martin", "elodie@example.com");
+    {
+        L::License l;
+        const bool ok = L::verifyKey (key, pub, l) == L::Result::Ok && l.name == "Élodie Martin" && l.email == "elodie@example.com" && l.edition == "premium";
+        // tampering: one character of the payload, of the signature, another key pair, junk
+        auto badPayload = key; badPayload[7] = badPayload[7] == 'A' ? 'B' : 'A';
+        auto badSig = key; badSig[badSig.size() - 3] = badSig[badSig.size() - 3] == 'A' ? 'B' : 'A';
+        L::License x;
+        const bool tamper = L::verifyKey (badPayload, pub, x) != L::Result::Ok && L::verifyKey (badSig, pub, x) == L::Result::BadSignature;
+        const bool otherKey = L::verifyKey (key, L::embeddedPublicKey(), x) == L::Result::BadSignature;   // the shipped key does not accept it
+        const bool junk = L::verifyKey ("NXP1-", pub, x) == L::Result::Malformed && L::verifyKey ("hello", pub, x) == L::Result::Malformed
+                          && L::verifyKey (licensefixture::key ("A", "a@b.c", "enterprise"), pub, x) == L::Result::UnknownEdition;
+        std::string spaced;
+        for (size_t i = 0; i < key.size(); ++i) { spaced += (char) std::tolower ((unsigned char) key[i]); if (i % 20 == 19) spaced += i % 40 == 39 ? "\n" : " "; }
+        const bool typed = L::verifyKey (spaced, pub, x) == L::Result::Ok;
+        t.check (ok && key.rfind ("NXP1-", 0) == 0, "clé NXP1 : charge utile (nom, e-mail, édition, date) signée, vérifiée avec la clé publique seule"_t);
+        t.check (tamper && otherKey && junk, "clé modifiée, signée par une autre clé, d'une autre édition ou illisible : refusée"_t);
+        t.check (typed, "clé recopiée en minuscules, avec espaces et retours à la ligne : acceptée"_t);
+        t.check (L::signKey ([] { L::License l; l.name = "a|b"; l.email = "x"; return l; }(), [] { L::SecretKey s; L::PublicKey p; licensefixture::pair (s, p); return s; }()).empty(),
+                 "générateur : champs contenant « | » refusés"_t);
+    }
+    // the manager: activation, licensee, restore, Studio Master rules
+    {
+        nx::LicenseManager m (pub);
+        juce::String err;
+        const bool refused = ! m.activate ("NXP1-AAAA-BBBB", err) && ! m.isPremium() && err.isNotEmpty();
+        const bool on = m.activate (juce::String::fromUTF8 (key.c_str()), err) && m.isPremium() && m.getLicensee() == juce::String::fromUTF8 ("Élodie Martin <elodie@example.com>");
+        nx::LicenseManager restored (pub);
+        restored.restore (m.getKey());
+        nx::LicenseManager shipped;   // embedded public key
+        shipped.restore (m.getKey());
+        m.deactivate();
+        using LM = nx::LicenseManager;
+        const bool rules = ! LM::isStudioMaster (false, 192000.0, "/m/a.flac") && ! LM::isStudioMaster (false, 44100.0, "/m/a.mp3")
+                           && LM::isStudioMaster (false, 352800.0, "/m/a.wav") && LM::isStudioMaster (false, 384000.0, "/m/a.flac")
+                           && LM::isStudioMaster (false, 768000.0, "/m/a.wav") && LM::isStudioMaster (true, 2822400.0, "/m/a.dsf")
+                           && LM::isStudioMaster (true, 22579200.0, "/m/a.dff") && LM::isStudioMaster (false, 0.0, "/m/disc.iso#area=0&track=1");
+        t.check (refused && on && restored.isPremium() && ! shipped.isPremium() && ! m.isPremium(),
+                 "LicenseManager : activation, titulaire, relecture au lancement, désactivation"_t);
+        t.check (rules, "Free : PCM jusqu'à 192 kHz ; DXD (352,8 / 384 / 768 kHz), DSD64-512 et SACD = Studio Master"_t);
+    }
+
+    // updates: parser, semantic versions, OS download link, check through a local file
+    {
+        using U = nx::UpdateChecker;
+        const bool sem = U::compareVersions ("1.1.0", "1.0.0") > 0 && U::compareVersions ("1.0.0", "1.0.0") == 0 && U::compareVersions ("v1.10.0", "1.9.9") > 0
+                         && U::compareVersions ("1.0.0-beta.2", "1.0.0") < 0 && U::compareVersions ("1.0.0-beta.10", "1.0.0-beta.2") > 0
+                         && U::compareVersions ("1.0.0-alpha", "1.0.0-beta") < 0 && U::compareVersions ("2.0", "1.99.99") > 0 && U::compareVersions ("1.0.0+build7", "1.0.0") == 0;
+        t.check (sem, "versions sémantiques : 1.1.0 > 1.0.0, 1.10 > 1.9.9, 1.0.0-beta < 1.0.0, v1.10.0, métadonnées de build ignorées"_t);
+        const juce::String json = R"({ "latestVersion": "1.2.0", "releaseNotes": "Nouveautes", "downloadUrlMac": "https://x/mac.dmg",
+                                       "downloadUrlWin": "https://x/win.exe", "downloadUrlLinux": "https://x/linux.tar.gz", "mandatory": true })";
+        nx::UpdateInfo info;
+        juce::String err;
+        const bool parsed = U::parse (json, info, err) && info.latestVersion == "1.2.0" && info.mandatory && info.releaseNotes == "Nouveautes"
+                            && info.downloadUrlForThisOS().startsWith ("https://x/");
+       #if JUCE_MAC
+        const bool os = info.downloadUrlForThisOS().endsWith ("mac.dmg");
+       #elif JUCE_WINDOWS
+        const bool os = info.downloadUrlForThisOS().endsWith ("win.exe");
+       #else
+        const bool os = info.downloadUrlForThisOS().endsWith ("linux.tar.gz");
+       #endif
+        const bool bad = ! U::parse ("{ pas du json", info, err) && ! U::parse ("{ \"releaseNotes\": \"x\" }", info, err) && ! U::parse ("", info, err);
+        t.check (parsed && os && bad, "version.json : champs lus, lien de l'OS courant, fichier invalide refusé"_t
+                 + " [" + juce::String ((int) parsed) + juce::String ((int) os) + juce::String ((int) bad) + " " + err + "]");
+        t.check (U::evaluate (json, "1.0.0").state == U::State::Available && U::evaluate (json, "1.2.0").state == U::State::UpToDate
+                 && U::evaluate (json, "1.3.0-beta").state == U::State::UpToDate && U::evaluate ("[]", "1.0.0").state == U::State::Failed,
+                 "comparaison avec la version courante : disponible / à jour / erreur"_t);
+
+        const auto file = t.tempDir.getChildFile ("version.json");
+        file.replaceWithText (json);
+        U checker ("1.0.0");
+        checker.setUrl (file.getFullPathName());
+        bool called = false;
+        checker.checkNow ([&] (const U::Status&) { called = true; });
+        for (int i = 0; i < 200 && ! called; ++i) juce::MessageManager::getInstance()->runDispatchLoopUntil (10);
+        const auto st = checker.getStatus();
+        U missing ("1.0.0");
+        missing.setUrl (t.tempDir.getChildFile ("absent.json").getFullPathName());
+        bool done2 = false;
+        missing.checkNow ([&] (const U::Status&) { done2 = true; });
+        for (int i = 0; i < 200 && ! done2; ++i) juce::MessageManager::getInstance()->runDispatchLoopUntil (10);
+        t.check (called && st.state == U::State::Available && st.info.latestVersion == "1.2.0" && missing.getStatus().state == U::State::Failed,
+                 "vérification en tâche de fond (fichier version.json) : mise à jour 1.2.0 trouvée ; source absente = échec propre"_t);
+        const auto repoFile = juce::File (__FILE__).getParentDirectory().getParentDirectory().getChildFile ("version.json");
+        nx::UpdateInfo repo;
+        t.check (! repoFile.existsAsFile() || (U::parse (repoFile.loadFileAsString(), repo, err) && U::compareVersions (repo.latestVersion, NX_VERSION) == 0),
+                 "version.json du dépôt : lisible, version = celle de l'application"_t);
+    }
+}
+
 NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)")
 {
     // A small library with artwork, lyrics and several formats.
@@ -283,7 +405,16 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     cap->record = false;
     auto* virtualDac = cap.get();
     opts.backend = std::move (cap);
+    opts.licensePublicKey = licensefixture::publicKey();
     nx::AppController app (std::move (opts));
+    {
+        // the interface tests below use every Premium feature
+        juce::String licenceError;
+        t.check (! app.isPremium() && app.engine().getSettings().freeEdition
+                 && app.activateLicense (licensefixture::key ("Banc d'essai", "test@nxplayer.local"), licenceError) && app.isPremium()
+                 && ! app.engine().getSettings().freeEdition,
+                 "édition : Free au premier lancement, Premium après activation d'une clé ("_t + licenceError + ")");
+    }
 
     // Tags for the generated WAVs come from folder / file names; set artists through the library.
     app.library().addFolder (music);
@@ -1160,6 +1291,97 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     const auto miniImg = mini.createComponentSnapshot (mini.getLocalBounds());
     savePng (miniImg, shots.getChildFile ("11_mini_lecteur.png"));
     t.check (colourVariety (miniImg) > 20, "mini-lecteur");
+
+    // NX Player Free: Studio Master formats and Pro features ask for Premium (the same binary, the key removed)
+    {
+        auto dismiss = [&]
+        {
+            settle (50);
+            while (auto* m = juce::ModalComponentManager::getInstance()->getModalComponent (0)) { m->exitModalState (0); settle (30); }
+        };
+        app.engine().stop();
+        app.deactivateLicense();
+        const auto s0 = app.engine().getSettings();
+        t.check (! app.isPremium() && s0.freeEdition && app.settings().get ("licenseKey").toString().isEmpty()
+                 && ! nx::resolveProfile (s0, "MT VAD (Merging Anubis Premium)").exclusive
+                 && nx::activeFamily (s0, "MT VAD (Merging Anubis Premium)") == nx::DeviceFamily::None,
+                 "Free : licence retirée, mode exclusif et profils matériels coupés dans le moteur"_t);
+
+        std::vector<nx::TrackInfo> dsd, hiRes, cd;
+        for (auto& tr : app.library().getTracks ("title", 1000))
+            (tr.isDsd ? dsd : tr.sampleRate > 192000 ? hiRes : cd).push_back (tr);
+        const int before = app.getUpsellCount();
+        app.playTracks (dsd, 0);
+        dismiss();
+        const bool dsdBlocked = app.getUpsellCount() == before + 1 && app.getLastUpsell() == nx::UpsellReason::StudioMaster
+                                && app.engine().getState() == nx::PlaybackEngine::State::Stopped;
+        app.playTracks (hiRes, 0);
+        dismiss();
+        const bool dxdBlocked = app.getUpsellCount() == before + 2;
+        // a mixed list: the Studio Master tracks are left out of the queue
+        std::vector<nx::TrackInfo> mixed { cd.front(), dsd.front(), cd.back(), hiRes.front() };
+        app.playTracks (mixed, 0);
+        settle (200);
+        bool onlyPcm = app.engine().getQueue().size() == 2;
+        for (auto& q : app.engine().getQueue()) onlyPcm = onlyPcm && ! q.uri.endsWithIgnoreCase (".dsf") && ! q.uri.endsWithIgnoreCase (".dff");
+        t.check (dsdBlocked && dxdBlocked && onlyPcm && ! dsd.empty() && ! hiRes.empty(),
+                 "Free : DSD et DXD (> 192 kHz) bloqués avec la fenêtre Premium, PCM ≤ 192 kHz lu, file sans les Studio Master"_t);
+        t.check (nx::AppController::upsellMessage (nx::UpsellReason::StudioMaster) == "Passez à NX Player Premium pour débloquer la lecture haute résolution au-delà de 192 kHz."_t
+                 && nx::AppController::upsellTitle (nx::UpsellReason::StudioMaster) == "Format Studio Master (DXD / DSD / SACD)"_t,
+                 "fenêtre Premium : « Format Studio Master (DXD / DSD / SACD) — Passez à NX Player Premium… »"_t);
+        {
+            app.playTracks (dsd, 0);
+            settle (50);
+            auto* w = dynamic_cast<juce::AlertWindow*> (juce::ModalComponentManager::getInstance()->getModalComponent (0));
+            t.check (w != nullptr && w->getNumButtons() == 3 && w->getButton (0)->getButtonText() == "Entrer une clé de licence"_t
+                     && w->getButton (1)->getButtonText() == "Acheter NX Player Premium"_t,
+                     "fenêtre Premium : boutons « Entrer une clé de licence » et « Acheter NX Player Premium »"_t);
+            shoot ("40_free_fenetre_premium");
+            if (w != nullptr) w->exitModalState (1);                  // "enter a key" -> Réglages › À propos
+            settle (100);
+            t.check (main->getSettingsWindow().isOpen() && main->getSettingsWindow().getTab() == "apropos", "« Entrer une clé de licence » ouvre Réglages › À propos"_t);
+            dismiss();
+        }
+        const int b2 = app.getUpsellCount();
+        const bool remoteRefused = ! app.setRemoteEnabled (true) && ! app.remote().isRunning() && app.getLastUpsell() == nx::UpsellReason::Remote;
+        dismiss();
+        nx::actions::editAlbum (app, app.library().getAlbums ("title", 1).front());
+        const bool editorRefused = app.getLastUpsell() == nx::UpsellReason::MetadataEditor && juce::ModalComponentManager::getInstance()->getNumModalComponents() == 1;
+        dismiss();
+        t.check (remoteRefused && editorRefused && app.getUpsellCount() == b2 + 2, "Free : NX Remote et éditeur de métadonnées réservés à Premium (fenêtre d'offre)"_t);
+
+        // Réglages › À propos: the licence card, Free state, key typed in the field
+        auto& sw2 = main->getSettingsWindow();
+        app.navigate ({ nx::PageId::Settings, "apropos" });
+        settle (100);
+        juce::TextEditor* keyField = nullptr;
+        for (auto* c : sw2.getPage().content().getChildren())
+            for (auto* k : c->getChildren())
+                if (auto* e = dynamic_cast<juce::TextEditor*> (k); e != nullptr && e->getTextToShowWhenEmpty().startsWith ("Collez")) keyField = e;
+        t.check (keyField != nullptr && keyField->isVisible() && shoot ("41_licence_free") > 30, "Réglages › Licence & Mises à jour : édition Free, champ de clé"_t);
+        if (keyField != nullptr)
+        {
+            keyField->setText ("nxp1-mauvaise-cle");
+            keyField->onReturnKey();
+            const bool rejected = ! app.isPremium();
+            keyField->setText (juce::String (licensefixture::key ("Lenny", "lenny@example.com")).toLowerCase());   // typed in lower case
+            keyField->onReturnKey();
+            settle (150);
+            t.check (rejected && app.isPremium() && app.license().getLicensee() == "Lenny <lenny@example.com>"
+                     && app.settings().get ("licenseKey").toString().startsWith ("NXP1-"),
+                     "clé collée dans les Réglages : mauvaise clé refusée, bonne clé acceptée (même en minuscules) et enregistrée"_t);
+        }
+        app.navigate ({ nx::PageId::Settings, "apropos" });
+        settle (100);
+        t.check (shoot ("42_licence_premium") > 30, "Réglages : « NX Player Premium — Activé pour … », badge ÉDITION PREMIUM"_t);
+        sw2.close();
+        app.navigate ({ nx::PageId::Home });
+        shoot ("43_barre_laterale_premium");
+        // the key is read back at the next launch (it lives in the settings, outside the application)
+        nx::LicenseManager next (licensefixture::publicKey());
+        next.restore (app.settings().get ("licenseKey").toString());
+        t.check (next.isPremium(), "licence relue au démarrage suivant (préférences utilisateur)"_t);
+    }
     t.info ("captures : " + shots.getFullPathName());
     t.check (juce::String (nx::MediaControls::compiledBackend()).isNotEmpty(),
              "touches multimédia du système : "_t + juce::String::fromUTF8 (nx::MediaControls::compiledBackend()));

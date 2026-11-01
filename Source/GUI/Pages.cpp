@@ -6,6 +6,8 @@
 #include "DeviceArt.h"
 #include "Logo.h"
 #include "Shortcuts.h"
+#include "../Core/LicenseManager.h"
+#include "../Core/UpdateChecker.h"
 #include "../Library/Downloads.h"
 #include "../Providers/StreamingProviders.h"
 #include "../Library/LibraryScanner.h"
@@ -193,6 +195,7 @@ void ListingPage::layoutContent (int width)
     shuffleAll.setVisible (hasPlayRow());
     viewBar.setVisible (showViewBar && ! hero && artistName.isEmpty());
     editButton.setVisible (hero);
+    editButton.pro = ! ctx.isPremium();
     bool remote = false;
     for (auto& t : heroTracks) remote = remote || DownloadManager::canDownload (t);
     downloadAll.setVisible (remote && playAll.isVisible());
@@ -1185,6 +1188,7 @@ namespace
         /** Applies a model (click on its row). */
         void choose (const DeviceModel& m)
         {
+            if (! ctx.isPremium() && juce::String (m.id) != "generic") { ctx.showUpsell (UpsellReason::DeviceProfiles); return; }
             auto s = ctx.engine().getSettings();
             applyDeviceModel (s, m);
             ctx.engine().setSettings (s);
@@ -1321,6 +1325,166 @@ namespace
     };
 }
 
+namespace
+{
+    /** Réglages › À propos: edition (Free / Premium), the licence key, the version and the update check. */
+    class LicenseCard : public juce::Component, private juce::Timer
+    {
+    public:
+        LicenseCard (AppContext& c, std::function<void()> changed) : ctx (c), onChanged (std::move (changed))
+        {
+            const bool premium = ctx.isPremium();
+            keyField.setTextToShowWhenEmpty ("Collez votre clé NXP1-…"_t, juce::Colours::grey);
+            keyField.setFont (style::font (13.0f));
+            keyField.onReturnKey = [this] { activate(); };
+            addChildComponent (keyField);
+            keyField.setVisible (! premium);
+            action.setButtonText (premium ? "Désactiver sur cet appareil"_t : "Activer"_t);
+            action.onClick = [this]
+            {
+                if (ctx.isPremium()) { ctx.deactivateLicense(); notify(); }
+                else activate();
+            };
+            addAndMakeVisible (action);
+            autoCheck.setButtonText ("Vérifier automatiquement les mises à jour au lancement"_t);
+            autoCheck.setToggleState ((bool) ctx.settings().get ("autoUpdateCheck", true), juce::dontSendNotification);
+            autoCheck.onClick = [this] { ctx.settings().set ("autoUpdateCheck", autoCheck.getToggleState()); };
+            addAndMakeVisible (autoCheck);
+            checkNow.setButtonText ("Vérifier maintenant"_t);
+            checkNow.onClick = [this] { ctx.checkForUpdates (true); lastState = -1; startTimerHz (4); };
+            addAndMakeVisible (checkNow);
+            download.setButtonText ("Télécharger la mise à jour"_t);
+            download.onClick = [this]
+            {
+                const auto url = ctx.updates().getStatus().info.downloadUrlForThisOS();
+                if (url.isNotEmpty()) juce::URL (url).launchInDefaultBrowser();
+            };
+            addChildComponent (download);
+            syncUpdate();
+            startTimerHz (2);
+        }
+
+        static int idealHeight (AppContext& c)
+        {
+            return c.updates().getStatus().state == UpdateChecker::State::Available ? 304 : 246;
+        }
+
+        void resized() override
+        {
+            auto r = getLocalBounds().reduced (18, 14);
+            r.removeFromTop (54);
+            auto keyRow = r.removeFromTop (34);
+            action.setBounds (keyRow.removeFromRight (ctx.isPremium() ? 230 : 120));
+            keyRow.removeFromRight (10);
+            keyField.setBounds (keyRow);
+            r.removeFromTop (68);
+            auto buttons = r.removeFromTop (32);
+            checkNow.setBounds (buttons.removeFromLeft (190));
+            buttons.removeFromLeft (10);
+            download.setBounds (buttons.removeFromLeft (240));
+            r.removeFromTop (6);
+            autoCheck.setBounds (r.removeFromTop (26));
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            const auto& t = ctx.theme();
+            style::paintGlass (g, *this, ctx, getLocalBounds().toFloat(), t.radius());
+            auto r = getLocalBounds().reduced (18, 14);
+            const bool premium = ctx.isPremium();
+            auto head = r.removeFromTop (24);
+            if (premium)
+            {
+                // "ÉDITION PREMIUM" badge
+                const auto text = "ÉDITION PREMIUM"_t;
+                g.setFont (style::font (11.0f, true));
+                auto badge = head.removeFromRight ((int) juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), text) + 22).toFloat().reduced (0, 2);
+                g.setGradientFill (juce::ColourGradient (t.accent(), badge.getX(), 0, t.accent2(), badge.getRight(), 0, false));
+                g.fillRoundedRectangle (badge, badge.getHeight() * 0.5f);
+                g.setColour (t.colour ("--nx-on-accent", juce::Colours::black));
+                g.drawText (text, badge, juce::Justification::centred);
+            }
+            g.setColour (t.textCol());
+            g.setFont (style::font (15.0f, true));
+            g.drawText (premium ? "NX Player Premium — Activé pour "_t + ctx.license().getLicensee() : juce::String ("NX Player Free (PCM jusqu'à 192 kHz)"_t),
+                        head, juce::Justification::centredLeft, true);
+            g.setColour (t.textDim());
+            g.setFont (style::font (12.0f));
+            g.drawText (premium ? juce::String ("Tout est débloqué : DSD, DXD, SACD, mode exclusif, profils matériels, NX Remote, éditeur de métadonnées."_t)
+                                : juce::String ("Premium débloque le DSD, le DXD (> 192 kHz), les images SACD, le mode exclusif, les profils matériels, NX Remote et l'éditeur de métadonnées."_t),
+                        r.removeFromTop (22), juce::Justification::centredLeft, true);
+            r.removeFromTop (8 + 34 + 10);
+            g.setColour (t.border());
+            g.fillRect (r.removeFromTop (1));
+            r.removeFromTop (8);
+            g.setColour (t.textCol());
+            g.setFont (style::font (13.0f, true));
+            g.drawText ("Version actuelle : v"_t + ctx.updates().getCurrentVersion(), r.removeFromTop (20), juce::Justification::centredLeft);
+            g.setColour (t.textDim());
+            g.setFont (style::font (12.0f));
+            g.drawText (statusText(), r.removeFromTop (20), juce::Justification::centredLeft, true);
+            const auto st = ctx.updates().getStatus();
+            if (st.state == UpdateChecker::State::Available && st.info.releaseNotes.isNotEmpty())
+            {
+                const juce::Rectangle<int> notes (18, 240, getWidth() - 36, 54);
+                g.setColour (t.textCol().withAlpha (0.85f));
+                g.drawFittedText (st.info.releaseNotes, notes, juce::Justification::topLeft, 3);
+            }
+        }
+
+        juce::String statusText() const
+        {
+            const auto st = ctx.updates().getStatus();
+            const auto when = st.checkedAt.toMilliseconds() > 0 ? " (" + st.checkedAt.formatted ("%H:%M") + ")" : juce::String();
+            switch (st.state)
+            {
+                case UpdateChecker::State::Idle:      return "Mises à jour : pas encore vérifiées"_t;
+                case UpdateChecker::State::Checking:  return "Recherche de mises à jour…"_t;
+                case UpdateChecker::State::UpToDate:  return "NX Player est à jour"_t + when;
+                case UpdateChecker::State::Available: return "Nouvelle version disponible : v"_t + st.info.latestVersion + (st.info.mandatory ? " · mise à jour requise"_t : juce::String()) + when;
+                case UpdateChecker::State::Failed:    return "Vérification impossible : "_t + st.error + when;
+            }
+            return {};
+        }
+
+        /** Activates the key typed in the field (tests call it too). */
+        bool activate()
+        {
+            juce::String err;
+            if (! ctx.activateLicense (keyField.getText().trim(), err)) { ctx.showMessage (err); return false; }
+            notify();
+            return true;
+        }
+        juce::TextEditor& getKeyField() { return keyField; }
+
+    private:
+        void notify() { auto cb = onChanged; juce::MessageManager::callAsync ([cb] { if (cb) cb(); }); }
+        void syncUpdate()
+        {
+            const auto st = ctx.updates().getStatus();
+            download.setVisible (st.state == UpdateChecker::State::Available && st.info.downloadUrlForThisOS().isNotEmpty());
+            checkNow.setEnabled (st.state != UpdateChecker::State::Checking);
+        }
+        void timerCallback() override
+        {
+            const int s = (int) ctx.updates().getStatus().state;
+            if (s == lastState) return;
+            const bool grew = s == (int) UpdateChecker::State::Available && getHeight() < idealHeight (ctx);
+            lastState = s;
+            syncUpdate();
+            repaint();
+            if (grew) notify();                          // room for the release notes
+        }
+
+        AppContext& ctx;
+        std::function<void()> onChanged;
+        juce::TextEditor keyField;
+        juce::TextButton action, checkNow, download;
+        juce::ToggleButton autoCheck;
+        int lastState = -1;
+    };
+}
+
 void SettingsPage::fullRow (juce::Component* control, int height)
 {
     Row r;
@@ -1400,7 +1564,12 @@ void SettingsPage::buildAudio()
     row ("Pilote"_t, makeCombo (ctx.getBackendNames(), ctx.getCurrentBackendName(), [this] (const juce::String& n) { ctx.selectBackend (n); refresh(); }), 36,
          "ASIO et WASAPI exclusif (Windows), CoreAudio + Hog Mode (macOS), ALSA hw (Linux) contournent le mixeur du système."_t);
     row ("Périphérique"_t, makeCombo (eng.getBackend().getDeviceNames(), eng.getDeviceName(), [this] (const juce::String& n) { ctx.selectDevice (n); refresh(); }));
-    row ("Accès exclusif (Hog Mode / exclusif)"_t, makeToggle (s.exclusive, [this] (bool v) { auto st = ctx.engine().getSettings(); st.exclusive = v; ctx.engine().setSettings (st); ctx.applyEngineSettings(); }));
+    const bool premium = ctx.isPremium();
+    row ("Accès exclusif (Hog Mode / exclusif)"_t + (premium ? juce::String() : juce::String ("  ·  PRO")), makeToggle (s.exclusive && premium, [this] (bool v)
+    {
+        if (v && ! ctx.isPremium()) { ctx.showUpsell (UpsellReason::ExclusiveMode); refresh(); return; }
+        auto st = ctx.engine().getSettings(); st.exclusive = v; ctx.engine().setSettings (st); ctx.applyEngineSettings();
+    }));
     {
         auto* buf = makeCombo ({ "Automatique"_t, "10 ms", "20 ms", "50 ms", "100 ms", "200 ms" },
                                s.bufferMilliseconds == 0 ? "Automatique"_t : juce::String (s.bufferMilliseconds) + " ms",
@@ -1414,8 +1583,9 @@ void SettingsPage::buildAudio()
     {
         fullRow (new DeviceCatalogPanel (ctx, [this] { refresh(); }), DeviceCatalogPanel::idealHeight());
         const juce::StringArray profiles { "Automatique (détection)"_t, "Générique"_t, "Merging Anubis / RAVENNA (AES67)"_t, "RME ADI-2 (USB)", "FiiO KA17 (USB)" };
-        row ("Profil matériel"_t, makeCombo (profiles, profiles[(int) s.hardwareProfile], [this, profiles] (const juce::String& v)
+        row ("Profil matériel"_t + (premium ? juce::String() : juce::String ("  ·  PRO")), makeCombo (profiles, profiles[premium ? (int) s.hardwareProfile : 1], [this, profiles] (const juce::String& v)
         {
+            if (! ctx.isPremium()) { ctx.showUpsell (UpsellReason::DeviceProfiles); refresh(); return; }   // Free: the standard profile only
             auto st = ctx.engine().getSettings();
             st.hardwareProfile = (HardwareProfile) juce::jmax (0, profiles.indexOf (v));
             st.deviceModel = {};                 // a manual family choice leaves the catalogue model
@@ -1694,6 +1864,8 @@ void SettingsPage::buildTools()
 
 void SettingsPage::buildAbout()
 {
+    section ("Licence & Mises à jour"_t);
+    fullRow (new LicenseCard (ctx, [this] { refresh(); }), LicenseCard::idealHeight (ctx));
     section ("À propos"_t);
     struct LogoHeader : juce::Component
     {

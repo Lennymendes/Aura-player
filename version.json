@@ -1,0 +1,8 @@
+{
+  "latestVersion": "1.0.0",
+  "releaseNotes": "NX Player 1.0.0 : lecture bit-perfect PCM / DXD / DSD, images SACD (DST), NX Remote, édition Free et Premium.",
+  "downloadUrlMac": "https://github.com/Lennymendes/NX-Player/releases/latest",
+  "downloadUrlWin": "https://github.com/Lennymendes/NX-Player/releases/latest",
+  "downloadUrlLinux": "https://github.com/Lennymendes/NX-Player/releases/latest",
+  "mandatory": false
+}

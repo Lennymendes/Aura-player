@@ -526,6 +526,18 @@ bool PlaybackEngine::openItem (int index, double startSeconds, bool flush)
         return false;
     }
 
+    if (s.freeEdition)
+    {
+        const auto f = dec->getFormat();
+        if (f.isDsd() || f.sampleRate > 192000.5 || sacd::isVirtualUri (item.uri))
+        {
+            // NX Player Free plays PCM up to 24 bits / 192 kHz: this track is skipped, the app offers Premium
+            std::lock_guard<std::mutex> l (controlLock);
+            lastError = juce::String (studioMasterError) + (item.title.isNotEmpty() ? item.title : item.uri);
+            errorFlag = true;
+            return false;
+        }
+    }
     auto plan = makePlan (dec->getFormat(), c, s);
     plan.channels = juce::jmin (plan.channels, juce::jlimit (1, 8, s.maxChannels));
     plan.inMemory = inMemory;

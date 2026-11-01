@@ -22,6 +22,11 @@ class RemoteServer;
 struct StudioToolsState;
 class TrackAnalyzer;
 struct TrackAnalysis;
+class LicenseManager;
+class UpdateChecker;
+
+/** Why the "Premium" window is shown (NX Player Free). */
+enum class UpsellReason { StudioMaster, ExclusiveMode, DeviceProfiles, Remote, MetadataEditor };
 
 enum class PageId { Home, Search, RecentlyAdded, Albums, AlbumDetail, Artists, ArtistDetail, Songs, Playlists, PlaylistDetail,
                     Source, NowPlaying, Settings, Marketplace, UserPlugins,
@@ -118,6 +123,18 @@ public:
     virtual void setStreamerMode (bool on) = 0;
     /** Easter egg (three clicks on the logo): adds the hidden ZEYN theme to the list (not applied), remembered. */
     virtual void unlockZeynTheme() = 0;
+
+    //== Free / Premium and updates ==========================================
+    virtual LicenseManager& license() = 0;
+    virtual bool isPremium() = 0;
+    /** Checks and saves a licence key (NXP1-...); false with the reason. */
+    virtual bool activateLicense (const juce::String& key, juce::String& error) = 0;
+    virtual void deactivateLicense() = 0;
+    /** The "Passez à NX Player Premium" window (enter a key / buy). */
+    virtual void showUpsell (UpsellReason why) = 0;
+    virtual UpdateChecker& updates() = 0;
+    /** userAsked: also says "à jour" / the error; otherwise only an available update is announced. */
+    virtual void checkForUpdates (bool userAsked) = 0;
     virtual bool isZeynUnlocked() = 0;
     /** A reassignable shortcut typed in another window (mini player): true if it was one. */
     virtual bool handleShortcutKey (const juce::KeyPress&) { return false; }

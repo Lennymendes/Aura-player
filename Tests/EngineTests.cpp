@@ -1296,3 +1296,44 @@ NX_TEST_SECTION (114, "Partie 2/3 : décodeur DST (MPEG-4), SACD / DFF compress�
                  "PCM 5.1 sur une interface 6+ sorties : 6 canaux directs, bit-perfect"_t);
     }
 }
+
+//==============================================================================
+NX_TEST_SECTION (115, "Édition Free dans le moteur : PCM jusqu'à 192 kHz, Studio Master refusés")
+{
+    auto play = [&] (const juce::File& f, juce::String& error, nx::CaptureBackend*& capOut, std::function<void (nx::CaptureBackend&)> cfg = {})
+    {
+        auto rig = std::make_unique<EngineRig> (cfg);
+        auto s = rig->engine->getSettings();
+        s.freeEdition = true;
+        rig->engine->setSettings (s);
+        rig->engine->onError = [&error] (const juce::String& m) { error = m; };
+        rig->engine->setQueue ({ EngineRig::item (f) }, 0, true);
+        rig->runToEnd (1024, 20.0);
+        capOut = rig->cap;
+        return rig;
+    };
+    const auto pcm192 = sinePcm (19200, 2, 24, 192000, 1000, 0.5);
+    const auto pcm352 = sinePcm (35280, 2, 24, 352800, 1000, 0.5);
+    auto f192 = t.tempDir.getChildFile ("free192.wav"), f352 = t.tempDir.getChildFile ("free352.wav"), fdsd = t.tempDir.getChildFile ("free.dsf");
+    writeWav (f192, &pcm192, nullptr, 2, 192000, 24, 24, false);
+    writeWav (f352, &pcm352, nullptr, 2, 352800, 24, 24, false);
+    writeDsf (fdsd, dsdSine (2822400.0, 0.1, 2, 1000.0, 0.5), 2, 2822400.0, false);
+
+    juce::String e1, e2, e3;
+    nx::CaptureBackend *c1 = nullptr, *c2 = nullptr, *c3 = nullptr;
+    auto r1 = play (f192, e1, c1);
+    auto r2 = play (f352, e2, c2);
+    auto r3 = play (fdsd, e3, c3, [] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0 }; });
+    t.check (e1.isEmpty() && c1->capturedInt.size() >= pcm192.size() && std::equal (pcm192.begin(), pcm192.end(), c1->capturedInt.begin()),
+             "Free : PCM 24 bits / 192 kHz lu en bit-perfect"_t);
+    t.check (e2.startsWith (nx::PlaybackEngine::studioMasterError) && c2->capturedInt.empty()
+             && e3.startsWith (nx::PlaybackEngine::studioMasterError) && c3->capturedDsd.empty(),
+             "Free : DXD 352,8 kHz et DSD refusés par le moteur (message « Premium »), rien n'atteint le DAC"_t);
+    nx::EngineSettings s;
+    s.freeEdition = true;
+    s.exclusive = true;
+    s.hardwareProfile = nx::HardwareProfile::MergingRavenna;
+    t.check (! nx::resolveProfile (s, "Anubis").exclusive && nx::activeFamily (s, "Anubis") == nx::DeviceFamily::None
+             && nx::resolveProfile (s, "Anubis").profileTag.isEmpty(),
+             "Free : mode exclusif et profils matériels neutralisés (profil standard)"_t);
+}
