@@ -1,6 +1,8 @@
 // NX Player — MIT License
 #pragma once
 
+#include <map>
+
 #include "Background.h"
 #include "Sidebar.h"
 #include "PlayerBar.h"
@@ -76,6 +78,7 @@ public:
     OnboardingWizard& getOnboarding() { return onboarding; }
     ImmersiveView& getImmersive() { return immersive; }
     ListingPage& getListing() { return listing; }
+    int rememberedScroll (const PageRequest& r) const { auto it = scrollMemory.find (viewKey (r)); return it == scrollMemory.end() ? 0 : it->second; }
     PageRequest getCurrentPage() const { return current; }
     MarketplacePage& getMarketplace() { return marketplace; }
 
@@ -117,6 +120,9 @@ private:
     PageRequest current;
     PageRequest localView;            // last page of the Local family (album, artist, grid...) and its scroll
     int localScroll = 0, pendingScroll = -1;
+    std::map<juce::String, int> scrollMemory;   // vertical scroll of each listing page, by page + arguments
+    bool restoreScroll = false;                 // the next page opened (Back, Forward, Local) gets its remembered scroll back
+    static juce::String viewKey (const PageRequest& r) { return juce::String ((int) r.page) + "|" + r.a + "|" + r.b; }
     bool queueVisible = false;
     bool immersiveMadeFullScreen = false;
 };

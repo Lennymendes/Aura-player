@@ -30,6 +30,12 @@ void IconButton::paintButton (juce::Graphics& g, bool hi, bool down)
     const float s = juce::jmin (r.getWidth(), r.getHeight()) * 0.62f;
     style::drawIcon (g, icon, r.withSizeKeepingCentre (s, s),
                      ! isEnabled() ? t.textCol().withAlpha (0.28f) : active ? t.accent() : (hi ? t.textCol() : t.textCol().withAlpha (0.82f)));
+    if (one)
+    {
+        g.setColour (t.accent());
+        g.setFont (style::font (10.0f, true));
+        g.drawText ("1", r.withSizeKeepingCentre (s, s), juce::Justification::centred);
+    }
     if (active)
     {
         g.setColour (t.accent());
@@ -664,6 +670,7 @@ void TrackList::setTracks (std::vector<TrackInfo> t, bool art, bool alb, bool nu
     artwork = art; album = alb; numbered = num;
     hover = selected = -1;
     artistRects.clear();
+    editButtons.clear();
     repaint();
 }
 
@@ -714,6 +721,11 @@ void TrackList::mouseUp (const juce::MouseEvent& e)
         }
         if (i < (int) downloadButtons.size() && downloadButtons[(size_t) i].contains (e.getPosition()))
             download ({ track });
+        if (onEdit && i < (int) editButtons.size() && editButtons[(size_t) i].contains (e.getPosition()) && track.id > 0)
+        {
+            onEdit (track);
+            return;
+        }
         if (i < (int) heartButtons.size() && heartButtons[(size_t) i].contains (e.getPosition()) && track.id > 0)
         {
             auto& tr = tracks[(size_t) i];
@@ -835,6 +847,16 @@ void TrackList::paint (juce::Graphics& g)
         g.setColour (t.textDim());
         g.setFont (style::font (13.0f));
         g.drawText (style::formatTime (tr.duration), right, juce::Justification::centredRight);
+
+        // metadata pencil (album page), left of the heart
+        if ((int) editButtons.size() != (int) tracks.size()) editButtons.assign (tracks.size(), {});
+        editButtons[(size_t) i] = {};
+        if (onEdit && tr.id > 0)
+        {
+            auto cell = r.removeFromRight (30).withSizeKeepingCentre (20, 20);
+            editButtons[(size_t) i] = cell.expanded (4);
+            style::drawIcon (g, style::Icon::Edit, cell.toFloat(), i == hover ? t.textCol() : t.textDim());
+        }
 
         // favourite heart (click)
         if ((int) heartButtons.size() != (int) tracks.size()) heartButtons.assign (tracks.size(), {});

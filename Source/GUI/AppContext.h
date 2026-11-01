@@ -82,9 +82,9 @@ public:
     virtual void navigate (const PageRequest& request) = 0;
     virtual void toggleMiniPlayer() = 0;
     virtual void setShuffle (bool on) = 0;
-    virtual void setRepeat (bool on) = 0;
+    virtual void setRepeat (PlaybackEngine::Repeat mode) = 0;
     virtual bool isShuffle() const = 0;
-    virtual bool isRepeat() const = 0;
+    virtual PlaybackEngine::Repeat getRepeat() const = 0;
     virtual void applyEngineSettings() = 0;
     virtual juce::StringArray getBackendNames() = 0;
     virtual juce::String getCurrentBackendName() = 0;

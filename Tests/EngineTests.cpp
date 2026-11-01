@@ -17,6 +17,7 @@
 #include "../Source/Audio/SacdIso.h"
 #include "SacdFixture.h"
 #include <cmath>
+#include <set>
 #include <thread>
 
 extern thread_local bool nxtest_countAllocations;
@@ -977,5 +978,100 @@ NX_TEST_SECTION (112, "Étape 6 : images SACD (.iso) : TOC, SACD Text, zones 2ch
         rig.engine->setQueue ({ item }, 0, true);
         rig.runToEnd (512);
         t.check (rig.cap->config.wire == nx::WireFormat::DoP && rig.cap->capturedInt.size() > 1000, "moteur : piste d'ISO en DoP 176,4 kHz"_t);
+    }
+}
+
+//==============================================================================
+NX_TEST_SECTION (113, "Ordre de lecture : répétition (piste / file) et lecture aléatoire sans répétition")
+{
+    using R = nx::PlaybackEngine::Repeat;
+    // queue logic alone (no audio): next index in play order
+    {
+        EngineRig rig;
+        std::vector<nx::PlayableItem> items (5);
+        rig.engine->setQueue (items, 0, false);
+        auto& e = *rig.engine;
+        t.check (e.getNextIndex (1) == 2 && e.getNextIndex (4) == -1, "ordre normal : suite de la file, fin après la dernière"_t);
+        e.setRepeat (R::All);
+        t.check (e.getNextIndex (4) == 0 && e.getNextIndex (2) == 3, "Répéter la file : la dernière piste est suivie de la première"_t);
+        e.setRepeat (R::One);
+        t.check (e.getNextIndex (2) == 2 && e.getNextIndex (2, true) == 3 && e.getNextIndex (4, true) == 0,
+                 "Répéter la piste : la même piste en fin naturelle, Suivant passe quand même à la suivante"_t);
+        e.setRepeat (R::Off);
+        e.setShuffle (true);
+        std::set<int> seen { 0 };
+        int cur = 0;
+        for (int k = 0; k < 4; ++k) { cur = e.getNextIndex (cur); seen.insert (cur); }
+        t.check (seen.size() == 5 && e.getNextIndex (cur) == -1 && e.getRemainingCount() == 4,
+                 "aléatoire : chaque piste exactement une fois, puis fin de la file"_t);
+        e.setRepeat (R::All);
+        const int last = cur;
+        std::set<int> pass2;
+        for (int k = 0; k < 4; ++k) { cur = e.getNextIndex (cur); pass2.insert (cur); }
+        t.check (pass2.size() == 4 && pass2.count (last) == 0,
+                 "aléatoire + répétition : nouvelle passe sans doublon, la dernière piste n'est pas rejouée aussitôt"_t);
+        e.setShuffle (false);
+        t.check (! e.isShuffle() && e.getNextIndex (1) == 2, "aléatoire coupé : retour à l'ordre de la file"_t);
+    }
+
+    // through the audio path: gapless repeat of the track / of the queue, shuffled pass
+    const auto a = randomPcm (6000, 2, 16, 11), b = randomPcm (5000, 2, 16, 12), c = randomPcm (4000, 2, 16, 13), d = randomPcm (3000, 2, 16, 14);
+    juce::Array<juce::File> files;
+    int n = 0;
+    for (auto* pcm : { &a, &b, &c, &d })
+    {
+        auto f = t.tempDir.getChildFile ("ord" + juce::String (n++) + ".wav");
+        writeWav (f, pcm, nullptr, 2, 48000, 16, 16, false);
+        files.add (f);
+    }
+    auto itemsOf = [&] (std::initializer_list<int> ids) { std::vector<nx::PlayableItem> v; for (int i : ids) v.push_back (EngineRig::item (files[i])); return v; };
+    auto startsWith = [] (const std::vector<int32_t>& got, size_t at, const std::vector<int32_t>& ref)
+    {
+        return got.size() >= at + ref.size() && std::equal (ref.begin(), ref.end(), got.begin() + (std::ptrdiff_t) at);
+    };
+    {
+        EngineRig rig;
+        int changes = 0;
+        rig.engine->onTrackChanged = [&] { ++changes; };
+        rig.engine->setRepeat (R::One);
+        rig.engine->setQueue (itemsOf ({ 0, 1 }), 0, true);
+        rig.runToEnd (1024, 30.0, [&] (int) { if (changes >= 3) rig.engine->setRepeat (R::Off); });
+        const auto& got = rig.cap->capturedInt;
+        t.check (startsWith (got, 0, a) && startsWith (got, a.size(), a) && startsWith (got, 2 * a.size(), a),
+                 "Répéter la piste : la piste 1 repart à 0:00 sans coupure quand elle se termine"_t);
+    }
+    {
+        EngineRig rig;
+        int changes = 0;
+        rig.engine->onTrackChanged = [&] { ++changes; };
+        rig.engine->setRepeat (R::All);
+        rig.engine->setQueue (itemsOf ({ 0, 1 }), 0, true);
+        rig.runToEnd (1024, 30.0, [&] (int) { if (changes >= 4) rig.engine->setRepeat (R::Off); });
+        const auto& got = rig.cap->capturedInt;
+        t.check (startsWith (got, 0, a) && startsWith (got, a.size(), b) && startsWith (got, a.size() + b.size(), a)
+                 && startsWith (got, 2 * a.size() + b.size(), b),
+                 "Répéter la file : après la dernière piste, retour au début de la file (A B A B)"_t);
+    }
+    {
+        EngineRig rig;
+        std::vector<int> order;
+        rig.engine->onTrackChanged = [&] { order.push_back (rig.engine->getCurrentIndex()); };
+        rig.engine->setShuffle (true);
+        rig.engine->setQueue (itemsOf ({ 0, 1, 2, 3 }), 0, true);
+        rig.runToEnd (1024, 30.0);
+        std::set<int> distinct (order.begin(), order.end());
+        t.check (order.size() == 4 && distinct.size() == 4 && order.front() == 0,
+                 "aléatoire : la lecture réelle passe une fois par chaque piste, celle choisie en premier"_t);
+        // the audio follows the same order
+        const auto& got = rig.cap->capturedInt;
+        size_t at = 0;
+        bool exact = ! order.empty();
+        for (int idx : order)
+        {
+            const auto& ref = idx == 0 ? a : idx == 1 ? b : idx == 2 ? c : d;
+            exact = exact && startsWith (got, at, ref);
+            at += ref.size();
+        }
+        t.check (exact, "aléatoire : les échantillons joués suivent l'ordre mélangé, sans trou"_t);
     }
 }

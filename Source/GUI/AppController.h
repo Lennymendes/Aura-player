@@ -71,9 +71,9 @@ public:
     void navigate (const PageRequest& r) override;
     void toggleMiniPlayer() override;
     void setShuffle (bool on) override;
-    void setRepeat (bool on) override       { repeatOn = on; }
-    bool isShuffle() const override         { return shuffleOn; }
-    bool isRepeat() const override          { return repeatOn; }
+    void setRepeat (PlaybackEngine::Repeat mode) override;
+    bool isShuffle() const override         { return eng->isShuffle(); }
+    PlaybackEngine::Repeat getRepeat() const override { return eng->getRepeat(); }
     void applyEngineSettings() override;
     juce::StringArray getBackendNames() override;
     juce::String getCurrentBackendName() override;
@@ -162,7 +162,6 @@ private:
     std::vector<TrackInfo> queueTracks;            // parallel to the engine queue
     TrackInfo externalTrack;                        // Spotify / YouTube hand-off
     bool externalPlaying = false;
-    bool shuffleOn = false, repeatOn = false;
     bool restartPromptOpen = false;
     // Endless shuffle: shuffled passes over the whole collection, queued a chunk at a time.
     juce::String shuffleScope;                      // empty = no endless shuffle running

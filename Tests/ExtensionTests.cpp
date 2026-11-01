@@ -363,6 +363,157 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     t.check (main->getCurrentPage().page == nx::PageId::AlbumDetail, "menu Local : reste sur l'album ouvert"_t);
     main->navigate ({ nx::PageId::Library, "albums" });
 
+    // --- Finition UX 1/3 -------------------------------------------------------------------------------------
+    {
+        // 1. shuffle / repeat buttons follow the engine (the collection shuffle above lit the shuffle button)
+        settle (150);
+        using R = nx::PlaybackEngine::Repeat;
+        t.check (app.isShuffle() && app.engine().isShuffle() && main->player.shuffleButton.active,
+                 "bouton Aléatoire : synchronisé avec l'état aléatoire global (Aléatoire de la bibliothèque)"_t);
+        main->player.repeatButton.onClick();
+        const bool all = app.engine().getRepeat() == R::All && main->player.repeatButton.active && ! main->player.repeatButton.one;
+        main->player.repeatButton.onClick();
+        const bool one = app.engine().getRepeat() == R::One && main->player.repeatButton.active && main->player.repeatButton.one;
+        main->player.repeatButton.onClick();
+        const bool off = app.engine().getRepeat() == R::Off && ! main->player.repeatButton.active && ! main->player.repeatButton.one;
+        t.check (all && one && off && (int) app.settings().get ("repeat", -1) == 0, "bouton Répéter : Désactivé -> File -> Piste -> Désactivé, affichage et moteur"_t);
+        main->player.shuffleButton.onClick();
+        t.check (! app.engine().isShuffle() && ! main->player.shuffleButton.active && ! (bool) app.settings().get ("shuffle", true),
+                 "bouton Aléatoire : un clic coupe l'aléatoire du moteur et mémorise le choix"_t);
+
+        // 2. Local (sidebar) inside Local goes back to the root grid
+        main->navigate ({ nx::PageId::AlbumDetail, "Zeyn", "Neon Roads" });
+        main->navigate ({ nx::PageId::Library, "albums", "sidebar" });
+        t.check (main->getCurrentPage().page == nx::PageId::Library && main->getCurrentPage().a == "albums",
+                 "menu Local : déjà dans Local sur un album, un nouveau clic ramène à la grille des albums"_t);
+
+        // 3. scroll of the grid is remembered across an album and the Back button (many albums so that it scrolls)
+        std::vector<juce::String> fakeIds;
+        for (int k = 0; k < 70; ++k)
+        {
+            nx::TrackInfo f;
+            f.source = "local";
+            f.externalId = f.uri = t.tempDir.getChildFile ("fake" + juce::String (k) + ".flac").getFullPathName();
+            f.title = "Piste " + juce::String (k);
+            f.artist = "Artiste " + juce::String (100 - k);
+            f.album = "Album " + juce::String::formatted ("%02d", k);
+            f.year = 1950 + k;
+            f.duration = 200; f.codec = "FLAC"; f.sampleRate = 44100; f.bitsPerSample = 16; f.channels = 2;
+            app.library().upsert (f);
+            fakeIds.push_back (f.externalId);
+        }
+        app.library().notifyChanged();
+        main->navigate ({ nx::PageId::Library, "albums" });
+        settle (200);
+        auto& listing = main->getListing();
+        listing.setScrollY (900);
+        const int scrolled = listing.getScrollY();
+        const auto albumsNow = listing.grid.getAlbums();
+        main->navigate ({ nx::PageId::AlbumDetail, albumsNow.front().artist, albumsNow.front().title });
+        t.check (listing.getScrollY() == 0, "album ouvert : la page démarre en haut"_t);
+        main->goBack();
+        settle (100);
+        t.check (scrolled > 500 && listing.getScrollY() == scrolled, "Précédent : la grille retrouve exactement sa position de scroll ("_t + juce::String (scrolled) + ")");
+        listing.setScrollY (1300);
+        const int s2 = listing.getScrollY();
+        main->navigate ({ nx::PageId::AlbumDetail, albumsNow.front().artist, albumsNow.front().title });
+        main->navigate ({ nx::PageId::Library, "albums", "sidebar" });
+        t.check (main->getCurrentPage().page == nx::PageId::Library && listing.getScrollY() == s2, "Local depuis un album : retour à la grille, scroll conservé"_t);
+
+        // 4. size / list / sort: the controls are really on top (not under the title header) and act at once
+        auto& vb = listing.viewBar;
+        auto topmostIs = [&] (juce::Component& c)
+        {
+            auto* hit = listing.content().getComponentAt (listing.content().getLocalPoint (&c, c.getLocalBounds().getCentre()));
+            return hit == &c || c.isParentOf (hit);   // (a combo box answers with its own label)
+        };
+        const bool onTop = vb.isVisible() && topmostIs (vb.small) && topmostIs (vb.medium) && topmostIs (vb.large) && topmostIs (vb.viewToggle) && topmostIs (vb.sort);
+        t.check (onTop, "S, M, L, Liste / Grille et tri : au premier plan, les clics les atteignent"_t
+                 + " [vis=" + juce::String ((int) vb.isVisible()) + " s=" + juce::String ((int) topmostIs (vb.small)) + " m=" + juce::String ((int) topmostIs (vb.medium))
+                 + " l=" + juce::String ((int) topmostIs (vb.large)) + " v=" + juce::String ((int) topmostIs (vb.viewToggle)) + " sort=" + juce::String ((int) topmostIs (vb.sort)) + "]");
+        vb.small.onClick();
+        const float sCard = listing.grid.getCardSize();
+        vb.medium.onClick();
+        const float mCard = listing.grid.getCardSize();
+        vb.large.onClick();
+        const float lCard = listing.grid.getCardSize();
+        t.check (sCard == 130.0f && mCard == 180.0f && lCard == 240.0f && app.settings().get ("albumSize", "").toString() == "L",
+                 "S / M / L : vignettes de 130 / 180 / 240 px, choix mémorisé"_t);
+        vb.viewToggle.onClick();
+        const bool list = listing.grid.isListMode();
+        vb.viewToggle.onClick();
+        t.check (list && ! listing.grid.isListMode(), "bouton Liste / Grille : bascule la vue en lignes détaillées puis revient à la grille"_t);
+        auto sortedBy = [&] (int id, auto less)
+        {
+            vb.sort.setSelectedId (id, juce::sendNotificationSync);
+            const auto& v = listing.grid.getAlbums();
+            return v.size() > 10 && std::is_sorted (v.begin(), v.end(), less);
+        };
+        const bool title = sortedBy (2, [] (const nx::AlbumInfo& a, const nx::AlbumInfo& b) { return a.title.compareNatural (b.title, false) < 0; });
+        const bool artist = sortedBy (3, [] (const nx::AlbumInfo& a, const nx::AlbumInfo& b) { return a.artist.compareNatural (b.artist, false) < 0; });
+        const bool year = sortedBy (4, [] (const nx::AlbumInfo& a, const nx::AlbumInfo& b) { return a.year > b.year; });
+        const bool added = sortedBy (5, [] (const nx::AlbumInfo& a, const nx::AlbumInfo& b) { return a.added > b.added; });
+        sortedBy (1, [] (const nx::AlbumInfo&, const nx::AlbumInfo&) { return true; });
+        t.check (title && artist && year && added && vb.sort.getNumItems() == 6, "menu de tri : titre A-Z, artiste, année, date d'ajout trient la vue immédiatement"_t
+                 + " [" + juce::String ((int) title) + juce::String ((int) artist) + juce::String ((int) year) + juce::String ((int) added) + " n=" + juce::String ((int) listing.grid.getAlbums().size()) + "]");
+
+        // 5. pencil on the album page: album and each track, pre-filled, view refreshed on save
+        const auto first = app.library().getAlbumTracks ("Zeyn", "Neon Roads");
+        main->navigate ({ nx::PageId::AlbumDetail, "Zeyn", "Neon Roads" });
+        settle (150);
+        auto& ed = listing.editButton;
+        t.check (ed.isVisible() && listing.content().getComponentAt (listing.content().getLocalPoint (&ed, ed.getLocalBounds().getCentre())) == &ed
+                 && static_cast<bool> (listing.list.onEdit),
+                 "vue album : crayon de l'album au premier plan, crayon sur chaque piste"_t);
+        auto modal = [&]() -> juce::AlertWindow*
+        {
+            settle (100);
+            return juce::ModalComponentManager::getInstance()->getNumModalComponents() > 0
+                       ? dynamic_cast<juce::AlertWindow*> (juce::ModalComponentManager::getInstance()->getModalComponent (0)) : nullptr;
+        };
+        ed.onClick();
+        if (auto* w = modal())
+        {
+            const bool prefilled = w->getTextEditorContents ("album") == "Neon Roads" && w->getTextEditorContents ("artist") == "Zeyn";
+            w->getTextEditor ("year")->setText ("1999");
+            w->exitModalState (1);
+            settle (300);
+            t.check (prefilled && ! listing.heroTracks.empty() && listing.heroTracks.front().year == 1999,
+                     "crayon de l'album : fenêtre pré-remplie, la vue album affiche l'année enregistrée"_t);
+        }
+        else t.check (false, "crayon de l'album : la fenêtre d'édition s'ouvre"_t);
+
+        const auto row = listing.list.getTracks().at (1);
+        listing.list.onEdit (row);
+        if (auto* w = modal())
+        {
+            const bool prefilled = w->getTextEditorContents ("title") == row.title && w->getTextEditorContents ("artist") == row.artist
+                                   && w->getTextEditorContents ("no").getIntValue() == row.trackNumber;
+            w->getTextEditor ("title")->setText ("Titre corrige");
+            w->getTextEditor ("no")->setText ("9");
+            w->exitModalState (1);
+            settle (300);
+            const auto& shown = listing.list.getTracks();
+            bool seen = false;
+            for (auto& s : shown) seen = seen || (s.id == row.id && s.title == "Titre corrige" && s.trackNumber == 9);
+            t.check (prefilled && seen, "crayon d'une piste : fenêtre pré-remplie, la liste affiche titre et numéro enregistrés"_t
+                     + " [pre=" + juce::String ((int) prefilled) + " seen=" + juce::String ((int) seen) + " n=" + juce::String ((int) shown.size()) + "]");
+            // a rescan of the file keeps what was typed
+            auto again = row;
+            again.title = "Titre du fichier";
+            app.library().upsert (again);
+            bool kept = false;
+            for (auto& s : app.library().getAlbumTracks ("Zeyn", "Neon Roads")) kept = kept || (s.id == row.id && s.title == "Titre corrige");
+            t.check (kept, "titre modifié à la main : conservé après un nouveau scan du fichier"_t);
+        }
+        else t.check (false, "crayon d'une piste : la fenêtre d'édition s'ouvre"_t);
+
+        for (auto& id : fakeIds) app.library().remove ("local", id);
+        app.library().notifyChanged();
+        (void) first;
+        main->navigate ({ nx::PageId::Library, "albums" });
+    }
+
     app.applyThemeNow ("aura-neon");
     app.navigate ({ nx::PageId::Albums });
     t.check (shoot ("05_theme_aura_neon") > 40 && app.theme().id == "aura-neon", "thème Aura Neon appliqué à chaud"_t);

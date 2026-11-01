@@ -48,6 +48,8 @@ void sortAlbums (std::vector<AlbumInfo>& v, const juce::String& mode)
     else if (mode == "artist")
         std::stable_sort (v.begin(), v.end(), [&] (const AlbumInfo& a, const AlbumInfo& b)
                           { const int c = a.artist.compareNatural (b.artist, false); return c != 0 ? c < 0 : a.year < b.year; });
+    else if (mode == "year")
+        std::stable_sort (v.begin(), v.end(), [] (const AlbumInfo& a, const AlbumInfo& b) { return a.year != b.year ? a.year > b.year : a.title.compareNatural (b.title, false) < 0; });
     else if (mode == "added")
         std::stable_sort (v.begin(), v.end(), [] (const AlbumInfo& a, const AlbumInfo& b) { return a.added > b.added; });
     else if (mode == "format")
@@ -151,10 +153,11 @@ juce::int64 Library::upsert (TrackInfo& t)
                             duration, codec, sample_rate, bits, channels, is_dsd, lossy, file_size, mtime, added, artwork, lyrics_path, credits)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
         ON CONFLICT (source, external_id) DO UPDATE SET
-            uri = excluded.uri, title = excluded.title, artist = excluded.artist, album_artist = CASE WHEN tracks.locked & 2 THEN tracks.album_artist ELSE excluded.album_artist END,
+            uri = excluded.uri, title = CASE WHEN tracks.locked & 16 THEN tracks.title ELSE excluded.title END,
+            artist = CASE WHEN tracks.locked & 32 THEN tracks.artist ELSE excluded.artist END, album_artist = CASE WHEN tracks.locked & 2 THEN tracks.album_artist ELSE excluded.album_artist END,
             album = CASE WHEN tracks.locked & 1 THEN tracks.album ELSE excluded.album END, genre = excluded.genre, composer = excluded.composer,
             year = CASE WHEN tracks.locked & 4 THEN tracks.year ELSE excluded.year END,
-            track_no = excluded.track_no, disc_no = excluded.disc_no, duration = excluded.duration, codec = excluded.codec,
+            track_no = CASE WHEN tracks.locked & 64 THEN tracks.track_no ELSE excluded.track_no END, disc_no = excluded.disc_no, duration = excluded.duration, codec = excluded.codec,
             sample_rate = excluded.sample_rate, bits = excluded.bits, channels = excluded.channels, is_dsd = excluded.is_dsd,
             lossy = excluded.lossy, file_size = excluded.file_size, mtime = excluded.mtime,
             artwork = CASE WHEN tracks.locked & 8 THEN tracks.artwork ELSE excluded.artwork END,
@@ -805,6 +808,17 @@ int Library::updateAlbum (const juce::String& artist, const juce::String& album,
                            "locked = locked | 3 | (CASE WHEN ?5 > 0 THEN 4 ELSE 0 END) | (CASE WHEN ?6 != '' THEN 8 ELSE 0 END) "
                            "WHERE album = ?2 AND COALESCE(NULLIF(album_artist, ''), artist) = ?1");
     u.bind (1, artist).bind (2, album).bind (3, newAlbum.trim()).bind (4, newArtist.trim()).bind (5, newYear).bind (6, cover).execute();
+    SqliteStatement c (db, "SELECT changes()");
+    return c.step() ? c.getInt (0) : 0;
+}
+
+int Library::updateTrack (juce::int64 id, const juce::String& title, const juce::String& artist, int trackNumber)
+{
+    if (id <= 0 || title.trim().isEmpty()) return 0;
+    std::lock_guard<std::recursive_mutex> l (db.getMutex());
+    // title, artist and number are locked: a rescan of the file keeps what was typed (bits 16, 32, 64)
+    SqliteStatement u (db, "UPDATE tracks SET title = ?2, artist = ?3, track_no = ?4, locked = locked | 16 | 32 | 64 WHERE id = ?1");
+    u.bind (1, id).bind (2, title.trim()).bind (3, artist.trim()).bind (4, juce::jmax (0, trackNumber)).execute();
     SqliteStatement c (db, "SELECT changes()");
     return c.step() ? c.getInt (0) : 0;
 }

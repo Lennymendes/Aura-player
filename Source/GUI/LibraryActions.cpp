@@ -94,6 +94,26 @@ void editAlbum (AppContext& ctx, const AlbumInfo& album)
     }), true);
 }
 
+void editTrack (AppContext& ctx, const TrackInfo& track)
+{
+    auto* w = new juce::AlertWindow ("Modifier le morceau"_t, "Les fichiers audio ne sont pas modifiés : seule la bibliothèque est mise à jour."_t, juce::MessageBoxIconType::NoIcon);
+    w->addTextEditor ("title", track.title, "Titre"_t);
+    w->addTextEditor ("artist", track.artist, "Artiste"_t);
+    w->addTextEditor ("no", track.trackNumber > 0 ? juce::String (track.trackNumber) : juce::String(), "N° de piste"_t);
+    w->addButton ("Enregistrer"_t, 1, juce::KeyPress (juce::KeyPress::returnKey));
+    w->addButton ("Annuler"_t, 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    auto* app = &ctx;
+    w->enterModalState (true, juce::ModalCallbackFunction::create ([w, app, id = track.id] (int result)
+    {
+        if (result != 1) return;
+        const int n = app->library().updateTrack (id, w->getTextEditorContents ("title"), w->getTextEditorContents ("artist"),
+                                                  w->getTextEditorContents ("no").getIntValue());
+        if (n == 0) { app->showMessage ("Le titre ne peut pas être vide"_t); return; }
+        app->library().notifyChanged();
+        app->showMessage ("Morceau mis à jour"_t);
+    }), true);
+}
+
 juce::PopupMenu playlistSubmenu (AppContext& ctx, std::vector<juce::int64> ids)
 {
     juce::PopupMenu m;

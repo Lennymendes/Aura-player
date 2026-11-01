@@ -169,6 +169,8 @@ public:
     /** cover / folder / front / albumart (.jpg .jpeg .png .webp), any case, in the album folder. Empty file when none. */
     static juce::File findFolderCover (const juce::File& albumFolder);
     /** Gives every local track without artwork the cover found in its folder. Returns the number of tracks updated. */
+    /** Metadata editor, one track: title, artist, number (the files are not touched; a rescan keeps the values). */
+    int updateTrack (juce::int64 id, const juce::String& title, const juce::String& artist, int trackNumber);
     int fillMissingArtwork();
     /** Edits an album in the library (tracks of (artist, album)): new name, artist, year (0 = keep) and cover file (optional).
         Returns the number of tracks updated. The audio files and their tags are not touched. */

@@ -151,7 +151,8 @@ AppController::AppController (Options options)
     eng->onTrackChanged = [this] { onTrackChanged(); };
     eng->onStateChanged = [this] { if (auto* m = getMainComponent()) m->stateChanged(); updateSystemNowPlaying (true); };
     eng->onSignalPathChanged = [this] { if (auto* m = getMainComponent()) m->stateChanged(); };
-    eng->onQueueFinished = [this] { if (repeatOn && ! queueTracks.empty()) eng->playIndex (0); };
+    eng->setShuffle ((bool) appSettings.get ("shuffle", false));
+    eng->setRepeat ((PlaybackEngine::Repeat) juce::jlimit (0, 2, (int) appSettings.get ("repeat", 0)));
     eng->onError = [this] (const juce::String& e) { showMessage (e); };
 
     lib.onChanged = [this]
@@ -426,20 +427,6 @@ void AppController::playTracks (const std::vector<TrackInfo>& tracks, int startI
         queueTracks.push_back (t);
         items.push_back (unified->toPlayable (t));
     }
-    if (shuffleOn && items.size() > 1)
-    {
-        // the chosen track stays first, the rest is shuffled
-        std::vector<size_t> order (items.size() - (size_t) start - 1);
-        std::iota (order.begin(), order.end(), (size_t) start + 1);
-        std::shuffle (order.begin(), order.end(), rng);
-        auto items2 = items;
-        auto tracks2 = queueTracks;
-        for (size_t k = 0; k < order.size(); ++k)
-        {
-            items[(size_t) start + 1 + k] = items2[order[k]];
-            queueTracks[(size_t) start + 1 + k] = tracks2[order[k]];
-        }
-    }
     eng->setQueue (std::move (items), start, true);
 }
 
@@ -458,11 +445,9 @@ void AppController::playCollection (const juce::String& scope, bool shuffle)
     std::shuffle (shufflePass.begin(), shufflePass.end(), rng);
     shuffleNext = 0;
     lastQueuedKey = 0;
-    const bool wasShuffle = shuffleOn;
-    shuffleOn = false;                                    // the pass is already shuffled
     const size_t first = std::min<size_t> (shufflePass.size(), 200);
     playTracks (std::vector<TrackInfo> (shufflePass.begin(), shufflePass.begin() + (std::ptrdiff_t) first), 0);
-    shuffleOn = wasShuffle;
+    setShuffle (true);                                    // the button follows: the whole collection is being shuffled
     shuffleNext = first;
     shuffleScope = scope;                                 // after playTracks, which clears it
     if (! queueTracks.empty()) lastQueuedKey = queueTracks.back().id;
@@ -472,7 +457,7 @@ void AppController::extendShuffle()
 {
     // Called on every track change: keep at least 20 tracks queued after the current one.
     if (shuffleScope.isEmpty() || externalPlaying) return;
-    const int remaining = (int) queueTracks.size() - 1 - eng->getCurrentIndex();
+    const int remaining = eng->getRemainingCount();
     if (remaining >= 20) return;
 
     std::vector<TrackInfo> chunk;
@@ -519,8 +504,18 @@ const TrackInfo* AppController::currentTrack()
 
 void AppController::setShuffle (bool on)
 {
-    shuffleOn = on;
+    if (eng->isShuffle() == on) return;
+    eng->setShuffle (on);
+    appSettings.set ("shuffle", on);
     showMessage (on ? "Lecture aléatoire activée"_t : "Lecture aléatoire désactivée"_t);
+}
+
+void AppController::setRepeat (PlaybackEngine::Repeat mode)
+{
+    eng->setRepeat (mode);
+    appSettings.set ("repeat", (int) mode);
+    showMessage (mode == PlaybackEngine::Repeat::One ? "Répétition : piste en cours"_t
+                 : mode == PlaybackEngine::Repeat::All ? "Répétition : toute la file"_t : "Répétition désactivée"_t);
 }
 
 void AppController::navigate (const PageRequest& r)

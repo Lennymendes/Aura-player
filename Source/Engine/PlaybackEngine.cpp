@@ -1,5 +1,6 @@
 // NX Player — MIT License
 #include "PlaybackEngine.h"
+#include <algorithm>
 #include "../Audio/SacdIso.h"
 #include "../Core/AudioLog.h"
 #include "../Audio/MemoryPlayStream.h"
@@ -159,21 +160,28 @@ juce::String PlaybackEngine::getLastError() const
 void PlaybackEngine::setQueue (std::vector<PlayableItem> items, int startIndex, bool startPlaying)
 {
     queue = std::move (items);
+    const int first = queue.empty() ? 0 : juce::jlimit (0, (int) queue.size() - 1, startIndex);
     {
         std::lock_guard<std::mutex> l (controlLock);
         decoderQueue = queue;
+        rebuildOrderLocked (first);
     }
     if (queue.empty()) { stop(); return; }
-    startIndex = juce::jlimit (0, (int) queue.size() - 1, startIndex);
+    startIndex = first;
     if (startPlaying) playIndex (startIndex);
     else currentIndex = startIndex;
 }
 
 void PlaybackEngine::appendToQueue (std::vector<PlayableItem> items)
 {
+    const int firstNew = (int) queue.size();
     for (auto& i : items) queue.push_back (std::move (i));
     std::lock_guard<std::mutex> l (controlLock);
     decoderQueue = queue;
+    // the new tracks join the end of the shuffled pass, shuffled among themselves
+    const auto from = playOrder.size();
+    for (int k = firstNew; k < (int) queue.size(); ++k) playOrder.push_back (k);
+    if (playOrder.size() > from) std::shuffle (playOrder.begin() + (std::ptrdiff_t) from, playOrder.end(), orderRng);
 }
 
 void PlaybackEngine::playIndex (int index, double startSeconds)
@@ -225,17 +233,74 @@ void PlaybackEngine::stop()
     if (onStateChanged) onStateChanged();
 }
 
+void PlaybackEngine::rebuildOrderLocked (int first)
+{
+    playOrder.clear();
+    const int n = (int) decoderQueue.size();
+    for (int k = 0; k < n; ++k) if (k != first) playOrder.push_back (k);
+    std::shuffle (playOrder.begin(), playOrder.end(), orderRng);
+    if (first >= 0 && first < n) playOrder.insert (playOrder.begin(), first);
+}
+
+int PlaybackEngine::nextLocked (int index, bool userAction)
+{
+    const int n = (int) decoderQueue.size();
+    if (n == 0) return -1;
+    if (repeatMode == Repeat::One && ! userAction) return index;
+    if (! shuffleOn) return index + 1 < n ? index + 1 : (repeatMode != Repeat::Off ? 0 : -1);
+    const auto it = std::find (playOrder.begin(), playOrder.end(), index);
+    if (it != playOrder.end() && it + 1 != playOrder.end()) return *(it + 1);
+    if (repeatMode == Repeat::Off) return -1;
+    rebuildOrderLocked (index);                  // a new pass starting from the track just played: it is not repeated back to back
+    return n > 1 ? playOrder[1] : playOrder[0];
+}
+
+void PlaybackEngine::setShuffle (bool on)
+{
+    std::lock_guard<std::mutex> l (controlLock);
+    shuffleOn = on;
+    if (on) rebuildOrderLocked (currentIndex.load());
+}
+bool PlaybackEngine::isShuffle() const { std::lock_guard<std::mutex> l (controlLock); return shuffleOn; }
+void PlaybackEngine::setRepeat (Repeat mode) { std::lock_guard<std::mutex> l (controlLock); repeatMode = mode; }
+PlaybackEngine::Repeat PlaybackEngine::getRepeat() const { std::lock_guard<std::mutex> l (controlLock); return repeatMode; }
+
+int PlaybackEngine::getRemainingCount() const
+{
+    std::lock_guard<std::mutex> l (controlLock);
+    const int cur = currentIndex.load(), n = (int) decoderQueue.size();
+    if (! shuffleOn) return juce::jmax (0, n - 1 - cur);
+    const auto it = std::find (playOrder.begin(), playOrder.end(), cur);
+    return it == playOrder.end() ? 0 : (int) (playOrder.end() - it) - 1;
+}
+
+int PlaybackEngine::getNextIndex (int index, bool userAction) const
+{
+    std::lock_guard<std::mutex> l (controlLock);
+    return const_cast<PlaybackEngine*> (this)->nextLocked (index, userAction);
+}
+
 void PlaybackEngine::next()
 {
-    const int i = currentIndex.load() + 1;
-    if (i < (int) queue.size()) playIndex (i);
+    const int i = getNextIndex (currentIndex.load(), true);
+    if (i >= 0) playIndex (i);
 }
 
 void PlaybackEngine::previous()
 {
     const int i = currentIndex.load();
-    if (getPositionSeconds() > 3.0 || i <= 0) seek (0.0);
-    else playIndex (i - 1);
+    int prev = -1;
+    {
+        std::lock_guard<std::mutex> l (controlLock);
+        if (shuffleOn)
+        {
+            const auto it = std::find (playOrder.begin(), playOrder.end(), i);
+            if (it != playOrder.end() && it != playOrder.begin()) prev = *(it - 1);
+        }
+        else prev = i - 1;
+    }
+    if (getPositionSeconds() > 3.0 || prev < 0) seek (0.0);
+    else playIndex (prev);
 }
 
 void PlaybackEngine::seek (double seconds)
@@ -384,14 +449,17 @@ void PlaybackEngine::run()
         // End of this track: gapless move to the next one.
         bool moved = false;
         int index = decIndex + 1;
-        while (! moved && ! threadShouldExit() && flushGen.load() == decoderGen)
+        size_t n;
+        { std::lock_guard<std::mutex> l (controlLock); n = decoderQueue.size(); }
+        // play order: shuffle, repeat the track / the queue; a track that cannot be opened is skipped (each one tried once at most)
+        for (size_t tries = 0, cand = (size_t) decIndex; ! moved && tries <= n && ! threadShouldExit() && flushGen.load() == decoderGen; ++tries)
         {
-            size_t n;
-            { std::lock_guard<std::mutex> l (controlLock); n = decoderQueue.size(); }
-            if (index >= (int) n) break;
+            { std::lock_guard<std::mutex> l (controlLock); index = nextLocked ((int) cand, tries > 0); }
+            if (index < 0) break;
             moved = openItem (index, 0.0, false);
-            if (! moved) ++index;
+            cand = (size_t) index;
         }
+        if (! moved) index = decIndex + 1;
 
         if (! moved && flushGen.load() == decoderGen)
         {

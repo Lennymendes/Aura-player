@@ -20,6 +20,7 @@ public:
     }
     void setIcon (style::Icon i) { icon = i; repaint(); }
     bool active = false;          // accent colour (shuffle on, lyrics shown...)
+    bool one = false;             // small "1" on the icon (repeat one)
     bool primary = false;         // big round play button
     void paintButton (juce::Graphics& g, bool hi, bool down) override;
 private:
@@ -156,6 +157,7 @@ public:
     void setCardSize (float px) { cardSize = px; repaint(); }
     void setListMode (bool on) { listMode = on; hover = -1; repaint(); }
     bool isListMode() const noexcept { return listMode; }
+    float getCardSize() const noexcept { return cardSize; }
     /** Sort mode applied by setAlbums ("title" | "artist" | "added" | "format", empty = as given) for library albums. */
     juce::String sortMode;
     int maxRows = 0;          // 0 = unlimited
@@ -223,13 +225,14 @@ public:
     /** Playlist page: the id of the playlist shown ("Retirer de cette playlist"). */
     juce::int64 playlistContext = 0;
     std::function<void()> onChanged;      // favourites / playlist edited from the list
+    std::function<void (const TrackInfo&)> onEdit;   // album page: pencil on each row (metadata editor)
 private:
     void changeListenerCallback (juce::ChangeBroadcaster*) override { repaint(); }
     void download (const std::vector<TrackInfo>& list);
     AppContext& ctx;
     std::vector<TrackInfo> tracks;
     std::vector<juce::Rectangle<int>> downloadButtons;   // per row, filled while painting (remote tracks only)
-    std::vector<juce::Rectangle<int>> heartButtons;
+    std::vector<juce::Rectangle<int>> heartButtons, editButtons;
     std::vector<juce::Rectangle<int>> artistRects;      // per row: clickable artist name (opens the artist page)
     bool artwork = true, album = true, numbered = false;
     int hover = -1, selected = -1;

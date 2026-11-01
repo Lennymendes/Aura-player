@@ -69,8 +69,14 @@ PlayerBar::PlayerBar (AppContext& c)
     playButton.onClick = [this] { ctx.engine().togglePlayPause(); };
     nextButton.onClick = [this] { ctx.engine().next(); };
     prevButton.onClick = [this] { ctx.engine().previous(); };
-    shuffleButton.onClick = [this] { ctx.setShuffle (! ctx.isShuffle()); shuffleButton.active = ctx.isShuffle(); shuffleButton.repaint(); };
-    repeatButton.onClick = [this] { ctx.setRepeat (! ctx.isRepeat()); repeatButton.active = ctx.isRepeat(); repeatButton.repaint(); };
+    shuffleButton.onClick = [this] { ctx.setShuffle (! ctx.isShuffle()); syncTransportButtons(); };
+    repeatButton.onClick = [this]
+    {
+        using R = PlaybackEngine::Repeat;
+        const auto m = ctx.getRepeat();
+        ctx.setRepeat (m == R::Off ? R::All : m == R::All ? R::One : R::Off);   // Off -> All -> One -> Off
+        syncTransportButtons();
+    };
     lyricsButton.onClick = [this] { if (onToggleLyrics) onToggleLyrics(); };
     queueButton.onClick = [this] { if (onToggleQueue) onToggleQueue(); };
     miniButton.onClick = [this] { ctx.toggleMiniPlayer(); };
@@ -104,6 +110,15 @@ PlayerBar::PlayerBar (AppContext& c)
 }
 
 PlayerBar::~PlayerBar() { ctx.trackAnalyzer().removeChangeListener (this); }
+
+void PlayerBar::syncTransportButtons()
+{
+    const bool sh = ctx.isShuffle();
+    const auto rep = ctx.getRepeat();
+    const bool on = rep != PlaybackEngine::Repeat::Off, one = rep == PlaybackEngine::Repeat::One;
+    if (shuffleButton.active != sh) { shuffleButton.active = sh; shuffleButton.repaint(); }
+    if (repeatButton.active != on || repeatButton.one != one) { repeatButton.active = on; repeatButton.one = one; repeatButton.repaint(); }
+}
 
 void PlayerBar::setWaveformShown (bool on)
 {
@@ -340,6 +355,7 @@ void PlayerBar::stateChanged()
 void PlayerBar::timerCallback()
 {
     perf::retune (*this, 30, 4);
+    syncTransportButtons();
     const auto& e = ctx.engine();
     double dur = e.getDurationSeconds();
     if (const auto* t = ctx.currentTrack()) if (dur <= 0) dur = t->duration;

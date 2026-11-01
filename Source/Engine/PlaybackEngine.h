@@ -24,6 +24,7 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <random>
 
 namespace nx
 {
@@ -90,6 +91,17 @@ public:
     void next();
     void previous();
     void seek (double seconds);
+
+    //== Play order: shuffle (each track once per pass) and repeat (off / whole queue / current track) ==========
+    enum class Repeat { Off, All, One };
+    void setShuffle (bool on);
+    bool isShuffle() const;
+    void setRepeat (Repeat mode);
+    Repeat getRepeat() const;
+    /** Tracks still to come before the queue (or the shuffled pass) ends, the current one excluded. */
+    int getRemainingCount() const;
+    /** The track that follows `index` in play order; -1 at the end. Repeat One returns `index` unless userAction. */
+    int getNextIndex (int index, bool userAction = false) const;
 
     //== A-B loop (gapless: the device keeps running, the decoder wraps) =======
     /** Loops [a, b) of the current track for ever (b − a ≥ 50 ms). Re-reads from the play position once. */
@@ -199,6 +211,12 @@ private:
     std::vector<PlayableItem> queue;         // message thread copy
     std::vector<PlayableItem> decoderQueue;  // decoder thread copy (under controlLock)
     bool queueDirty = false;
+    bool shuffleOn = false;                  // all of these under controlLock
+    Repeat repeatMode = Repeat::Off;
+    std::vector<int> playOrder;              // shuffle: a permutation of the queue indices
+    std::mt19937 orderRng { std::random_device{}() };
+    void rebuildOrderLocked (int first);     // [first] then the others shuffled
+    int nextLocked (int index, bool userAction);
 
     // Ring + events
     SpscRing<uint8_t> ring;

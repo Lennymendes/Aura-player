@@ -33,6 +33,8 @@ public:
     void mouseExit (const juce::MouseEvent&) override { setMouseCursor (juce::MouseCursor::NormalCursor); }
     void trackChanged();
     void stateChanged();
+    /** Shuffle / repeat buttons follow the engine (also changed by a "shuffle the collection" or the phone). */
+    void syncTransportButtons();
     void refreshPlugins() { pluginSlot.refreshPlugins(); resized(); }
 
     // A-B loop (button, keys I / O / L, markers on the seek bar)
@@ -51,13 +53,14 @@ public:
 
     IconButton lyricsButton, queueButton, studioButton, immersiveButton;
     DeviceChip deviceChip;
+    IconButton shuffleButton, repeatButton;   // follow the engine's shuffle / repeat state (syncTransportButtons)
 
 private:
     void timerCallback() override;
     void changeListenerCallback (juce::ChangeBroadcaster*) override;   // analysis finished
     AppContext& ctx;
     ArtworkView artwork;
-    IconButton shuffleButton, prevButton, playButton, nextButton, repeatButton, miniButton, volumeButton, waveButton;
+    IconButton prevButton, playButton, nextButton, miniButton, volumeButton, waveButton;
     SeekBar seek;
     LoopButton loopButton;
     double pendingLoopA = -1.0;

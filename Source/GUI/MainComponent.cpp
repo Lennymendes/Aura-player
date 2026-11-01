@@ -357,6 +357,7 @@ bool MainComponent::isLocalPage (PageId p) noexcept
 
 void MainComponent::rememberLocalView()
 {
+    if (visiblePage == &listing) scrollMemory[viewKey (current)] = listing.getScrollY();   // exact Viewport position of the page being left
     if (visiblePage == &listing && isLocalPage (current.page)) { localView = current; localScroll = listing.getScrollY(); }
 }
 
@@ -366,11 +367,16 @@ void MainComponent::navigate (const PageRequest& request)
     if (r.page == PageId::Settings) { openSettings (r.a); return; }   // a window over the page, not a page
     if (r.page == PageId::Library && r.b == "sidebar")
     {
-        // "Local" in the sidebar: back to the album / artist that was open (same scroll), not to the grid.
-        // Only the Back button leaves it.
+        // "Local" in the sidebar: coming from another section, back to the album / artist that was open (same scroll);
+        // already inside Local (an album, an artist...), a click goes back to the root: the grid of all the albums.
         r.b = {};
         rememberLocalView();
-        if (localView.page == PageId::AlbumDetail || localView.page == PageId::ArtistDetail
+        if (isLocalPage (current.page))
+        {
+            localView = r;
+            restoreScroll = true;                 // the grid comes back where it was left
+        }
+        else if (localView.page == PageId::AlbumDetail || localView.page == PageId::ArtistDetail
             || (localView.page == PageId::Genre && localView.a.isNotEmpty()))
         {
             r = localView;
@@ -391,12 +397,14 @@ void MainComponent::navigate (const PageRequest& request)
 void MainComponent::goBack()
 {
     if (! canGoBack()) return;
+    restoreScroll = true;
     open (history[(size_t) --historyPos]);
 }
 
 void MainComponent::goForward()
 {
     if (! canGoForward()) return;
+    restoreScroll = true;
     open (history[(size_t) ++historyPos]);
 }
 
@@ -409,8 +417,10 @@ void MainComponent::updateNavButtons()
 void MainComponent::open (const PageRequest& r)
 {
     rememberLocalView();                       // scroll position of the page being left
-    const int scroll = pendingScroll;
+    int scroll = pendingScroll;
     pendingScroll = -1;
+    if (scroll < 0 && restoreScroll) scroll = rememberedScroll (r);
+    restoreScroll = false;
     if (isLocalPage (r.page)) { localView = r; localScroll = 0; }
     current = r;
     updateNavButtons();
@@ -445,6 +455,7 @@ void MainComponent::open (const PageRequest& r)
     listing.artistName = {};
     listing.list.playlistContext = 0;
     listing.list.onChanged = nullptr;
+    listing.list.onEdit = nullptr;
     listing.grid.onOpen = [this] (const AlbumInfo& a) { navigate ({ PageId::AlbumDetail, a.artist, a.title }); };
     listing.grid.onPlay = [this] (const AlbumInfo& a) { ctx.playTracks (ctx.library().getAlbumTracks (a.artist, a.title), 0); };
     if (homeSlot->getParentComponent() != nullptr) homeSlot->getParentComponent()->removeChildComponent (homeSlot.get());
@@ -584,6 +595,7 @@ void MainComponent::open (const PageRequest& r)
                              + (nas.isNotEmpty() ? " · "_t + ctx.networkSourceLabel (nas) : juce::String());
                 p.grid.setAlbums ({});
                 p.list.setTracks (tracks, false, false, true);
+                p.list.onEdit = [this] (const TrackInfo& t) { actions::editTrack (ctx, t); };
                 p.heroTracks = tracks;
             };
             break;

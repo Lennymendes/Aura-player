@@ -19,6 +19,8 @@ juce::int64 createPlaylistWith (AppContext& ctx, const juce::String& name, const
 
 /** Metadata editor (pencil): album name, artist, year and a local cover image; the library updates immediately. */
 void editAlbum (AppContext& ctx, const AlbumInfo& album);
+/** Same editor for one track (title, artist, number), pre-filled with its tags; the page refreshes on save. */
+void editTrack (AppContext& ctx, const TrackInfo& track);
 
 /** Right click on album cards (one or a selection). */
 void showAlbumMenu (AppContext& ctx, const std::vector<AlbumInfo>& albums, juce::Component* target);
