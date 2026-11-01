@@ -259,7 +259,7 @@ std::unique_ptr<AudioDecoder> DffDecoder::open (std::unique_ptr<juce::InputStrea
         {
             // index of the frames: {u64 file offset of the frame data, u32 length}
             juce::MemoryBlock mb;
-            if (s->readIntoMemoryBlock (mb, (ssize_t) size) == (size_t) size)
+            if (s->readIntoMemoryBlock (mb, (int) size) == (size_t) size)
                 for (size_t i = 0; i + 12 <= mb.getSize(); i += 12)
                 {
                     const auto* e = static_cast<const uint8_t*> (mb.getData()) + i;
