@@ -305,7 +305,7 @@ void Sidebar::paint (juce::Graphics& g)
     else
     {
         auto s = juce::Rectangle<float> (0, 58, (float) getWidth(), 36);
-        if (hover == -3) { g.setColour (juce::Colours::white.withAlpha (0.06f)); g.fillRoundedRectangle (s.reduced (8, 2), 8.0f); }
+        if (hover == -3) { g.setColour (style::neutral().withAlpha (0.06f)); g.fillRoundedRectangle (s.reduced (8, 2), 8.0f); }
         style::drawIcon (g, style::Icon::Search, s.withSizeKeepingCentre (18, 18), t.textCol().withAlpha (0.8f));
     }
 
@@ -349,7 +349,7 @@ void Sidebar::paint (juce::Graphics& g)
         }
         else if (i == hover)
         {
-            g.setColour (juce::Colours::white.withAlpha (0.06f));
+            g.setColour (style::neutral().withAlpha (0.06f));
             g.fillRoundedRectangle (row.toFloat(), 8.0f);
         }
         const auto iconColour = isActive ? t.accent() : (it.icon == style::Icon::Heart ? t.accent().withAlpha (0.8f) : t.textCol().withAlpha (0.8f));
@@ -372,7 +372,7 @@ void Sidebar::paint (juce::Graphics& g)
             auto q = quickAddBounds (i);
             if (i == hover)
             {
-                g.setColour (juce::Colours::white.withAlpha (quickHover ? 0.16f : 0.08f));
+                g.setColour (style::neutral().withAlpha (quickHover ? 0.16f : 0.08f));
                 g.fillRoundedRectangle (q.toFloat(), 6.0f);
             }
             style::drawIcon (g, style::Icon::FolderPlus, q.toFloat().reduced (4.0f), quickHover ? t.accent() : t.textDim());
@@ -410,7 +410,7 @@ void Sidebar::paint (juce::Graphics& g)
         g.setFont (style::font (11.5f));
         g.drawText (dl.getCurrentTitle(), box.removeFromTop (14), juce::Justification::centredLeft, true);
         auto bar = juce::Rectangle<float> (16.0f, (float) getHeight() - 50.0f, (float) getWidth() - 32.0f, 3.0f);
-        g.setColour (juce::Colours::white.withAlpha (0.12f));
+        g.setColour (style::neutral().withAlpha (0.12f));
         g.fillRoundedRectangle (bar, 1.5f);
         g.setColour (t.accent());
         g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * juce::jlimit (0.0f, 1.0f, overall)), 1.5f);
@@ -420,7 +420,7 @@ void Sidebar::paint (juce::Graphics& g)
     auto s = juce::Rectangle<int> (compact ? 8 : 10, getHeight() - 46, getWidth() - (compact ? 16 : 20), 34);
     if (hover == -2)
     {
-        g.setColour (juce::Colours::white.withAlpha (0.06f));
+        g.setColour (style::neutral().withAlpha (0.06f));
         g.fillRoundedRectangle (s.toFloat(), 8.0f);
     }
     if (compact)

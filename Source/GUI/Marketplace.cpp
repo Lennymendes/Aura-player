@@ -12,7 +12,7 @@ void ToggleSwitch::paint (juce::Graphics& g)
     if (on)
         g.setGradientFill (juce::ColourGradient (t.accent(), r.getX(), r.getY(), t.accent2(), r.getRight(), r.getBottom(), false));
     else
-        g.setColour (juce::Colours::white.withAlpha (isMouseOver() ? 0.22f : 0.16f));
+        g.setColour (style::neutral().withAlpha (isMouseOver() ? 0.22f : 0.16f));
     g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
     const float d = r.getHeight() - 6.0f;
     auto knob = juce::Rectangle<float> (d, d).withCentre ({ on ? r.getRight() - 3.0f - d * 0.5f : r.getX() + 3.0f + d * 0.5f, r.getCentreY() });

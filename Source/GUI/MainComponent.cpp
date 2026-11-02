@@ -120,6 +120,8 @@ MainComponent::MainComponent (AppContext& c)
     remoteButton.onClick = [this] { showRemote(); };
     settingsButton.onClick = [this] { openSettings ({}); };
     backButton.onClick = [this] { goBack(); };
+    sideButtons.go = [this] (bool forward) { if (forward) goForward(); else goBack(); };
+    addMouseListener (&sideButtons, true);
     forwardButton.onClick = [this] { goForward(); };
     sidebarVisible = (bool) ctx.settings().get ("sidebarVisible", true);
     sidebarAmount = sidebarVisible ? 1.0f : 0.0f;
@@ -166,7 +168,7 @@ MainComponent::MainComponent (AppContext& c)
     navigate ({ PageId::Home });
 }
 
-MainComponent::~MainComponent() { juce::Desktop::getInstance().removeFocusChangeListener (this); }
+MainComponent::~MainComponent() { removeMouseListener (&sideButtons); juce::Desktop::getInstance().removeFocusChangeListener (this); }
 
 void MainComponent::globalFocusChanged (juce::Component* focused)
 {
@@ -805,6 +807,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& k)
     if (k == juce::KeyPress ('[', juce::ModifierKeys::commandModifier, 0) || k == juce::KeyPress (juce::KeyPress::leftKey, juce::ModifierKeys::altModifier, 0)) { goBack(); return true; }
     if (k == juce::KeyPress (']', juce::ModifierKeys::commandModifier, 0) || k == juce::KeyPress (juce::KeyPress::rightKey, juce::ModifierKeys::altModifier, 0)) { goForward(); return true; }
     if (k == juce::KeyPress ('b', juce::ModifierKeys::commandModifier, 0)) { setSidebarVisible (! sidebarVisible); return true; }
+    if (k == juce::KeyPress::backspaceKey && dynamic_cast<juce::TextEditor*> (getCurrentlyFocusedComponent()) == nullptr) { goBack(); return true; }
     // A-B loop: I = start, O = end + loop, L = off
     if (k.getModifiers().isAnyModifierKeyDown() == false)
     {

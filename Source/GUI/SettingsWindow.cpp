@@ -76,7 +76,7 @@ void SettingsWindow::paint (juce::Graphics& g)
 
     // navigation
     auto nav = p.withWidth (244.0f);
-    g.setColour (juce::Colours::white.withAlpha (0.03f));
+    g.setColour (style::neutral().withAlpha (0.03f));
     g.fillRoundedRectangle (nav.reduced (6.0f), t.radius());
     g.setColour (t.border());
     g.fillRect (nav.getRight(), p.getY() + 16.0f, 1.0f, p.getHeight() - 32.0f);
@@ -96,7 +96,7 @@ void SettingsWindow::paint (juce::Graphics& g)
         const bool on = ids[i] == page.getTab();
         if (on || i == hoverTab)
         {
-            g.setColour (on ? t.accent().withAlpha (0.16f) : juce::Colours::white.withAlpha (0.06f));
+            g.setColour (on ? t.accent().withAlpha (0.16f) : style::neutral().withAlpha (0.06f));
             g.fillRoundedRectangle (r, 9.0f);
         }
         if (on)

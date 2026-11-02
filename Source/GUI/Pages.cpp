@@ -1098,7 +1098,7 @@ namespace
                 tiles.push_back (tile);
                 const bool on = i == current;
                 const bool hover = tile.contains (getMouseXYRelative()) && isMouseOver (true);
-                g.setColour (on ? t.accent().withAlpha (0.18f) : juce::Colours::white.withAlpha (hover ? 0.08f : 0.04f));
+                g.setColour (on ? t.accent().withAlpha (0.18f) : style::neutral().withAlpha (hover ? 0.08f : 0.04f));
                 g.fillRoundedRectangle (tile.toFloat(), 10.0f);
                 g.setColour (on ? t.accent() : t.border());
                 g.drawRoundedRectangle (tile.toFloat().reduced (0.5f), 10.0f, on ? 1.6f : 1.0f);
@@ -1239,7 +1239,7 @@ namespace
                     auto row = juce::Rectangle<int> (0, i * rowH, getWidth(), rowH).reduced (0, 2);
                     if (! row.intersects (g.getClipBounds())) continue;
                     const bool on = current == m->id;
-                    g.setColour (on ? t.accent().withAlpha (0.16f) : juce::Colours::white.withAlpha (i == hover ? 0.07f : 0.025f));
+                    g.setColour (on ? t.accent().withAlpha (0.16f) : style::neutral().withAlpha (i == hover ? 0.07f : 0.025f));
                     g.fillRoundedRectangle (row.toFloat(), 7.0f);
                     if (on) { g.setColour (t.accent().withAlpha (0.8f)); g.drawRoundedRectangle (row.toFloat().reduced (0.5f), 7.0f, 1.0f); }
                     auto in = row.reduced (10, 3);
@@ -1318,7 +1318,7 @@ namespace
         {
             const auto& t = ctx.theme();
             auto r = getLocalBounds().toFloat().reduced (1.0f, 3.0f);
-            g.setColour (listening ? t.accent().withAlpha (0.18f) : juce::Colours::white.withAlpha (isMouseOver() ? 0.09f : 0.05f));
+            g.setColour (listening ? t.accent().withAlpha (0.18f) : style::neutral().withAlpha (isMouseOver() ? 0.09f : 0.05f));
             g.fillRoundedRectangle (r, 7.0f);
             g.setColour (listening ? t.accent() : t.border().withMultipliedAlpha (1.5f));
             g.drawRoundedRectangle (r.reduced (0.5f), 7.0f, 1.0f);
@@ -1770,7 +1770,14 @@ void SettingsPage::buildAudio()
         }), 36, "Un fichier plus gros (DSD512, DXD de plusieurs heures) est lu depuis le disque."_t);
     }
     row ("Mode Streamer / Gaming"_t, makeToggle (ctx.isStreamerMode(), [this] (bool v) { ctx.setStreamerMode (v); }), 36,
-         "Réduit l'actualisation de l'interface (fond animé, spectre, paroles, transitions) pour libérer le CPU / GPU pendant un jeu ou OBS. La lecture audio n'est pas modifiée."_t);
+         "Fond, spectre, paroles et transitions au repos ; 1 image / s quand NX Player est en arrière-plan. L'audio n'est pas modifié."_t);
+    row ("Overlay « Now Playing » pour OBS"_t, makeToggle (ctx.isNowPlayingOverlayVisible(), [this] (bool v) { ctx.setNowPlayingOverlay (v); }), 36,
+         "Petite fenêtre en verre givré (pochette, titre, artiste, badge Hi-Res / DSD) à capturer dans OBS. Double-clic : masquer."_t);
+    row ("Mode Streamer : now_playing.txt et now_playing_cover.jpg mis à jour en temps réel"_t, makeButton ("Ouvrir le dossier"_t, [this]
+    {
+        ctx.userDataDirectory().getChildFile ("now_playing.txt").revealToUser();
+        if (! ctx.userDataDirectory().getChildFile ("now_playing.txt").existsAsFile()) ctx.userDataDirectory().startAsProcess();
+    }), 36, "Sources « Texte (lire depuis un fichier) » et « Image » d'OBS Studio."_t);
     row ("Empêcher la mise en veille pendant la lecture"_t, makeToggle ((bool) ctx.settings().get ("preventSleep", true), [this] (bool v) { ctx.settings().set ("preventSleep", v); }), 36,
          SleepBlocker::isSupported() ? "L'ordinateur reste éveillé tant que la musique joue (l'écran peut s'éteindre)."_t
                                      : "Non disponible sur ce système."_t);

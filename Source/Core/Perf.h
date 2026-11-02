@@ -12,8 +12,13 @@ inline std::atomic<bool>& streamerFlag() { static std::atomic<bool> f { false };
 inline bool streamer() { return streamerFlag().load(); }
 inline void setStreamer (bool on) { streamerFlag() = on; }
 
-/** Timer rate for the interface: `normal`, or `low` (a few Hz) in Streamer mode. */
-inline int hz (int normal, int low) { return streamer() ? low : normal; }
+/** The application is not in front (a game or OBS is): set by the controller's timer. */
+inline std::atomic<bool>& backgroundFlag() { static std::atomic<bool> f { false }; return f; }
+inline void setBackground (bool on) { backgroundFlag() = on; }
+
+/** Timer rate for the interface: `normal`, or `low` (a few Hz) in Streamer mode, 1 Hz there when the window is
+    in the background. */
+inline int hz (int normal, int low) { return streamer() ? (backgroundFlag().load() ? 1 : low) : normal; }
 
 /** Called at the top of a timerCallback(): switches the timer to the rate of the current mode. */
 inline void retune (juce::Timer& t, int normal, int low)

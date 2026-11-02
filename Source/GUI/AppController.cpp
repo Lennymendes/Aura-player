@@ -132,7 +132,8 @@ AppController::AppController (Options options)
     lookAndFeel.applyTheme (themeManager.current());
     juce::LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
 
-    // Plug-ins
+    // Plug-ins ("Spectre circulaire" was withdrawn: a copy installed from the old catalogue goes too)
+    dataDir.getChildFile ("Plugins").getChildFile ("UI").getChildFile ("nx-radial").deleteRecursively();
     pluginManager.setSearchFolders ({ resourcesDir.getChildFile ("Plugins"), dataDir.getChildFile ("Plugins") });
     if (auto* ui = appSettings.get ("uiPlugins").getArray())
         for (auto& p : pluginManager.getUiPlugins()) pluginManager.setUiPluginEnabled (p.id, ui->contains (p.id));
@@ -231,6 +232,7 @@ AppController::AppController (Options options)
 
     lastFrame = juce::Time::getMillisecondCounterHiRes() / 1000.0;
     if ((bool) appSettings.get ("remoteEnabled", false) && isPremium()) setRemoteEnabled (true);   // left on: the saved link works again at once
+    if (options.createWindow && (bool) appSettings.get ("nowPlayingOverlay", false)) setNowPlayingOverlay (true);
     if (options.createWindow && (bool) appSettings.get ("autoUpdateCheck", true))
     {
         // 3 s after the launch, in the background: only an available update is announced
@@ -710,6 +712,47 @@ void AppController::toggleMiniPlayer()
     }
 }
 
+void AppController::setNowPlayingOverlay (bool show)
+{
+    if (overlayWindow == nullptr)
+    {
+        if (! show) return;
+        overlayWindow = std::make_unique<OverlayWindow> (*this);
+        const auto saved = appSettings.get ("overlayPosition").toString();
+        if (saved.isNotEmpty()) overlayWindow->restoreWindowStateFromString (saved);
+        else if (mainWindow != nullptr) overlayWindow->setTopLeftPosition (mainWindow->getScreenX() + 40, mainWindow->getScreenY() + 60);
+    }
+    if (! show) appSettings.set ("overlayPosition", overlayWindow->getWindowStateAsString());
+    overlayWindow->setVisible (show);
+    if (show) overlayWindow->getOverlay().trackChanged();
+    appSettings.set ("nowPlayingOverlay", show);
+}
+
+bool AppController::isNowPlayingOverlayVisible() { return overlayWindow != nullptr && overlayWindow->isVisible(); }
+
+bool AppController::writeNowPlayingFiles (const juce::File& dir, const TrackInfo* t, const juce::Image& cover)
+{
+    juce::String line;
+    if (t != nullptr) line = t->displayArtist().isNotEmpty() ? t->displayArtist() + juce::String::fromUTF8 (" \xe2\x80\x94 ") + t->title : t->title;
+    bool ok = dir.getChildFile ("now_playing.txt").replaceWithText (line, false, false, "\n");
+    const auto jpg = dir.getChildFile ("now_playing_cover.jpg");
+    if (cover.isValid())
+    {
+        // write next to it, then swap: OBS never reads a half-written image
+        const auto tmp = dir.getChildFile ("now_playing_cover.tmp");
+        tmp.deleteFile();
+        {
+            juce::FileOutputStream out (tmp);
+            juce::JPEGImageFormat jpeg;
+            jpeg.setQuality (0.9f);
+            ok = out.openedOk() && jpeg.writeImageToStream (cover.convertedToFormat (juce::Image::RGB), out) && ok;
+        }
+        ok = tmp.moveFileTo (jpg) && ok;
+    }
+    else jpg.deleteFile();
+    return ok;
+}
+
 void AppController::showMessage (const juce::String& text)
 {
     if (auto* m = getMainComponent()) m->showMessage (text);
@@ -793,6 +836,7 @@ void AppController::onTrackChanged()
     }
     if (auto* m = getMainComponent()) m->trackChanged();
     if (miniWindow) miniWindow->getMini().trackChanged();
+    if (overlayWindow) overlayWindow->getOverlay().trackChanged();
     if (const auto* t = currentTrack())
     {
         if (t->id > 0 && ! externalPlaying) lib.markPlayed (t->id);
@@ -817,6 +861,20 @@ void AppController::timerCallback()
     audioAnalyzer->update (dt, playing);
 
     pluginManager.setState ("time", now);
+    perf::setBackground (mainWindow != nullptr && ! juce::Process::isForegroundProcess());
+    if (perf::streamer())
+    {
+        // OBS files, written again only when the track or its artwork changes
+        const auto* t = currentTrack();
+        const auto cover = t != nullptr ? artworkCache->get (t->artworkKey, 600) : juce::Image();
+        const auto key = t != nullptr ? juce::String (t->id) + "|" + t->title + "|" + (cover.isValid() ? t->artworkKey : juce::String()) : juce::String ("-");
+        if (key != exportedNowPlaying)
+        {
+            exportedNowPlaying = key;
+            writeNowPlayingFiles (dataDir, t, cover);
+        }
+    }
+    else exportedNowPlaying = {};
     updateSystemNowPlaying (false);
     sleepBlocker.setActive (playing && (bool) appSettings.get ("preventSleep", true));
     if (remoteServer->isRunning() && now - lastRemoteState > 0.25)

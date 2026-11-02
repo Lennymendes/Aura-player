@@ -90,6 +90,16 @@ public:
 
     IconButton sidebarButton, backButton, forwardButton, remoteButton, settingsButton, streamerButton;
 
+    /** Side mouse buttons (4 = back, 5 = forward) anywhere in the window. */
+    struct SideButtons : juce::MouseListener
+    {
+        std::function<void (bool)> go;
+        void mouseDown (const juce::MouseEvent& e) override
+        {
+            if (e.mods.isBackButtonDown()) go (false);
+            else if (e.mods.isForwardButtonDown()) go (true);
+        }
+    } sideButtons;
 private:
     void open (const PageRequest& r);
     static bool isLocalPage (PageId p) noexcept;

@@ -1,0 +1,50 @@
+/* Cobalt Minimal — thème livré avec NX Player (variables : docs/THEMES.md). */
+:root {
+  /* Fond et surfaces */
+  --nx-bg: #07090E;
+  --nx-bg-2: #0C1018;
+  --nx-surface: #0F141D;
+  --nx-glass-tint: rgba(10, 14, 22, 0.62);
+  --nx-glass-strong: rgba(7, 9, 14, 0.88);
+  --nx-border: rgba(59, 130, 246, 0.12);
+  --nx-highlight: rgba(147, 197, 253, 0.05);
+  --nx-shadow: rgba(0, 0, 0, 0.65);
+
+  /* Texte */
+  --nx-text: #EEF2F8;
+  --nx-text-dim: #8090A6;
+
+  /* Accents */
+  --nx-accent: #3B82F6;
+  --nx-accent-2: #60A5FA;
+  --nx-on-accent: #FFFFFF;
+
+  /* Qualité du signal (Signal Path) */
+  --nx-quality-bitperfect: #A78BFA;
+  --nx-quality-enhanced: var(--nx-accent);
+  --nx-quality-high: #60A5FA;
+  --nx-quality-low: #FBBF24;
+
+  /* Formes et dimensions */
+  --nx-radius: 10px;
+  --nx-radius-small: 8px;
+  --nx-sidebar-width: 236px;
+  --nx-player-height: 84px;
+  --nx-player-position: bottom;
+  --nx-card-size: 176px;
+
+  /* Arrière-plan pochette */
+  --nx-artwork-blur: 60;
+  --nx-artwork-dim: 0.72;
+  --nx-artwork-saturation: 0.7;
+
+  /* Paroles */
+  --nx-lyrics-active: var(--nx-text);
+  --nx-lyrics-inactive: rgba(238, 242, 248, 0.26);
+  --nx-lyrics-size: 30px;
+
+  /* Typographie et animations */
+  --nx-font: "";
+  --nx-font-size: 14px;
+  --nx-animation-speed: 1.0;
+}

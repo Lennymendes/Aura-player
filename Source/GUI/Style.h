@@ -76,6 +76,12 @@ inline void paintGlass (juce::Graphics& g, juce::Component& panel, AppContext& c
     g.drawRoundedRectangle (area.reduced (0.5f), radius, 1.0f);
 }
 
+/** Neutral ink for hover fills, tracks and separators: white on dark themes, the text colour on light ones. */
+inline juce::Colour neutral() { return juce::LookAndFeel::getDefaultLookAndFeel().findColour (juce::Label::textColourId); }
+
+/** A colour drawn on a dark chip over artwork: too dark (black accent of a light theme) -> white. */
+inline juce::Colour onDark (juce::Colour c) { return c.getPerceivedBrightness() < 0.45f ? juce::Colours::white : c; }
+
 inline void paintBadge (juce::Graphics& g, juce::Rectangle<float> r, const juce::String& text, juce::Colour c, bool filled = false)
 {
     g.setColour (filled ? c : c.withAlpha (0.14f));

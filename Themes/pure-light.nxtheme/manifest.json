@@ -1,0 +1,11 @@
+{
+  "id": "pure-light",
+  "name": "Pure Light",
+  "author": "NX Audio Suite",
+  "version": "1.0",
+  "description": "Clair et givré : fond perle, cartes blanches translucides, texte anthracite, accent noir profond.",
+  "stylesheet": "theme.css",
+  "background": {
+    "type": "solid"
+  }
+}

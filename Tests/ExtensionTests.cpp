@@ -97,7 +97,8 @@ NX_TEST_SECTION (401, "Thèmes .nxtheme : CSS, rechargement à chaud, import / e
     userDir.createDirectory();
     tm.setSearchFolders ({ resources().getChildFile ("Themes"), userDir });
     t.check (tm.getThemeIds().contains ("nx-emerald") && tm.getThemeIds().contains ("aura-neon") && tm.getThemeIds().contains ("glass-rose")
-             && tm.getThemeIds().contains ("ocean-blue"), "4 thèmes livrés : "_t + tm.getThemeIds().joinIntoString (", "));
+             && tm.getThemeIds().contains ("ocean-blue") && tm.getThemeIds().contains ("pure-light") && tm.getThemeIds().contains ("solar-amber")
+             && tm.getThemeIds().contains ("cobalt-minimal"), "7 thèmes livrés : "_t + tm.getThemeIds().joinIntoString (", "));
     t.check (tm.apply ("nx-emerald") && tm.current().accent() == juce::Colour (0xff00f5a0) && tm.current().bg() == juce::Colour (0xff0a0c0e),
              "NX Emerald : fond #0A0C0E, accent #00F5A0");
     t.check (tm.findTheme ("aura-neon") != nullptr && tm.findTheme ("aura-neon")->shaderCode.contains ("gl_FragColor"),
@@ -476,6 +477,21 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     t.check (shoot ("01_accueil") > 60, "Accueil (grille, ajouts récents, spectre)"_t);
     app.navigate ({ nx::PageId::Albums });
     t.check (shoot ("02_albums") > 60, "Albums (pochettes, badges de résolution)"_t);
+    app.settings().set ("albumView", "list");
+    app.navigate ({ nx::PageId::Home });
+    app.navigate ({ nx::PageId::Albums });
+    {
+        // list view: the artwork thumbnails are drawn opaque (the row fill used to leave them at a few % alpha)
+        settle (300);
+        auto img = main->createComponentSnapshot (main->getLocalBounds(), true, 1.0f);
+        savePng (img, shots.getChildFile ("02b_albums_liste.png"));
+        int vivid = 0;
+        for (int y = 0; y < img.getHeight(); y += 3)
+            for (int x = 0; x < img.getWidth() / 2; x += 3)
+                if (img.getPixelAt (x, y).getSaturation() > 0.45f && img.getPixelAt (x, y).getBrightness() > 0.35f) ++vivid;
+        t.check (vivid > 400, "vue liste : pochettes opaques et nettes ("_t + juce::String (vivid) + " points colorés)");
+    }
+    app.settings().set ("albumView", "grid");
     app.navigate ({ nx::PageId::AlbumDetail, "Zeyn", "Neon Roads" });
     t.check (shoot ("03_album") > 60, "Détail d'album"_t);
 
@@ -659,6 +675,20 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     app.applyThemeNow ("aura-neon");
     app.navigate ({ nx::PageId::Albums });
     t.check (shoot ("05_theme_aura_neon") > 40 && app.theme().id == "aura-neon", "thème Aura Neon appliqué à chaud"_t);
+    {
+        // the three minimal themes: listed, applied hot, readable (text contrasts with the background)
+        bool ok = true;
+        for (auto [id, accent] : { std::pair<const char*, juce::uint32> { "pure-light", 0xff000000 }, { "solar-amber", 0xfff59e0b }, { "cobalt-minimal", 0xff3b82f6 } })
+        {
+            app.applyThemeNow (id);
+            app.navigate ({ nx::PageId::Albums });
+            const auto& th = app.theme();
+            ok = ok && th.id == id && th.accent() == juce::Colour (accent)
+                 && std::abs (th.textCol().getPerceivedBrightness() - th.bg().getPerceivedBrightness()) > 0.6f
+                 && shoot ("05_theme_" + juce::String (id)) > 20;
+        }
+        t.check (ok, "thèmes Pure Light, Solar Amber et Cobalt Minimal : appliqués à chaud, texte contrasté"_t);
+    }
     app.applyThemeNow ("nx-emerald");
 
     app.navigate ({ nx::PageId::Search, "lum" });
@@ -714,21 +744,21 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     auto& market = main->getMarketplace();
     app.navigate ({ nx::PageId::Marketplace });
     const int galleryCards = market.getNumCards();
-    t.check (galleryCards >= 7, "Extensions & Thèmes : "_t + juce::String (galleryCards) + " cartes (4 thèmes, plug-ins d'interface et DSP)"_t);
+    t.check (galleryCards >= 7, "Extensions & Thèmes : "_t + juce::String (galleryCards) + " cartes (7 thèmes, plug-ins d'interface et DSP)"_t);
     t.check (shoot ("12_extensions_themes") > 60, "galerie avec aperçus en direct"_t);
     app.navigate ({ nx::PageId::Marketplace, "themes" });
     const int themeCards = market.getNumCards();
-    t.check (themeCards == 4, "onglet Thèmes : "_t + juce::String (themeCards) + " cartes");
+    t.check (themeCards == 7, "onglet Thèmes : "_t + juce::String (themeCards) + " cartes");
     app.navigate ({ nx::PageId::UserPlugins, "catalogue" });
     const int catalogueCards = market.getNumCards();
-    t.check (catalogueCards == 6, "Plugins utilisateur › Catalogue : "_t + juce::String (catalogueCards) + " plug-ins en plus (5 interface, 1 DSP)");
+    t.check (catalogueCards == 5, "Plugins utilisateur › Catalogue : "_t + juce::String (catalogueCards) + " plug-ins en plus (4 interface, 1 DSP)");
     t.check (shoot ("13_plugins_catalogue") > 60, "catalogue avec aperçus"_t);
 
     juce::String installError;
-    const bool radialOk = market.installFromCatalogue ("nx.radial", installError);
+    const bool radialOk = market.installFromCatalogue ("nx.waterfall", installError);
     bool radialOn = false;
-    for (auto& p : app.plugins().getUiPlugins()) if (p.id == "nx.radial") radialOn = p.enabled && p.folder.isAChildOf (app.userDataDirectory());
-    t.check (radialOk && radialOn, "installation en un clic : Spectre circulaire copié dans le dossier utilisateur et activé"_t
+    for (auto& p : app.plugins().getUiPlugins()) if (p.id == "nx.waterfall") radialOn = p.enabled && p.folder.isAChildOf (app.userDataDirectory());
+    t.check (radialOk && radialOn, "installation en un clic : Spectrogramme copié dans le dossier utilisateur et activé"_t
                                    + (installError.isNotEmpty() ? " (" + installError + ")" : juce::String()));
     const bool toneOk = market.installFromCatalogue ("nx.tone", installError);
     bool toneOn = false;
@@ -738,7 +768,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     app.navigate ({ nx::PageId::UserPlugins, "installes" });
     t.check (market.getNumCards() == 2, "onglet Installés : "_t + juce::String (market.getNumCards()) + " plug-ins");
     app.navigate ({ nx::PageId::NowPlaying });
-    shoot ("10b_spectre_circulaire");
+    shoot ("10b_spectrogramme");
     app.navigate ({ nx::PageId::UserPlugins, "installes" });
     t.check (shoot ("14_plugins_installes") > 40, "plug-ins installés par l'utilisateur"_t);
     juce::String removeError;
@@ -746,7 +776,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     bool stillThere = false;
     for (auto& p : app.plugins().getDspPlugins()) if (p.id == "nx.tone") stillThere = true;
     t.check (removed && ! stillThere, "retrait d'un plug-in utilisateur"_t + (removeError.isNotEmpty() ? " (" + removeError + ")" : juce::String()));
-    app.plugins().setUiPluginEnabled ("nx.radial", false);
+    app.plugins().setUiPluginEnabled ("nx.waterfall", false);
 
     // History (‹ ›) and the sidebar toggle
     app.navigate ({ nx::PageId::Home });
@@ -760,6 +790,40 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     const bool fwdOk = main->getCurrentPage().page == nx::PageId::Albums;
     app.navigate ({ nx::PageId::Artists });
     t.check (backOk && back2Ok && fwdOk && ! main->canGoForward(), "historique : ‹ revient en arrière, › avance, une nouvelle page efface l'avant"_t);
+    {
+        // shortcuts: Cmd/Ctrl + [ / ], Alt + arrows, Backspace (no text field focused), side mouse buttons 4 / 5, Cmd/Ctrl + B
+        using K = juce::KeyPress;
+        const auto cmd = juce::ModifierKeys::commandModifier, alt = juce::ModifierKeys::altModifier;
+        app.navigate ({ nx::PageId::Albums });
+        app.navigate ({ nx::PageId::Favourites });
+        main->grabKeyboardFocus();
+        main->keyPressed (K ('[', cmd, 0));
+        const bool k1 = main->getCurrentPage().page == nx::PageId::Albums;
+        main->keyPressed (K (']', cmd, 0));
+        const bool k2 = main->getCurrentPage().page == nx::PageId::Favourites;
+        main->keyPressed (K (K::leftKey, alt, 0));
+        main->keyPressed (K (K::rightKey, alt, 0));
+        const bool k3 = main->getCurrentPage().page == nx::PageId::Favourites;
+        main->keyPressed (K (K::backspaceKey));
+        const bool k4 = main->getCurrentPage().page == nx::PageId::Albums;
+        auto mouse = [&] (juce::ModifierKeys::Flags button)
+        {
+            auto src = juce::Desktop::getInstance().getMainMouseSource();
+            const juce::MouseEvent e (src, { 10.0f, 10.0f }, juce::ModifierKeys (button), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                      main, main, juce::Time::getCurrentTime(), { 10.0f, 10.0f }, juce::Time::getCurrentTime(), 1, false);
+            main->sideButtons.mouseDown (e);
+        };
+        mouse (juce::ModifierKeys::forwardButtonModifier);
+        const bool m1 = main->getCurrentPage().page == nx::PageId::Favourites;
+        mouse (juce::ModifierKeys::backButtonModifier);
+        const bool m2 = main->getCurrentPage().page == nx::PageId::Albums;
+        main->keyPressed (K ('b', cmd, 0));
+        const bool hidden = ! main->isSidebarVisible();
+        main->keyPressed (K ('b', cmd, 0));
+        t.check (k1 && k2 && k3 && k4 && m1 && m2 && hidden && main->isSidebarVisible() && ! main->backButton.isEnabled() == ! main->canGoBack(),
+                 "navigation : Cmd/Ctrl + [ ], Alt + flèches, Retour arrière, boutons souris 4 / 5, Cmd/Ctrl + B (barre latérale)"_t);
+        app.navigate ({ nx::PageId::Artists });
+    }
     main->setSidebarVisible (false, false);
     t.check (! main->sidebar.isVisible() && main->sidebarButton.getX() <= 16, "barre latérale masquée : le contenu prend toute la largeur"_t);
     shoot ("15_barre_laterale_masquee");
@@ -846,12 +910,47 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         app.applyEngineSettings();
 
         app.setStreamerMode (true);
+        nx::perf::setBackground (false);
         t.check (app.isStreamerMode() && (bool) app.settings().get ("streamerMode", false) && main->streamerButton.active
                  && nx::perf::hz (30, 4) == 4, "mode Streamer : activé, enregistré, bouton allumé, timers ralentis"_t);
+        nx::perf::setBackground (true);
+        const bool backgroundSlow = nx::perf::hz (30, 4) == 1;
+        nx::perf::setBackground (false);
         main->player.stateChanged();
         settle (200);
         shoot ("16b_mode_streamer");
+        {
+            // OBS: now_playing.txt / now_playing_cover.jpg, written by the controller while Streamer mode is on
+            const auto txt = app.userDataDirectory().getChildFile ("now_playing.txt");
+            for (int i = 0; i < 40 && ! txt.existsAsFile(); ++i) settle (50);
+            const auto* tr = app.currentTrack();
+            const bool exported = txt.existsAsFile() && (tr == nullptr || txt.loadFileAsString().contains (tr->title));
+            const auto dir = t.tempDir.getChildFile ("obs");
+            dir.createDirectory();
+            nx::TrackInfo fake;
+            fake.title = "Night Drive";
+            fake.artist = "Zeyn";
+            juce::Image img (juce::Image::RGB, 64, 64, true);
+            juce::Graphics (img).fillAll (juce::Colours::orange);
+            const bool written = nx::AppController::writeNowPlayingFiles (dir, &fake, img)
+                                 && dir.getChildFile ("now_playing.txt").loadFileAsString() == juce::String::fromUTF8 ("Zeyn \xe2\x80\x94 Night Drive")
+                                 && juce::ImageFileFormat::loadFrom (dir.getChildFile ("now_playing_cover.jpg")).getWidth() == 64;
+            const bool cleared = nx::AppController::writeNowPlayingFiles (dir, nullptr, {})
+                                 && dir.getChildFile ("now_playing.txt").loadFileAsString().isEmpty() && ! dir.getChildFile ("now_playing_cover.jpg").exists();
+            app.setNowPlayingOverlay (true);
+            settle (150);
+            auto* ov = app.getOverlayWindow();
+            const bool overlay = app.isNowPlayingOverlayVisible() && ov != nullptr && ov->getWidth() == 460;
+            if (ov != nullptr)
+                savePng (ov->getOverlay().createComponentSnapshot (ov->getOverlay().getLocalBounds(), true, 1.0f), shots.getChildFile ("16d_overlay_now_playing.png"));
+            app.setNowPlayingOverlay (false);
+            t.check (backgroundSlow && exported && written && cleared && overlay && ! app.isNowPlayingOverlayVisible()
+                     && ! (bool) app.settings().get ("nowPlayingOverlay", true),
+                     "mode Streamer : 1 image / s en arrière-plan, now_playing.txt + pochette JPEG pour OBS, overlay « Now Playing »"_t
+                     + " [" + juce::String ((int) backgroundSlow) + juce::String ((int) exported) + juce::String ((int) written) + juce::String ((int) cleared) + juce::String ((int) overlay) + "]");
+        }
         app.setStreamerMode (false);
+        nx::perf::setBackground (false);
         t.check (! app.isStreamerMode() && nx::perf::hz (30, 4) == 30, "mode Streamer : désactivé, cadence normale"_t);
     }
     // A-B loop markers on the seek bar
@@ -1068,8 +1167,11 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         t.check (slowIgnored && app.isZeynUnlocked() && (bool) app.settings().get ("zeynUnlocked", false) && zeyn != nullptr && zeyn->name == "ZEYN"
                  && app.theme().id == themeBefore && main->sidebar.logoBounds().getHeight() == 40,
                  "triple clic sur le logo (< 800 ms) : thème ZEYN déverrouillé et mémorisé, pas appliqué ; clics lents ignorés"_t);
-        t.check (zeyn != nullptr && zeyn->bg() == juce::Colour (0xff06070a) && zeyn->surface() == juce::Colour (0xff0e1117) && zeyn->accent() == juce::Colour (0xff00f5a0),
-                 "thème ZEYN : fond obsidienne #06070A, surfaces #0E1117, accent émeraude #00F5A0"_t);
+        t.check (zeyn != nullptr && zeyn->bg() == juce::Colour (0xff1a1b1e) && zeyn->colour ("--nx-bg-2") == juce::Colour (0xff2c2e33)
+                 && zeyn->accent() == juce::Colour (0xfff8fafc) && zeyn->textCol() == juce::Colours::white && zeyn->textDim() == juce::Colour (0xffcbd5e1)
+                 && std::abs (zeyn->glassTint().getFloatAlpha() - 0.08f) < 0.01f && std::abs (zeyn->border().getFloatAlpha() - 0.28f) < 0.01f
+                 && zeyn->number ("--nx-artwork-saturation", 1.0f) == 0.0f,
+                 "thème ZEYN : verre givré monochrome (titane #1A1B1E → #2C2E33, verre blanc 8 %, bordure 28 %, accent #F8FAFC, pochette N&B)"_t);
         sw.getPage().setTab ("interface");
         bool listed = false;
         for (auto& th : app.themes().getThemes()) listed = listed || th.id == "zeyn";

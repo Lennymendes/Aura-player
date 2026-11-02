@@ -471,7 +471,7 @@ void DeviceChip::paint (juce::Graphics& g)
     const auto device = ctx.engine().getDeviceName();
     const auto s = ctx.engine().getSettings();
     const auto family = familyFromName (device) != DeviceFamily::None ? familyFromName (device) : activeFamily (s, device);
-    g.setColour (juce::Colours::white.withAlpha (isMouseOver() ? 0.12f : 0.06f));
+    g.setColour (style::neutral().withAlpha (isMouseOver() ? 0.12f : 0.06f));
     g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
     g.setColour (t.border().withMultipliedAlpha (1.5f));
     g.drawRoundedRectangle (r, r.getHeight() * 0.5f, 1.0f);

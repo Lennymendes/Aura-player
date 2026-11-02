@@ -1,0 +1,13 @@
+{
+  "id": "cobalt-minimal",
+  "name": "Cobalt Minimal",
+  "author": "NX Audio Suite",
+  "version": "1.0",
+  "description": "Studio ultra-sobre : fond nuit, accent bleu électrique, rien de superflu.",
+  "stylesheet": "theme.css",
+  "background": {
+    "type": "artwork",
+    "fallback": "mesh",
+    "speed": 0.06
+  }
+}

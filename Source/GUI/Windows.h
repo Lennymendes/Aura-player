@@ -27,6 +27,35 @@ private:
     juce::ComponentDragger dragger;
 };
 
+/** Streamer / OBS "Now Playing" card: artwork, title, artist and the resolution badge on frosted glass.
+    Drag it anywhere; double-click hides it. Capture its window in OBS (Window Capture). */
+class NowPlayingOverlay : public juce::Component, private juce::Timer
+{
+public:
+    explicit NowPlayingOverlay (AppContext& c);
+    void paint (juce::Graphics&) override;
+    void trackChanged();
+    void mouseDown (const juce::MouseEvent& e) override { dragger.startDraggingComponent (getTopLevelComponent(), e.getEventRelativeTo (getTopLevelComponent())); }
+    void mouseDrag (const juce::MouseEvent& e) override { dragger.dragComponent (getTopLevelComponent(), e.getEventRelativeTo (getTopLevelComponent()), nullptr); }
+    void mouseDoubleClick (const juce::MouseEvent&) override { ctx.setNowPlayingOverlay (false); }
+private:
+    void timerCallback() override;
+    AppContext& ctx;
+    juce::Image cover, blurred;
+    juce::String shownKey;
+    juce::ComponentDragger dragger;
+};
+
+class OverlayWindow : public juce::DocumentWindow
+{
+public:
+    explicit OverlayWindow (AppContext& ctx);
+    void closeButtonPressed() override { setVisible (false); }
+    NowPlayingOverlay& getOverlay() { return *overlay; }
+private:
+    NowPlayingOverlay* overlay = nullptr;
+};
+
 class MainWindow : public juce::DocumentWindow
 {
 public:

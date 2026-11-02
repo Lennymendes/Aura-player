@@ -31,6 +31,7 @@ namespace nx
 {
 
 class MainWindow;
+class OverlayWindow;
 class MiniWindow;
 class MainComponent;
 
@@ -75,6 +76,11 @@ public:
     const TrackInfo* currentTrack() override;
     void navigate (const PageRequest& r) override;
     void toggleMiniPlayer() override;
+    void setNowPlayingOverlay (bool show) override;
+    bool isNowPlayingOverlayVisible() override;
+    /** Streamer mode: now_playing.txt ("Artiste — Titre") and now_playing_cover.jpg in `dir` (empty text when stopped). */
+    static bool writeNowPlayingFiles (const juce::File& dir, const TrackInfo* track, const juce::Image& cover);
+    OverlayWindow* getOverlayWindow() { return overlayWindow.get(); }
     void setShuffle (bool on) override;
     void setRepeat (PlaybackEngine::Repeat mode) override;
     bool isShuffle() const override         { return eng->isShuffle(); }
@@ -178,6 +184,8 @@ private:
     NXLookAndFeel lookAndFeel;
     std::unique_ptr<MainWindow> mainWindow;
     std::unique_ptr<MiniWindow> miniWindow;
+    std::unique_ptr<OverlayWindow> overlayWindow;
+    juce::String exportedNowPlaying;        // what the OBS files hold ("" = not written yet)
     std::unique_ptr<MainComponent> headlessMain;   // tests without a window
     std::unique_ptr<LicenseManager> licenseManager;
     std::unique_ptr<UpdateChecker> updateChecker;

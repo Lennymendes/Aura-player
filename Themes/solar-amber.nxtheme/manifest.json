@@ -1,0 +1,13 @@
+{
+  "id": "solar-amber",
+  "name": "Solar Amber",
+  "author": "NX Audio Suite",
+  "version": "1.0",
+  "description": "Minimaliste et chaud : fond carbone, lignes épurées, un seul accent ambre doré.",
+  "stylesheet": "theme.css",
+  "background": {
+    "type": "artwork",
+    "fallback": "mesh",
+    "speed": 0.08
+  }
+}

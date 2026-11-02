@@ -58,8 +58,8 @@ void familySetProfile (EngineSettings& s, DeviceFamily f, int i)
 juce::String familyTitle (DeviceFamily f)
 {
     return f == DeviceFamily::Merging ? juce::String ("Merging Anubis · RAVENNA / AES67"_t)
-         : f == DeviceFamily::Rme ? juce::String ("RME ADI-2 · USB")
-         : f == DeviceFamily::Fiio ? juce::String ("FiiO KA17 · USB")
+         : f == DeviceFamily::Rme ? juce::String (juce::CharPointer_UTF8 ("RME ADI-2 \xc2\xb7 USB"))
+         : f == DeviceFamily::Fiio ? juce::String (juce::CharPointer_UTF8 ("FiiO KA17 \xc2\xb7 USB"))
          : juce::String();
 }
 
@@ -356,7 +356,7 @@ std::vector<const DeviceModel*> searchDeviceModels (const juce::String& query)
     {
         const juce::String hay = juce::String (m.brand) + " " + juce::String::fromUTF8 (m.name) + " " + m.series + " " + juce::String::fromUTF8 (m.name).replace ("-", " ")
                                + " " + juce::String::fromUTF8 (m.subtitle)
-                               + (juce::String (m.id) == "generic" ? " generique générique autre dac" : "");
+                               + (juce::String (m.id) == "generic" ? juce::String::fromUTF8 (" generique générique autre dac") : juce::String());
         bool all = true;
         for (auto& w : words) if (w.isNotEmpty() && ! hay.containsIgnoreCase (w)) { all = false; break; }
         if (all) out.push_back (&m);

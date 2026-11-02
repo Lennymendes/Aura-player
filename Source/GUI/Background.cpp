@@ -120,7 +120,12 @@ void BackgroundComponent::updateGlass()
         juce::Graphics g (img);
         g.fillAll (ctx.theme().bg());
         g.setImageResamplingQuality (juce::Graphics::mediumResamplingQuality);
-        if (current.isValid() && mode == "artwork")
+        if (mode == "solid")
+        {
+            g.setGradientFill (juce::ColourGradient (ctx.theme().bg(), 0, 0, ctx.theme().colour ("--nx-bg-2", ctx.theme().bg()), 0, (float) h, false));
+            g.fillAll();
+        }
+        else if (current.isValid() && mode == "artwork")
         {
             if (previous.isValid() && fade < 1.0f) g.drawImage (previous, img.getBounds().toFloat());
             g.setOpacity (previous.isValid() ? fade : juce::jmin (1.0f, fade + 0.0001f) );
@@ -147,7 +152,7 @@ void BackgroundComponent::timerCallback()
         fade = still ? 1.0f : juce::jmin (1.0f, fade + (1.0f / 30.0f) / 0.8f * ctx.theme().number ("--nx-animation-speed", 1.0f));
         dirty = true;
     }
-    const bool animated = ! still && (mode == "mesh" || mode == "gradient" || mode == "shader" || ! current.isValid());
+    const bool animated = ! still && mode != "solid" && (mode == "mesh" || mode == "gradient" || mode == "shader" || ! current.isValid());
     if (animated)
     {
         renderMesh (now - time0);
@@ -193,6 +198,13 @@ void BackgroundComponent::paint (juce::Graphics& g)
     }
    #endif
 
+    if (mode == "solid")
+    {
+        // still, calm background (light themes): a soft vertical gradient, no vignette
+        g.setGradientFill (juce::ColourGradient (t.bg(), 0, r.getY(), t.colour ("--nx-bg-2", t.bg()), 0, r.getBottom(), false));
+        g.fillRect (r);
+        return;
+    }
     g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
     if (mode == "artwork" && (current.isValid() || previous.isValid()))
     {

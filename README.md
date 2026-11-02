@@ -247,10 +247,16 @@ la liste et en bas de la barre latérale ; le morceau rejoint ensuite la bibliot
 **Paroles** : fichier `.lrc` / `.txt` à côté du morceau, puis tags (SYLT synchronisé, USLT, LYRICS, ©lyr). Aucune
 requête en ligne.
 
+**Thèmes livrés** : NX Emerald, Aura Neon, Glass Rose, Ocean Blue, Pure Light (clair, givré), Solar Amber, Cobalt Minimal,
+et le thème caché ZEYN (verre givré noir & blanc, triple clic sur le logo).
+**Navigation** : ‹ › en haut à gauche, Cmd/Ctrl + [ / ], Alt + ← / →, Retour arrière (hors champ de texte), boutons
+latéraux de la souris ; Cmd/Ctrl + B masque la barre latérale.
+**Mode Streamer / Gaming** : interface au repos (1 image / s en arrière-plan), overlay « Now Playing » à capturer dans
+OBS, et `now_playing.txt` / `now_playing_cover.jpg` tenus à jour dans le dossier de données.
 **Extensions & Thèmes** (barre latérale › Personnaliser ; l'onglet « Plugins utilisateur › » mène au catalogue) : chaque thème et chaque plug-in est une carte avec un
 aperçu en direct ; un clic sur l'interrupteur l'active ou le désactive, un clic sur un thème l'applique.
 **Plugins utilisateur** : le *Catalogue* propose des plug-ins en plus livrés avec NX Player (Oscilloscope,
-Spectre circulaire, Spectrogramme, Crêtes-mètre numérique, Horloge & session d'écoute, DSP Tonalité & balance) ;
+Spectrogramme, Crêtes-mètre numérique, Horloge & session d'écoute, DSP Tonalité & balance) ;
 « Installer » les copie dans votre dossier et les active. *Installés* liste vos plug-ins, avec « Importer un plugin… »
 (dossier ou .zip) et l'ouverture du dossier.
 

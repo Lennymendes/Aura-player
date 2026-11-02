@@ -180,43 +180,44 @@ void ThemeManager::rescan()
 
 Theme ThemeManager::makeZeynTheme()
 {
-    // Built in (no folder): obsidian black, emerald / cyan neon of the NX logo, discreet gradients.
+    // Built in (no folder): monochrome frosted glass — titanium / platinum greys, translucent white cards, fine
+    // specular white borders, white and silver text, an icy white accent. The artwork behind is shown in black & white.
     Theme t;
     t.id = "zeyn";
     t.name = "ZEYN";
     t.author = "NX Audio Suite";
-    t.version = "1.0";
-    t.description = "Thème caché : noir obsidienne, accents émeraude / cyan néon du logo NX Player."_t;
-    t.background = juce::JSON::parse (R"({ "type": "mesh", "speed": 0.08 })");
+    t.version = "2.0";
+    t.description = "Thème caché : verre givré noir & blanc, gris titane, reflets argentés, accent blanc glacé."_t;
+    t.background = juce::JSON::parse (R"({ "type": "artwork", "fallback": "mesh", "speed": 0.05 })");
     t.vars = parseCssVariables (R"CSS(:root {
-        --nx-bg: #06070A;
-        --nx-bg-2: #0A0D12;
-        --nx-surface: #0E1117;
-        --nx-glass-tint: rgba(9, 11, 16, 0.66);
-        --nx-glass-strong: rgba(6, 7, 10, 0.88);
-        --nx-border: rgba(0, 245, 160, 0.10);
-        --nx-highlight: rgba(0, 217, 245, 0.07);
-        --nx-shadow: rgba(0, 0, 0, 0.70);
-        --nx-text: #F2F7F5;
-        --nx-text-dim: #7E8C88;
-        --nx-accent: #00F5A0;
-        --nx-accent-2: #00D2FF;
-        --nx-on-accent: #031510;
-        --nx-quality-bitperfect: #B07CFF;
+        --nx-bg: #1A1B1E;
+        --nx-bg-2: #2C2E33;
+        --nx-surface: #232529;
+        --nx-glass-tint: rgba(255, 255, 255, 0.08);
+        --nx-glass-strong: rgba(44, 46, 51, 0.86);
+        --nx-border: rgba(255, 255, 255, 0.28);
+        --nx-highlight: rgba(255, 255, 255, 0.14);
+        --nx-shadow: rgba(0, 0, 0, 0.55);
+        --nx-text: #FFFFFF;
+        --nx-text-dim: #CBD5E1;
+        --nx-accent: #F8FAFC;
+        --nx-accent-2: #CBD5E1;
+        --nx-on-accent: #0B0C0E;
+        --nx-quality-bitperfect: #E2E8F0;
         --nx-quality-enhanced: var(--nx-accent);
-        --nx-quality-high: #6FE8D0;
-        --nx-quality-low: #FFB547;
-        --nx-radius: 16px;
-        --nx-radius-small: 9px;
+        --nx-quality-high: #CBD5E1;
+        --nx-quality-low: #FBBF24;
+        --nx-radius: 18px;
+        --nx-radius-small: 10px;
         --nx-sidebar-width: 236px;
         --nx-player-height: 84px;
         --nx-player-position: bottom;
         --nx-card-size: 176px;
-        --nx-artwork-blur: 56;
-        --nx-artwork-dim: 0.66;
-        --nx-artwork-saturation: 1.15;
-        --nx-lyrics-active: var(--nx-text);
-        --nx-lyrics-inactive: rgba(242, 247, 245, 0.28);
+        --nx-artwork-blur: 64;
+        --nx-artwork-dim: 0.58;
+        --nx-artwork-saturation: 0.0;
+        --nx-lyrics-active: #FFFFFF;
+        --nx-lyrics-inactive: rgba(203, 213, 225, 0.30);
         --nx-lyrics-size: 30px;
         --nx-font: "";
         --nx-font-size: 14px;

@@ -85,7 +85,7 @@ namespace
         g.setFont (style::font (12.5f, true));
         g.drawText (value, top, juce::Justification::centredRight);
         auto bar = r.removeFromTop (6).withY (r.getY() + 3);
-        g.setColour (juce::Colours::white.withAlpha (0.08f));
+        g.setColour (style::neutral().withAlpha (0.08f));
         g.fillRoundedRectangle (bar, 3.0f);
         if (fraction >= 0.0f)
         {
@@ -214,7 +214,7 @@ void HardwareDashboard::paint (juce::Graphics& g)
             }
             else
             {
-                g.setColour (juce::Colours::white.withAlpha (0.05f));
+                g.setColour (style::neutral().withAlpha (0.05f));
                 g.fillRoundedRectangle (chip, 6.0f);
                 g.setColour (t.textDim().withAlpha (0.45f));
             }

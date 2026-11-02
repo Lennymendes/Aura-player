@@ -24,7 +24,7 @@ void IconButton::paintButton (juce::Graphics& g, bool hi, bool down)
     if ((hi || down) && isEnabled())
     {
         const float d = juce::jmin (r.getWidth(), r.getHeight());
-        g.setColour (juce::Colours::white.withAlpha (down ? 0.14f : 0.08f));
+        g.setColour (style::neutral().withAlpha (down ? 0.14f : 0.08f));
         g.fillEllipse (r.withSizeKeepingCentre (d, d));
     }
     const float s = juce::jmin (r.getWidth(), r.getHeight()) * 0.62f;
@@ -89,7 +89,7 @@ void ArtworkView::paint (juce::Graphics& g)
     g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
     g.drawImage (img, r);
     g.restoreState();
-    g.setColour (juce::Colours::white.withAlpha (0.06f));
+    g.setColour (style::neutral().withAlpha (0.06f));
     g.drawRoundedRectangle (r, cornerRadius, 1.0f);
 }
 
@@ -141,7 +141,7 @@ void SeekBar::paint (juce::Graphics& g)
     }
     else
     {
-        g.setColour (juce::Colours::white.withAlpha (0.14f));
+        g.setColour (style::neutral().withAlpha (0.14f));
         g.fillRoundedRectangle (track, th * 0.5f);
         g.setGradientFill (juce::ColourGradient (t.accent(), track.getX(), 0, t.accent2(), track.getRight(), 0, false));
         g.fillRoundedRectangle (track.withWidth (track.getWidth() * frac), th * 0.5f);
@@ -481,7 +481,7 @@ void AlbumGrid::paint (juce::Graphics& g)
             auto br = juce::Rectangle<float> (bw, 18.0f).withPosition (bx, art.getY() + 8);
             g.setColour (juce::Colours::black.withAlpha (0.55f));
             g.fillRoundedRectangle (br, 6.0f);
-            g.setColour (a.hasDsd ? style::qualityColour (t, PathQuality::BitPerfect) : t.accent());
+            g.setColour (style::onDark (a.hasDsd ? style::qualityColour (t, PathQuality::BitPerfect) : t.accent()));
             g.setFont (style::font (11.0f, true));
             g.drawText (badge, br, juce::Justification::centred);
             bx = br.getRight() + 5.0f;
@@ -491,7 +491,7 @@ void AlbumGrid::paint (juce::Graphics& g)
             auto br = juce::Rectangle<float> ((float) chb.length() * 7.0f + 12.0f, 18.0f).withPosition (bx, art.getY() + 8);
             g.setColour (juce::Colours::black.withAlpha (0.55f));
             g.fillRoundedRectangle (br, 6.0f);
-            g.setColour (a.maxChannels > 2 ? t.accent2() : t.textCol().withAlpha (0.85f));
+            g.setColour (style::onDark (a.maxChannels > 2 ? t.accent2() : t.textCol()).withAlpha (0.9f));
             g.setFont (style::font (11.0f, true));
             g.drawText (chb, br, juce::Justification::centred);
             bx = br.getRight() + 5.0f;
@@ -535,16 +535,18 @@ void AlbumGrid::paintRow (juce::Graphics& g, int i, juce::Rectangle<int> row)
     const auto& t = ctx.theme();
     const auto& a = albums[(size_t) i];
     const bool hot = i == hover, isSelected = selected.count (i) > 0;
-    g.setColour (isSelected ? t.accent().withAlpha (0.22f) : juce::Colours::white.withAlpha (hot ? 0.08f : 0.03f));
+    g.setColour (isSelected ? t.accent().withAlpha (0.22f) : style::neutral().withAlpha (hot ? 0.08f : 0.03f));
     g.fillRoundedRectangle (row.toFloat(), 8.0f);
     auto r = row.reduced (8, 4);
     auto art = r.removeFromLeft (r.getHeight()).toFloat();
     auto img = ctx.artwork().get (a.artworkKey, 128);
     if (! img.isValid()) img = imaging::placeholder (a.title, 64, t.accent(), t.accent2());
     juce::Path p;
-    p.addRoundedRectangle (art, 5.0f);
+    p.addRoundedRectangle (art, 6.0f);
     g.saveState();
     g.reduceClipRegion (p);
+    g.setOpacity (1.0f);          // drawImage uses the current colour's alpha: the row background above is at 3-8 %
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
     g.drawImage (img, art);
     g.restoreState();
     r.removeFromLeft (12);
@@ -562,13 +564,13 @@ void AlbumGrid::paintRow (juce::Graphics& g, int i, juce::Rectangle<int> row)
     chip (channelBadge (a.maxChannels), a.maxChannels > 2 ? t.accent2() : t.textDim());
     g.setColour (t.textDim());
     g.setFont (style::font (12.5f));
-    g.drawText (juce::String (a.trackCount) + " " + "morceaux"_t + " · " + style::formatTime (a.duration), r.removeFromRight (150), juce::Justification::centredRight, true);
+    g.drawText (juce::String (a.trackCount) + " " + "morceaux"_t + juce::String (juce::CharPointer_UTF8 (" \xc2\xb7 ")) + style::formatTime (a.duration), r.removeFromRight (150), juce::Justification::centredRight, true);
     g.setColour (t.textCol());
     g.setFont (style::font (14.0f, true));
     g.drawText (a.title, r.removeFromTop (r.getHeight() / 2 + 2), juce::Justification::bottomLeft, true);
     g.setColour (t.textDim());
     g.setFont (style::font (12.5f));
-    g.drawText (a.artist + (a.year > 0 ? " · " + juce::String (a.year) : juce::String()), r, juce::Justification::topLeft, true);
+    g.drawText (a.artist + (a.year > 0 ? juce::String (juce::CharPointer_UTF8 (" \xc2\xb7 ")) + juce::String (a.year) : juce::String()), r, juce::Justification::topLeft, true);
     if (hot && ! editRect (i).isEmpty())
     {
         const auto er = editRect (i).toFloat();
@@ -625,7 +627,7 @@ void PillBar::paint (juce::Graphics& g)
         }
         else
         {
-            g.setColour (juce::Colours::white.withAlpha (hot ? 0.12f : 0.06f));
+            g.setColour (style::neutral().withAlpha (hot ? 0.12f : 0.06f));
             g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
             g.setColour (quality ? qc.withAlpha (0.55f) : t.border());
             g.drawRoundedRectangle (r, r.getHeight() * 0.5f, 1.0f);
@@ -805,7 +807,7 @@ void TrackList::paint (juce::Graphics& g)
         const bool isPlaying = playing != nullptr && playing->source == tr.source && playing->externalId == tr.externalId;
         if (i == hover || i == selected)
         {
-            g.setColour (juce::Colours::white.withAlpha (i == selected ? 0.08f : 0.05f));
+            g.setColour (style::neutral().withAlpha (i == selected ? 0.08f : 0.05f));
             g.fillRoundedRectangle (row.toFloat().reduced (0, 2), 8.0f);
         }
         auto r = row.reduced (10, 6);

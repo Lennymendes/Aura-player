@@ -86,6 +86,9 @@ public:
     virtual const TrackInfo* currentTrack() = 0;
     virtual void navigate (const PageRequest& request) = 0;
     virtual void toggleMiniPlayer() = 0;
+    /** Streamer "Now Playing" card in its own small window (for OBS Window Capture). */
+    virtual void setNowPlayingOverlay (bool show) = 0;
+    virtual bool isNowPlayingOverlayVisible() = 0;
     virtual void setShuffle (bool on) = 0;
     virtual void setRepeat (PlaybackEngine::Repeat mode) = 0;
     virtual bool isShuffle() const = 0;

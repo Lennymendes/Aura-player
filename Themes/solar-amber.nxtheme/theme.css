@@ -1,0 +1,50 @@
+/* Solar Amber — thème livré avec NX Player (variables : docs/THEMES.md). */
+:root {
+  /* Fond et surfaces */
+  --nx-bg: #0B0A09;
+  --nx-bg-2: #14110D;
+  --nx-surface: #171410;
+  --nx-glass-tint: rgba(20, 17, 13, 0.60);
+  --nx-glass-strong: rgba(12, 10, 8, 0.88);
+  --nx-border: rgba(245, 158, 11, 0.10);
+  --nx-highlight: rgba(255, 220, 160, 0.05);
+  --nx-shadow: rgba(0, 0, 0, 0.60);
+
+  /* Texte */
+  --nx-text: #F5F0E8;
+  --nx-text-dim: #9C9283;
+
+  /* Accents */
+  --nx-accent: #F59E0B;
+  --nx-accent-2: #FBBF24;
+  --nx-on-accent: #1A1003;
+
+  /* Qualité du signal (Signal Path) */
+  --nx-quality-bitperfect: #FCD34D;
+  --nx-quality-enhanced: var(--nx-accent);
+  --nx-quality-high: #FBBF24;
+  --nx-quality-low: #F87171;
+
+  /* Formes et dimensions */
+  --nx-radius: 12px;
+  --nx-radius-small: 8px;
+  --nx-sidebar-width: 236px;
+  --nx-player-height: 84px;
+  --nx-player-position: bottom;
+  --nx-card-size: 176px;
+
+  /* Arrière-plan pochette */
+  --nx-artwork-blur: 56;
+  --nx-artwork-dim: 0.7;
+  --nx-artwork-saturation: 0.6;
+
+  /* Paroles */
+  --nx-lyrics-active: var(--nx-text);
+  --nx-lyrics-inactive: rgba(245, 240, 232, 0.26);
+  --nx-lyrics-size: 30px;
+
+  /* Typographie et animations */
+  --nx-font: "";
+  --nx-font-size: 14px;
+  --nx-animation-speed: 1.0;
+}

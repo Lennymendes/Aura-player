@@ -1,0 +1,50 @@
+/* Pure Light — thème livré avec NX Player (variables : docs/THEMES.md). */
+:root {
+  /* Fond et surfaces */
+  --nx-bg: #F4F5F7;
+  --nx-bg-2: #E9EBEF;
+  --nx-surface: #FFFFFF;
+  --nx-glass-tint: rgba(255, 255, 255, 0.62);
+  --nx-glass-strong: rgba(255, 255, 255, 0.88);
+  --nx-border: rgba(17, 24, 39, 0.10);
+  --nx-highlight: rgba(255, 255, 255, 0.70);
+  --nx-shadow: rgba(15, 23, 42, 0.12);
+
+  /* Texte */
+  --nx-text: #111827;
+  --nx-text-dim: #6B7280;
+
+  /* Accents */
+  --nx-accent: #000000;
+  --nx-accent-2: #4B5563;
+  --nx-on-accent: #FFFFFF;
+
+  /* Qualité du signal (Signal Path) */
+  --nx-quality-bitperfect: #6D28D9;
+  --nx-quality-enhanced: var(--nx-accent);
+  --nx-quality-high: #047857;
+  --nx-quality-low: #B45309;
+
+  /* Formes et dimensions */
+  --nx-radius: 14px;
+  --nx-radius-small: 8px;
+  --nx-sidebar-width: 236px;
+  --nx-player-height: 84px;
+  --nx-player-position: bottom;
+  --nx-card-size: 176px;
+
+  /* Arrière-plan pochette */
+  --nx-artwork-blur: 60;
+  --nx-artwork-dim: 0.0;
+  --nx-artwork-saturation: 0.6;
+
+  /* Paroles */
+  --nx-lyrics-active: var(--nx-text);
+  --nx-lyrics-inactive: rgba(17, 24, 39, 0.28);
+  --nx-lyrics-size: 30px;
+
+  /* Typographie et animations */
+  --nx-font: "";
+  --nx-font-size: 14px;
+  --nx-animation-speed: 1.0;
+}
