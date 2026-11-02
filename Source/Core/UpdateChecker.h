@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Update check, the same for Free and Premium (one binary; the licence stays in the settings across updates).
 // Reads a small JSON file (default: version.json at the root of the GitHub repository):
 //   { "latestVersion": "1.1.0", "releaseNotes": "...", "downloadUrlMac": "...", "downloadUrlWin": "...",

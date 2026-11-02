@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 #include "Pages.h"
 #include <random>
 #include <algorithm>
@@ -18,6 +18,7 @@
 #include "../DSP/StudioTools.h"
 #include "LibraryActions.h"
 #include "Dashboard.h"
+#include "NXPlayerData.h"
 
 namespace nx
 {
@@ -386,6 +387,15 @@ void ListingPage::ArtistHeader::paint (juce::Graphics& g)
     g.setGradientFill (juce::ColourGradient (juce::Colours::black.withAlpha (0.05f), 0, banner.getY(), t.bg().withAlpha (0.92f), 0, banner.getBottom(), false));
     g.fillRect (banner);
     g.restoreState();
+    if (meta)   // attribution of the online visuals
+    {
+        const auto fromAdb = [] (const juce::String& u) { return u.containsIgnoreCase ("theaudiodb.com"); };
+        const auto credit = fromAdb (meta->bannerUrl) || fromAdb (meta->imageUrl) ? "Source : TheAudioDB.com"_t
+                          : meta->imageUrl.containsIgnoreCase ("wikimedia.org") ? "Photo : Wikimedia Commons (Wikipédia)"_t : juce::String();
+        g.setColour (juce::Colours::white.withAlpha (0.6f));
+        g.setFont (style::font (11.0f));
+        g.drawText (credit, banner.reduced (14.0f, 8.0f), juce::Justification::topRight);
+    }
 
     // round photo, overlapping the banner
     const float d = 150.0f;
@@ -455,7 +465,8 @@ void ListingPage::ArtistHeader::paint (juce::Graphics& g)
         }
         g.setColour (t.textDim());
         g.setFont (style::font (11.5f));
-        g.drawText ("Biographie : "_t + meta->bioSource, under, juce::Justification::centredRight);
+        g.drawText (meta->bioSource == "Wikipedia" ? "Source : Wikipédia — Texte sous licence CC BY-SA 4.0"_t : "Source : TheAudioDB.com"_t,
+                    under, juce::Justification::centredRight);
     }
 }
 
@@ -1515,6 +1526,94 @@ juce::StringArray SettingsPage::tabLabels()
 
 namespace
 {
+    /** Multi-line text block of the settings (credits, legal notices): its height follows the width. */
+    struct NoticeText : juce::Component
+    {
+        NoticeText (juce::String t, float size, juce::Colour c) : text (std::move (t)), fontSize (size), colour (c) { setInterceptsMouseClicks (false, false); }
+        juce::TextLayout layout (int width) const
+        {
+            juce::AttributedString as;
+            as.append (text, style::font (fontSize), colour);
+            as.setWordWrap (juce::AttributedString::byWord);
+            as.setLineSpacing (2.0f);
+            juce::TextLayout tl;
+            tl.createLayout (as, (float) juce::jmax (100, width));
+            return tl;
+        }
+        int heightFor (int width) const { return (int) std::ceil (layout (width).getHeight()) + 4; }
+        void paint (juce::Graphics& g) override { layout (getWidth()).draw (g, getLocalBounds().toFloat()); }
+        juce::String text;
+        float fontSize;
+        juce::Colour colour;
+    };
+
+    juce::String trademarkNotice()
+    {
+        return "RME et ADI-2 sont des marques de RME Audio AG. Merging, Anubis et RAVENNA sont des marques de Merging Technologies SA. "
+               "FiiO et KA17 sont des marques de FiiO Electronics Technology Co., Ltd. ASIO est une marque de Steinberg Media Technologies GmbH. "
+               "Super Audio CD et Direct Stream Digital sont des marques de Sony Group Corporation et de Koninklijke Philips N.V. "
+               "Les autres noms de produits ou de sociétés cités appartiennent à leurs propriétaires respectifs. Ces noms sont utilisés "
+               "uniquement pour indiquer la compatibilité des profils audio de NX Player. NX Player n'est ni affilié à ces sociétés, ni approuvé, "
+               "sponsorisé ou certifié par elles. Les profils matériels sont fournis « en l'état », sans garantie de résultat sur un appareil donné."_t;
+    }
+
+    juce::String creditsText()
+    {
+        juce::StringArray l;
+        l.add ("NX Player © 2026 Lenny Antunes Mendes (NX Audio). Tous droits réservés."_t);
+        l.add ("NX Player utilise les composants suivants ; nous remercions leurs auteurs."_t);
+        l.add ({});
+        l.add ("JUCE — © Raw Material Software Limited. Utilisé sous licence JUCE (licence commerciale)."_t);
+        l.add ("JUCE intègre :"_t);
+        l.add ("   • FLAC — © Josh Coalson, Xiph.Org Foundation. Licence BSD."_t);
+        l.add ("   • Ogg / Vorbis — © Xiph.Org Foundation. Licence BSD."_t);
+        l.add ("   • zlib — © Jean-loup Gailly et Mark Adler. Licence zlib."_t);
+        l.add ("   • libpng — © The PNG Reference Library Authors. Licence libpng."_t);
+        l.add ("   • Ce logiciel est basé en partie sur le travail de l'Independent JPEG Group."_t);
+        l.add ("   • HarfBuzz — © ses auteurs. Licence « Old MIT »."_t);
+        l.add ("   • SheenBidi — © Muhammad Tayyab Akram. Licence Apache 2.0."_t);
+        l.add ("   • choc — © Julian Storer. Licence ISC. QuickJS — © Fabrice Bellard, Charlie Gordon. Licence MIT."_t);
+        l.add ("Monocypher 4.0.3 — © Loup Vaillant et contributeurs. Licence BSD 2 clauses (ou CC0)."_t);
+        l.add ("libwebp — © Google LLC. Licence BSD 3 clauses et octroi de brevets."_t);
+        l.add ("stb_image — Sean Barrett. Domaine public (ou licence MIT)."_t);
+        l.add ("Apple Lossless Audio Codec — © Apple Inc. Licence Apache 2.0 (fichiers modifiés pour arm64 / MSVC)."_t);
+        l.add ("SQLite — domaine public."_t);
+        l.add ("QR Code generator library — © Project Nayuki. Licence MIT."_t);
+        l.add ("ASIO — technologie et marque de Steinberg Media Technologies GmbH (version Windows)."_t);
+        l.add ({});
+        l.add ("Données et services en ligne (facultatifs, désactivables dans les réglages) :"_t);
+        l.add ("   • Biographies d'artistes : Wikipédia, textes sous licence CC BY-SA 4.0 (source affichée sous chaque texte)."_t);
+        l.add ("   • Photos et informations d'artistes : TheAudioDB.com (uniquement avec votre clé API personnelle)."_t);
+        l.add ({});
+        l.add ("Les textes complets de ces licences sont fournis dans le fichier « Licences.txt »."_t);
+        return l.joinIntoString ("\n");
+    }
+
+    /** Licences.txt (embedded) in a read-only window. */
+    void showLicencesFile (const Theme& theme)
+    {
+        auto* ed = new juce::TextEditor();
+        ed->setMultiLine (true, true);
+        ed->setReadOnly (true);
+        ed->setScrollbarsShown (true);
+        ed->setFont (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.5f, juce::Font::plain));
+        ed->setColour (juce::TextEditor::backgroundColourId, theme.bg());
+        ed->setColour (juce::TextEditor::textColourId, theme.textCol());
+        ed->setText (juce::String::fromUTF8 (NXData::Licences_txt, NXData::Licences_txtSize), false);
+        ed->setSize (820, 640);
+        juce::DialogWindow::LaunchOptions o;
+        o.content.setOwned (ed);
+        o.dialogTitle = "Licences.txt";
+        o.dialogBackgroundColour = theme.bg();
+        o.escapeKeyTriggersCloseButton = true;
+        o.useNativeTitleBar = true;
+        o.resizable = true;
+        o.launchAsync();
+    }
+}
+
+namespace
+{
     juce::ComboBox* makeCombo (const juce::StringArray& items, const juce::String& selected, std::function<void (const juce::String&)> fn)
     {
         auto* cb = new juce::ComboBox();
@@ -1582,6 +1681,7 @@ void SettingsPage::buildAudio()
     // Hardware profile (Merging Anubis / RAVENNA, RME ADI-2, FiiO KA17)
     {
         fullRow (new DeviceCatalogPanel (ctx, [this] { refresh(); }), DeviceCatalogPanel::idealHeight());
+        fullRow (new NoticeText (trademarkNotice(), 11.0f, ctx.theme().textDim().withAlpha (0.8f)), 60);
         const juce::StringArray profiles { "Automatique (détection)"_t, "Générique"_t, "Merging Anubis / RAVENNA (AES67)"_t, "RME ADI-2 (USB)", "FiiO KA17 (USB)" };
         row ("Profil matériel"_t + (premium ? juce::String() : juce::String ("  ·  PRO")), makeCombo (profiles, profiles[premium ? (int) s.hardwareProfile : 1], [this, profiles] (const juce::String& v)
         {
@@ -1739,13 +1839,28 @@ void SettingsPage::buildLibrary()
     }
 
     section ("Artistes & paroles"_t);
-    row ("Photos et biographies d'artistes en ligne (TheAudioDB, Wikipédia)"_t, makeToggle (ctx.artistInfo().isEnabled(), [this] (bool v)
+    row ("Photos et biographies d'artistes en ligne (Wikipédia, TheAudioDB avec votre clé)"_t, makeToggle (ctx.artistInfo().isEnabled(), [this] (bool v)
     {
         ctx.artistInfo().setEnabled (v);
         ctx.settings().set ("artistInfoOnline", v);
-    }), 36, "Seul le nom de l'artiste est envoyé. Les réponses sont gardées 30 jours dans la bibliothèque."_t);
-    row ("Chercher les paroles en ligne (LRCLIB, puis lyrics.ovh)"_t, makeToggle ((bool) ctx.settings().get ("lyricsOnline", true), [this] (bool v) { ctx.settings().set ("lyricsOnline", v); }), 36,
-         "Fichier .lrc et tags d'abord, puis LRCLIB (paroles synchronisées), puis lyrics.ovh en secours (texte seul). Artiste, titre, album et durée sont envoyés à ces services."_t);
+    }), 36, "Seul le nom de l'artiste est envoyé. Les réponses sont gardées 30 jours dans la bibliothèque. "
+            "Biographies Wikipédia sous licence CC BY-SA 4.0 (source affichée sous chaque texte)."_t);
+    {
+        auto* key = new juce::TextEditor();
+        key->setTextToShowWhenEmpty ("Votre clé (theaudiodb.com)"_t, ctx.theme().textDim());
+        key->setFont (style::font (14.0f));
+        key->setIndents (10, 0);
+        key->setJustification (juce::Justification::centredLeft);
+        key->setText (ctx.settings().get ("audioDbKey").toString(), false);
+        key->onTextChange = [this, key]
+        {
+            ctx.settings().set ("audioDbKey", key->getText().trim());
+            ctx.artistInfo().setAudioDbKey (key->getText());
+        };
+        row ("Clé API TheAudioDB personnelle (optionnel)"_t, key, 36,
+             "Sans clé personnelle, TheAudioDB n'est jamais interrogé (biographies Wikipédia seules)."_t);
+    }
+    row ("Paroles : fichiers .lrc / .txt à côté du morceau et tags intégrés (aucune requête en ligne)"_t, nullptr, 26);
 }
 
 void SettingsPage::buildInterface()
@@ -1881,9 +1996,26 @@ void SettingsPage::buildAbout()
     auto* header = new LogoHeader();
     header->text = ctx.theme().textCol();
     fullRow (header, 104);
-    row ("NX Player " NX_VERSION " · NX Audio Suite · licence MIT"_t, nullptr, 26);
-    row ("Utilise JUCE (AGPLv3 / commercial), SQLite (domaine public), Apple ALAC (Apache 2.0), QR Code generator (Project Nayuki, MIT). Voir THIRD_PARTY_NOTICES.md."_t, nullptr, 40);
-    row ("Infos d'artistes : TheAudioDB et Wikipédia (CC BY-SA). Paroles : LRCLIB, lyrics.ovh."_t, nullptr, 26);
+    row ("NX Player " NX_VERSION " · NX Audio Suite · logiciel propriétaire"_t, nullptr, 26);
+
+    section ("Licences & mentions légales"_t);
+    struct Title : juce::Component
+    {
+        juce::Colour c;
+        void paint (juce::Graphics& g) override
+        {
+            g.setColour (c);
+            g.setFont (style::font (16.0f, true));
+            g.drawText ("NX Player — Licences et crédits"_t, getLocalBounds(), juce::Justification::centredLeft);
+        }
+    };
+    auto* title = new Title();
+    title->c = ctx.theme().textCol();
+    fullRow (title, 28);
+    fullRow (new NoticeText (creditsText(), 13.0f, ctx.theme().textCol().withAlpha (0.85f)), 400);
+    row ("Textes complets des licences des composants tiers"_t, makeButton ("Afficher Licences.txt"_t, [this] { showLicencesFile (ctx.theme()); }), 36);
+    section ("Marques"_t);
+    fullRow (new NoticeText (trademarkNotice(), 12.5f, ctx.theme().textDim()), 120);
 }
 
 void SettingsPage::layoutContent (int width)
@@ -1902,6 +2034,7 @@ void SettingsPage::layoutContent (int width)
         }
         if (r.full)
         {
+            if (auto* n = dynamic_cast<NoticeText*> (r.control)) r.height = n->heightFor (juce::jmin (inner, 980));
             r.control->setBounds (pad, y, juce::jmin (inner, 980), r.height);
             y += r.height + 12;
             continue;

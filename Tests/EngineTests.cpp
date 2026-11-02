@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Brique 1: decoders, DSP, exact float transport, and the engine end to end through a virtual DAC.
 #include "TestFramework.h"
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -660,7 +660,7 @@ NX_TEST_SECTION (109, "Profils matériel : Merging Anubis / RAVENNA (DXD, phase 
     t.check (pRme.wire == nx::WireFormat::DoP && pRme.deviceRate == 352800.0 && rmeDop.dopPrerollMs == 150 && rmeDop.lockVolume
              && nx::makePlan (pcm441, caps, rmeDop).conversion == nx::PlaybackPlan::Conversion::None
              && nx::pipelineLabel (pRme, {}) == "DSD128 DoP [RME Bit-Perfect]",
-             "RME SteadyClock DoP Native : DSD128 en DoP 352,8 kHz, synchro 150 ms, volume verrouillé, PCM bit-perfect"_t);
+             "RME Horloge DoP Haute Precision : DSD128 en DoP 352,8 kHz, synchro 150 ms, volume verrouillé, PCM bit-perfect"_t);
     base.rmeProfile = nx::RmeProfile::VelvetDxd;
     auto velvet = nx::resolveProfile (base, rme);
     const auto pVelvet = nx::makePlan (dsd128, caps, velvet);
@@ -668,7 +668,7 @@ NX_TEST_SECTION (109, "Profils matériel : Merging Anubis / RAVENNA (DXD, phase 
              && velvet.dsdToPcmGainDb == 6.0 && ! velvet.lockVolume
              && nx::pipelineLabel (pVelvet, {}) == juce::String::fromUTF8 ("DSD128 \xe2\x86\x92 DXD 352,8 kHz [RME Velvet]"),
              "RME AKM Velvet DXD : DSD -> DXD 352,8 kHz +6 dB, phase minimale"_t);
-    base.rmeProfile = nx::RmeProfile::SteadyClockDoP;
+    base.rmeProfile = nx::RmeProfile::HighPrecisionDoP;
 
     // Minimum-phase filter: same magnitude, energy at the start (no pre-ringing)
     {

@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Free / Premium editions in one binary. Without a valid key the player runs as NX Player Free; an NXP1 key
 // signed with the author's Ed25519 private key (Tools/nx_keygen) unlocks NX Player Premium. The key is kept in
 // the user's settings (Application Support / AppData), so it survives every update of the application.

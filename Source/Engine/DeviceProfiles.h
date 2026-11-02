@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Device profiles (in the spirit of Roon's device setup): a recognised interface gets dedicated settings.
 // Merging Anubis / RAVENNA / AES67 (MT VAD driver): DoP switches the network stream between PCM and DSD
 // framing, which can upset ANEMAN / PTP with many channels and 1 ms latency. The profiles avoid it (DXD) or

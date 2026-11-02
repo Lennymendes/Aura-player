@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // First-run assistant (Cider 2 style), also from Réglages › Interface › « Relancer l'assistant » :
 //   1. language and theme   2. layout   3. detected audio device (+ optimal profile in one click)
 //   4. music sources (local folder, NAS / Jellyfin)

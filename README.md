@@ -1,7 +1,7 @@
 # NX Player 1.0 — lecteur bit-perfect PCM · DXD · DSD
 
 Lecteur audiophile de la **NX Audio Suite** (AuraEngine DSD, AuraDAW). C++20 · JUCE 8.0.15 · macOS (CoreAudio) ·
-Windows (ASIO, WASAPI exclusif) · Linux (ALSA). Licence **MIT** (voir « Licences » pour JUCE et le SDK ASIO).
+Windows (ASIO, WASAPI exclusif) · Linux (ALSA). Logiciel **propriétaire** (voir « Licences »).
 
 - **Moteur bit-perfect** : les échantillons entiers ne passent jamais par le flottant ; DSD natif (ASIO),
   DoP partout, conversion DSD → DXD 64 bits si le DAC ne prend que le PCM ; gapless ; changement automatique de
@@ -92,7 +92,7 @@ Le DAC du banc est virtuel (`CaptureBackend`) : il enregistre ce que le moteur e
 | `Source/DSP` | DSD → PCM (FIR à tables, 150 dB), rééchantillonneur polyphase L/M (160 dB), requantification TPDF, DoP |
 | `Source/Engine` | plan de lecture, moteur (fil de décodage → ring → fil audio), chaîne DSP, Signal Path |
 | `Source/Output` | sorties : JUCE (CoreAudio + Hog Mode, ALSA, WASAPI partagé), `win/` WASAPI exclusif et ASIO natifs, DAC virtuel |
-| `Source/Library` | SQLite, tags, scanner + veille, paroles (LRC, LRCLIB) |
+| `Source/Library` | SQLite, tags, scanner + veille, paroles locales (LRC / TXT, tags) |
 | `Source/Providers` | flux HTTP progressifs, UPnP / DLNA, Qobuz, Tidal (DASH fMP4), Spotify, YouTube Music, fusion |
 | `Source/GUI` | interface (fond, verre, barre latérale, pages, En cours, paroles, Signal Path, mini-lecteur, fenêtre Réglages + tableau de bord, assistant, vue immersive, dessins des DAC) |
 | `Source/Remote` | NX Remote : serveur HTTP local, jeton, API JSON (la web app est `Resources/remote/index.html`) |
@@ -146,7 +146,7 @@ Les connecteurs de streaming restent dans le code (`Source/Providers/StreamingPr
 avec `-DNX_ENABLE_STREAMING=ON` ils reviennent dans la barre latérale. NX Player n'extrait aucun identifiant des
 applications des services et ne contourne aucune protection.
 
-Paroles : fichier `.lrc` à côté du morceau, puis tags (USLT, LYRICS), puis LRCLIB (désactivable dans les réglages).
+Paroles : fichier `.lrc` ou `.txt` à côté du morceau, puis tags (ID3 SYLT / USLT, Vorbis LYRICS, MP4 ©lyr). Aucun service en ligne.
 
 Identifiants des services (si le streaming est réactivé) : options CMake ou secrets GitHub `NX_SPOTIFY_CLIENT_ID`,
 `NX_QOBUZ_APP_ID`, `NX_QOBUZ_APP_SECRET`, `NX_TIDAL_CLIENT_ID`, `NX_TIDAL_CLIENT_SECRET`.
@@ -180,7 +180,8 @@ nombre de morceaux. **Favoris** : cœur sur chaque morceau, clic droit › Ajout
 **Playlists** : clic droit › « Ajouter à une playlist » sur un morceau ou un album entier (ou une sélection d'albums,
 Cmd / Ctrl + clic, Maj + clic), ou glisser-déposer sur une playlist de la barre latérale (sur « Playlists » : nouvelle
 playlist). **Artistes** : photos en médaillons, page avec bannière, biographie et discographie de la bibliothèque
-(TheAudioDB, sinon Wikipédia ; seul le nom de l'artiste est envoyé, réponses gardées 30 jours, désactivable).
+(Wikipédia sous CC BY-SA 4.0, et TheAudioDB uniquement avec votre clé API personnelle ; source affichée, seul le nom de
+l'artiste est envoyé, réponses gardées 30 jours, désactivable).
 **NAS / Jellyfin** : badge « NAS » (ou « JELLYFIN ») à côté du format ; clic droit › Retirer de la bibliothèque (un
 album, une sélection, tous les albums d'un serveur) ; Réglages › Bibliothèque & NAS › « Retirer les indisponibles » ou
 « Purger le NAS ». Les fichiers restent sur le serveur.
@@ -223,7 +224,7 @@ clair sur le réseau local : à n'activer que sur un réseau de confiance).
 | Merging Anubis / RAVENNA (MT VAD) | Studio DXD Reference *(défaut)* | DSD64 à DSD512 -> DXD 352,8 kHz (FIR phase linéaire 64 bits, gain 0 / +3 / +6 dB + limiteur −0,2 dBFS) ; PCM bit-perfect ; aucun DoP sur le réseau |
 | | Analog Warmth | DSD et PCM -> DXD 352,8 / 384 kHz, filtre à phase minimale (sans pré-écho), harmonique paire −90 dB et −0,5 dB au-dessus de 18 kHz (débrayable) |
 | | Pure DoP 1-Bit | DoP 1.0, tampon 2048, 2 canaux, 1,5 s de silence DoP à chaque changement de fréquence (verrouillage PTP) |
-| RME ADI-2 (USB) | SteadyClock DoP Native *(défaut)* | DoP (jusqu'au DSD256 si l'ADI-2 annonce la fréquence), synchro 150 ms, PCM bit-perfect, option « Sécurité DSD Direct » (volume logiciel verrouillé à 100 %) |
+| RME ADI-2 (USB) | Horloge DoP Haute Précision *(défaut)* | DoP (jusqu'au DSD256 si l'ADI-2 annonce la fréquence), synchro 150 ms, PCM bit-perfect, option « Sécurité DSD Direct » (volume logiciel verrouillé à 100 %) |
 | | AKM Velvet DXD | DSD -> DXD 352,8 kHz +6 dB, phase minimale : l'EQ, le loudness et le crossfeed de l'ADI-2 restent utilisables |
 
 Le badge de la barre de lecture affiche le chemin actif : `DSD64 → DXD 352,8 kHz [Anubis Ref]`, `PCM 44,1 → DXD [Warm]`,
@@ -243,8 +244,8 @@ ou « Télécharger » sur un album / un dossier du NAS) copie le fichier origin
 dans Réglages › Téléchargements (par défaut `Musique/NX Player`, rangé Artiste / Album). La progression s'affiche dans
 la liste et en bas de la barre latérale ; le morceau rejoint ensuite la bibliothèque avec la mention « Hors-ligne ».
 
-**Paroles** : fichier `.lrc`, tags, puis LRCLIB (exact, puis titre nettoyé, puis recherche par durée), puis
-lyrics.ovh en secours (texte non synchronisé).
+**Paroles** : fichier `.lrc` / `.txt` à côté du morceau, puis tags (SYLT synchronisé, USLT, LYRICS, ©lyr). Aucune
+requête en ligne.
 
 **Extensions & Thèmes** (barre latérale › Personnaliser ; l'onglet « Plugins utilisateur › » mène au catalogue) : chaque thème et chaque plug-in est une carte avec un
 aperçu en direct ; un clic sur l'interrupteur l'active ou le désactive, un clic sur un thème l'applique.
@@ -279,11 +280,11 @@ Thèmes : `docs/THEMES.md`. Plug-ins : `docs/PLUGINS.md`.
 
 ## Licences
 
-Le code de NX Player est sous licence MIT (`LICENSE`). Il s'appuie sur :
-- **JUCE 8** : AGPLv3 ou licence commerciale. Distribuer un binaire de NX Player impose donc l'une des deux
-  (code source complet sous AGPLv3, ou licence JUCE).
+NX Player est un logiciel propriétaire : © 2026 Lenny Antunes Mendes (NX Audio), tous droits réservés (`LICENSE`).
+Le kit de plug-ins DSP (`Source/Ext/nxplayer_dsp.h`) et les plug-ins d'exemple restent sous MIT. Il s'appuie sur :
+- **JUCE 8** : licence commerciale JUCE (obligatoire pour vendre un binaire propriétaire).
 - **SDK ASIO** (optionnel, non fourni) : licence Steinberg ou GPLv3. Un binaire compilé avec ASIO suit l'une d'elles.
 - **ALAC** (Apple, Apache 2.0), **SQLite** (domaine public), **QuickJS** (MIT, via JUCE), **QR Code generator**
-  (Project Nayuki, MIT).
+  (Project Nayuki, MIT), **Monocypher**, **libwebp**, **stb_image**, et les bibliothèques intégrées à JUCE.
 
-Détails : `THIRD_PARTY_NOTICES.md`.
+Détails : `THIRD_PARTY_NOTICES.md` ; textes complets : `Licences.txt` (aussi affiché dans Réglages › À propos).

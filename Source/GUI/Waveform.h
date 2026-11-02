@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Track analysis (one background scan per track, shared by the player bar and the immersive view):
 //  - a high-density envelope (min / max peak + RMS per bin) for an Audirvana-style waveform
 //  - Peak and RMS in dBFS, and the official Dynamic Range (TT DR meter algorithm)

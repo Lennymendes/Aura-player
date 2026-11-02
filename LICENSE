@@ -1,21 +1,13 @@
-MIT License
+Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Tous droits réservés.
 
-Copyright (c) 2026 ZEYN — NX Audio Suite
+Ce logiciel et son code source sont propriétaires. Toute redistribution, modification, décompilation ou ingénierie inverse sans autorisation écrite est strictement interdite.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+---
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Exceptions :
+- Les composants tiers inclus dans ce dépôt ou dans le binaire restent soumis à leurs propres licences
+  (voir THIRD_PARTY_NOTICES.md et Licences.txt). Rien dans le présent texte ne restreint les droits
+  que ces licences accordent sur ces composants.
+- Le kit de développement de plug-ins DSP (Source/Ext/nxplayer_dsp.h) et les plug-ins d'exemple
+  (Plugins/DSP/crossfeed, Catalog/DSP/tone) sont fournis sous licence MIT, afin que des tiers puissent
+  écrire des plug-ins pour NX Player ; leur en-tête l'indique.

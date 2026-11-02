@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Plain-text audio diagnostics (~/Library/NX Player/audio.log on macOS). Message / control thread only
 // (never from the real-time callback). Capped at 512 KB.
 #pragma once

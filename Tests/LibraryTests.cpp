@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Brique 2: tags, SQLite library, folder watching, lyrics, providers (parsers + a real HTTP stream).
 #include "TestFramework.h"
 #include "TestAudioFiles.h"
@@ -12,6 +12,7 @@
 #include "../Source/Providers/Http.h"
 #include "../Source/Output/CaptureBackend.h"
 #include <future>
+#include <cstring>
 #include "FakeUpnp.h"
 #include "../Source/Library/Downloads.h"
 #include <juce_graphics/juce_graphics.h>
@@ -376,12 +377,56 @@ NX_TEST_SECTION (204, "Paroles synchronisées (LRC)")
     t.check (l.indexAt (5.0) == -1 && l.indexAt (17.0) == 1 && l.indexAt (61.9) == 3 && l.indexAt (70.0) == 4, "ligne courante selon la position");
     const auto plain = nx::parseLrc ("Pas de minutage\nDeuxième ligne"_t);
     t.check (! plain.synced && plain.plain.contains ("Deuxième"_t), "paroles non synchronisées conservées"_t);
-    // Second chance online: the title and artist are cleaned before asking again (LRCLIB, then lyrics.ovh).
-    t.check (nx::cleanTitleForLyrics ("Night Drive (2024 Remaster)") == "Night Drive" && nx::cleanTitleForLyrics ("Échos [feat. Mira]"_t) == "Échos"_t
-             && nx::cleanTitleForLyrics ("Sous la pluie") == "Sous la pluie" && nx::cleanTitleForLyrics ("Song - Live at Wembley") == "Song",
-             "repli des paroles : titre nettoyé (remaster, feat., live)"_t);
-    t.check (nx::mainArtistForLyrics ("Zeyn feat. Mira Solenne") == "Zeyn" && nx::mainArtistForLyrics ("Atlas Trio & Nora Vale") == "Atlas Trio"
-             && nx::mainArtistForLyrics ("Quatuor Émeraude"_t) == "Quatuor Émeraude"_t, "repli des paroles : artiste principal"_t);
+    // Local sources only (no online service): sidecar .txt, then ID3 SYLT (synced, milliseconds) before USLT.
+    {
+        auto audio = t.tempDir.getChildFile ("lyr_sidecar.mp3");
+        audio.replaceWithText ("x");
+        audio.withFileExtension ("txt").replaceWithText ("Ligne une\nLigne deux");
+        nx::TrackInfo tr;
+        tr.source = "local";
+        tr.externalId = audio.getFullPathName();
+        const auto side = nx::loadLocalLyrics (tr);
+        t.check (! side.synced && side.plain.contains ("Ligne deux") && side.source == "Fichier .txt"_t, "paroles : fichier .txt à côté du morceau"_t);
+    }
+    {
+        const uint8_t zero = 0;
+        juce::MemoryBlock sylt;
+        const uint8_t head[6] = { 3, 'f', 'r', 'a', 2, 1 };        // UTF-8, language, ms time stamps, lyrics
+        sylt.append (head, 6);
+        sylt.append (&zero, 1);                                     // empty content descriptor
+        for (auto [text, ms] : { std::pair<const char*, uint32_t> { "Premier", 1500 }, { "Second", 62250 } })
+        {
+            sylt.append (text, std::strlen (text));
+            sylt.append (&zero, 1);
+            const uint8_t b[4] = { (uint8_t) (ms >> 24), (uint8_t) (ms >> 16), (uint8_t) (ms >> 8), (uint8_t) ms };
+            sylt.append (b, 4);
+        }
+        juce::MemoryBlock uslt;
+        uslt.append (head, 4);
+        uslt.append (&zero, 1);
+        uslt.append ("Texte seul", 10);
+        ByteWriter f;
+        frame (f, "USLT", uslt);
+        frame (f, "SYLT", sylt);
+        juce::MemoryBlock file;
+        file.append ("ID3", 3);
+        const uint8_t v[3] = { 4, 0, 0 };
+        file.append (v, 3);
+        ByteWriter sz;
+        syncsafe (sz, (uint32_t) f.size());
+        file.append (sz.data.getData(), 4);
+        file.append (f.data.getData(), f.size());
+        file.append ("not audio", 9);
+        auto audio = t.tempDir.getChildFile ("lyr_sylt.mp3");
+        audio.replaceWithData (file.getData(), file.getSize());
+        nx::TrackInfo tr;
+        tr.source = "local";
+        tr.externalId = audio.getFullPathName();
+        const auto l = nx::loadLocalLyrics (tr);
+        t.check (l.synced && l.lines.size() == 2 && std::abs (l.lines[0].time - 1.5) < 1e-6 && std::abs (l.lines[1].time - 62.25) < 1e-6
+                 && l.lines[1].text == "Second" && l.source == "Tags",
+                 "paroles : tag ID3 SYLT (synchronisé) préféré à USLT"_t);
+    }
 }
 
 NX_TEST_SECTION (205, "Connecteurs : signatures, manifestes, DASH -> FLAC, DIDL-Lite, fusion")

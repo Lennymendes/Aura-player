@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // v1.0: Memory Play, studio tools, library filters / favourites / playlists / NAS clean-up, artist pages,
 // NX Remote (HTTP API, token, QR code), AuraEngine X bridge, English dictionary.
 #include "TestFramework.h"
@@ -372,6 +372,18 @@ NX_TEST_SECTION (211, "Pages artistes : photo, bannière et biographie (TheAudio
     nx::Library lib;
     juce::String err;
     lib.openInMemory (t.tempDir.getChildFile ("art208"), err);
+    {
+        // No personal key (default): TheAudioDB is never called, Wikipedia only; a key is reduced to [A-Za-z0-9].
+        nx::ArtistInfoService noKey (lib);
+        noKey.wikipediaBase = http.base() + "/wiki/";
+        noKey.language = "fr";
+        const auto m = noKey.fetchNow ("Nora Vale");
+        t.check (noKey.audioDbBase.isEmpty() && m.bioSource == "Wikipedia" && ! http.requests.joinIntoString ("|").contains ("search.php"),
+                 "TheAudioDB : aucune requête sans clé API personnelle"_t);
+        noKey.setAudioDbKey (" ab/../12?x ");
+        t.check (noKey.audioDbBase == "https://www.theaudiodb.com/api/v1/json/ab12x", "TheAudioDB : clé personnelle dans l'URL, caractères filtrés"_t);
+        http.requests.clear();
+    }
     nx::ArtistInfoService service (lib);
     service.audioDbBase = http.base();
     service.wikipediaBase = http.base() + "/wiki/";
@@ -403,6 +415,9 @@ NX_TEST_SECTION (211, "Pages artistes : photo, bannière et biographie (TheAudio
     const auto atlas = lib.getArtistMeta ("Atlas Trio");
     t.check (atlas.has_value() && atlas->bio == "Jazz trio." && changes >= 1, "file d'attente en arrière-plan (repli anglais), notification de l'interface"_t);
     t.check (nx::ArtistInfoService::tidyBio (juce::String::repeatedString ("Phrase. ", 400), 100).length() <= 101, "biographie tronquée à une fin de phrase"_t);
+    service.setAudioDbKey ({});
+    t.check (! lib.getArtistMeta ("Zeyn").has_value() && lib.getArtistMeta ("Nora Vale").has_value(),
+             "clé TheAudioDB retirée : données TheAudioDB oubliées, Wikipédia conservé"_t);
 }
 
 //==============================================================================

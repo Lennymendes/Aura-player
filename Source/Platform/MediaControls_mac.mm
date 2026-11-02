@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // macOS: media keys / Control Centre / Touch Bar through MPRemoteCommandCenter, metadata through
 // MPNowPlayingInfoCenter. Compiled with ARC (see CMakeLists.txt).
 #include "MediaControls.h"

@@ -1,7 +1,7 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Artist pages: photo, banner and an up-to-date biography from open services, cached in the library.
-//   1. TheAudioDB (free public key) : photo, banner / fanart, biography (French when available)
-//   2. Wikipedia (REST summary)     : biography and photo when TheAudioDB has nothing
+//   1. TheAudioDB (only with the user's own API key) : photo, banner / fanart, biography (French when available)
+//   2. Wikipedia (REST summary, CC BY-SA 4.0)        : biography and photo when TheAudioDB has nothing
 // Requests run on one background thread, one at a time, throttled (≈ 1 per second). Results are kept for
 // 30 days; "not found" answers too, so that a library of 2 000 artists never hammers the services.
 #pragma once
@@ -31,8 +31,13 @@ public:
     bool isEnabled() const noexcept { return enabled.load(); }
     int getPendingCount() const;
 
+    /** The user's personal TheAudioDB key. Empty: TheAudioDB is never called (no shared / test key) and the
+        TheAudioDB data already cached are forgotten. */
+    void setAudioDbKey (const juce::String& key);
+
     // Services (overridden by the tests with a local server). {lang} is replaced by the language.
-    juce::String audioDbBase { "https://www.theaudiodb.com/api/v1/json/2" };
+    juce::String audioDbBase;                    // empty = TheAudioDB off
+    static constexpr const char* audioDbRoot = "https://www.theaudiodb.com/api/v1/json/";
     juce::String wikipediaBase { "https://{lang}.wikipedia.org/api/rest_v1/page/summary/" };
     juce::String language { "fr" };
     int throttleMs = 1100;

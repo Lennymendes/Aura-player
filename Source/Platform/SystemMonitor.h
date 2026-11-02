@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Computer card of the hardware dashboard: OS, CPU load, memory in use, and the "no idle sleep while
 // playing" assertion (macOS IOKit power assertion, Windows SetThreadExecutionState).
 #pragma once

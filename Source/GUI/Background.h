@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // The living background (Cider style): the current artwork, blurred, saturated and dimmed, cross-faded
 // on track change; or a slowly drifting mesh gradient built from the theme / artwork colours; or a
 // theme GLSL shader on OpenGL builds. Also produces the extra-blurred image glass panels show.

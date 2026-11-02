@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Writers for the self-test: every container is produced byte by byte (independent of the readers),
 // plus a 5th-order sigma-delta modulator to make real DSD.
 #pragma once

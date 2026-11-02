@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Immersive view (full screen Now Playing, Cider 2 style): an animated background made of the artwork's
 // colours, the HD artwork, large synced lyrics, a waveform progress bar and clean controls.
 //

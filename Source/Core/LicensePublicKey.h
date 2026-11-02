@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Public half of the licence signing key (Ed25519). Only this is shipped: the private key stays with the author
 // (Tools/nx_keygen). To use your own pair: nx_keygen new-keypair my.key, then paste its public key here.
 #pragma once

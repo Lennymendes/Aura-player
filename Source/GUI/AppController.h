@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Owns every service and the windows; implements AppContext for the interface.
 #pragma once
 
@@ -198,7 +198,6 @@ private:
     std::mt19937 rng { std::random_device{}() };
     juce::String backendName;
     double lastFrame = 0.0;
-    int lyricsGeneration = 0;
     juce::Image emptyImage;
     std::shared_ptr<int> alive = std::make_shared<int> (0);
     std::atomic<bool> nasDiscoveryRunning { false };

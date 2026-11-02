@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 #include "Library.h"
 #include "../Audio/AudioDecoder.h"
 #include "../Audio/SacdIso.h"
@@ -557,6 +557,12 @@ void Library::setArtistMeta (const ArtistMeta& m)
      .bind (7, m.genre).bind (8, m.found ? 1 : 0).bind (9, m.fetched > 0 ? m.fetched : (juce::int64) juce::Time::currentTimeMillis()).execute();
 }
 
+void Library::forgetAudioDbArtistMeta()
+{
+    std::lock_guard<std::recursive_mutex> l (db.getMutex());
+    db.exec ("DELETE FROM artist_meta WHERE bio_source = 'TheAudioDB' OR image LIKE '%theaudiodb.com%' OR banner LIKE '%theaudiodb.com%'");
+}
+
 std::vector<ArtistInfo> Library::getArtists (int limit)
 {
     std::lock_guard<std::recursive_mutex> l (db.getMutex());
@@ -918,8 +924,8 @@ bool readLocalTrack (const juce::File& file, Library& library, TrackInfo& t)
         }
     }
 
-    auto lrc = file.withFileExtension ("lrc");
-    t.lyricsPath = lrc.existsAsFile() ? lrc.getFullPathName() : juce::String();
+    const auto lrc = file.withFileExtension ("lrc"), txt = file.withFileExtension ("txt");
+    t.lyricsPath = lrc.existsAsFile() ? lrc.getFullPathName() : txt.existsAsFile() ? txt.getFullPathName() : juce::String();
     return true;
 }
 

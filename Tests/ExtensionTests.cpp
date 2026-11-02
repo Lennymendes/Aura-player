@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Brique 3 & 4: themes (CSS, hot reload, import / export), JS UI plug-ins, C DSP plug-ins, and the
 // whole interface rendered off-screen (screenshots of every page).
 #include "TestFramework.h"
@@ -1374,6 +1374,22 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         app.navigate ({ nx::PageId::Settings, "apropos" });
         settle (100);
         t.check (shoot ("42_licence_premium") > 30, "Réglages : « NX Player Premium — Activé pour … », badge ÉDITION PREMIUM"_t);
+        {
+            // Licences & mentions légales: credits, button for the full Licences.txt (embedded), trademark notice
+            juce::TextButton* licences = nullptr;
+            for (auto* c : sw2.getPage().content().getChildren())
+                if (auto* b = dynamic_cast<juce::TextButton*> (c); b != nullptr && b->getButtonText() == "Afficher Licences.txt") licences = b;
+            const auto text = juce::String::fromUTF8 (NXData::Licences_txt, NXData::Licences_txtSize);
+            bool all = true;
+            for (auto* needle : { "Raw Material Software", "Xiph.Org", "Jean-loup Gailly", "PNG Reference Library", "Independent JPEG Group",
+                                  "HarfBuzz", "Muhammad Tayyab Akram", "Fabrice Bellard", "Monocypher", "Additional IP Rights Grant",
+                                  "Sean Barrett", "Apache License", "SQLite", "Project Nayuki", "Steinberg", "CC BY-SA 4.0" })
+                all = all && text.contains (needle);
+            if (licences != nullptr) sw2.getPage().setScrollY (licences->getY() - 420);
+            settle (100);
+            t.check (licences != nullptr && all && shoot ("44_licences_mentions") > 30,
+                     "À propos : licences et crédits, bouton Licences.txt (notices complètes embarquées), mention des marques"_t);
+        }
         sw2.close();
         app.navigate ({ nx::PageId::Home });
         shoot ("43_barre_laterale_premium");

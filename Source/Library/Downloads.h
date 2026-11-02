@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Offline copies: downloads the original audio file of NAS / Jellyfin (UPnP) tracks in the background into
 // the download folder (Artist / Album / NN Title.ext), then adds it to the library as a local track marked
 // "hors-ligne". One download at a time, progress reported through change messages.

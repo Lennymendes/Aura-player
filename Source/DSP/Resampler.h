@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Rational polyphase resampler (L / M), linear phase, Kaiser-windowed sinc, 64-bit.
 // Used for: PCM rates the DAC cannot play, the optional "sinc upsampling to DXD", and the last
 // stage of DSD -> PCM when the DAC tops out below 352,8 kHz.

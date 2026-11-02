@@ -1,4 +1,4 @@
-/* NX Player — MIT License
+/* NX Player plug-in SDK — MIT License (exception: this file may be used freely to write NX Player plug-ins)
  * Example DSP plug-in: headphone crossfeed (a low-passed, slightly delayed share of each channel is
  * fed to the other one, as with loudspeakers). Shows the whole C ABI in ~120 lines.
  * Build: CMake target nx_crossfeed (built with NX Player), or by hand:

@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Licence key generator for the author of NX Player (keep the private key out of the repository).
 //
 //   nx_keygen new-keypair <private.key>                         creates a key pair, prints the public key

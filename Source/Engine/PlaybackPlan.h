@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // How a track reaches the DAC: decided once per track from its format, the DAC's capabilities and the
 // user's settings. Two consecutive tracks with the same "wire" (format, rate, channels) are played
 // gaplessly; a different wire reopens the device at the track boundary.
@@ -26,7 +26,7 @@ enum class AnubisProfile
 /** Sound profiles of an RME ADI-2 (USB). */
 enum class RmeProfile
 {
-    SteadyClockDoP,       // DSD in DoP 1.0 (up to DSD256), 150 ms sync, PCM bit-perfect
+    HighPrecisionDoP,       // DSD in DoP 1.0 (up to DSD256), 150 ms sync, PCM bit-perfect
     VelvetDxd             // DSD -> DXD 352,8 kHz +6 dB, minimum phase: keeps the ADI-2's DSP (EQ, loudness, crossfeed) usable
 };
 
@@ -51,7 +51,7 @@ struct EngineSettings
     AnubisProfile anubisProfile = AnubisProfile::StudioDxdReference;
     double anubisDsdGainDb = 6.0;        // DSD -> DXD gain in the Anubis profiles: 0, +3 or +6 dB (limiter above 0 dBFS)
     bool anubisHarmonics = true;         // "Analog Warmth": the harmonic / HF shaping stage (can be switched off)
-    RmeProfile rmeProfile = RmeProfile::SteadyClockDoP;
+    RmeProfile rmeProfile = RmeProfile::HighPrecisionDoP;
     int fiioProfile = 0;                 // FiiO KA17: 0 = DoP bit-perfect, 1 = DSD -> DXD
     juce::String deviceModel;            // equipment chosen by hand in the catalogue ("" = none); see DeviceModels
     bool rmeLockVolume = true;           // "Sécurité RME DSD Direct": software volume locked at 100 %

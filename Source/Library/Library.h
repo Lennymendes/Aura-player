@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Unified library (SQLite): local files, NAS / UPnP servers and streaming services live in the same
 // tables, each row tagged with its source. Albums and artists are derived views of the tracks.
 #pragma once
@@ -33,7 +33,7 @@ struct TrackInfo
     bool isDsd = false, lossy = false;
     juce::int64 fileSize = 0, modified = 0, added = 0;
     juce::String artworkKey;         // file name in the artwork cache, or an http(s) URL
-    juce::String lyricsPath;         // sidecar .lrc
+    juce::String lyricsPath;         // sidecar .lrc / .txt
     juce::String credits;            // newline separated "Rôle : Nom"
     int playCount = 0;
     bool favourite = false;
@@ -138,6 +138,8 @@ public:
     //== Artist information ===================================================
     std::optional<ArtistMeta> getArtistMeta (const juce::String& name);
     void setArtistMeta (const ArtistMeta& meta);
+    /** Drops the cached artist data that came from TheAudioDB (no personal key any more). */
+    void forgetAudioDbArtistMeta();
 
     //== Playlists ============================================================
     juce::int64 createPlaylist (const juce::String& name, const juce::String& source = "local", const juce::String& externalId = {});

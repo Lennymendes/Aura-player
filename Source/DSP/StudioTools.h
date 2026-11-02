@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Studio tools of the player bar: listening checks used in mastering, applied in 64 bits after the decoder.
 //   Mono (L+R)      both channels carry (L + R) / 2
 //   Solo Mid / Side M = (L + R) / 2 or S = (L − R) / 2 on both channels

@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Cover art decoding that never gives up: JUCE's decoders first, then libwebp (WebP) and stb_image
 // (progressive / CMYK JPEG, 16-bit PNG...), always converted to a standard 8-bit RGB image.
 #pragma once

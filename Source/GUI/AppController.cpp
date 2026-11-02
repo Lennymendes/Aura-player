@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 #include "AppController.h"
 #include "../Core/ImageDecode.h"
 #include "../Audio/SacdIso.h"
@@ -100,6 +100,7 @@ AppController::AppController (Options options)
     // Artist pages (photos, biographies) and NX Remote
     artistInfoService = std::make_unique<ArtistInfoService> (lib);
     artistInfoService->setEnabled ((bool) appSettings.get ("artistInfoOnline", true));
+    artistInfoService->setAudioDbKey (appSettings.get ("audioDbKey").toString());   // no personal key: TheAudioDB is never called
     artistInfoService->language = i18n::getLanguage();
     remoteServer = std::make_unique<RemoteServer>();
     remoteServer->onCommand = [this] (const juce::String& c, const juce::StringPairArray& p) { handleRemoteCommand (c, p); };
@@ -768,29 +769,9 @@ void AppController::onTrackChanged()
 
 void AppController::loadLyrics (const TrackInfo& t)
 {
-    const int gen = ++lyricsGeneration;
-    auto local = loadLocalLyrics (t);
-    auto* m = getMainComponent();
-    if (m == nullptr) return;
-    if (! local.isEmpty() || ! (bool) appSettings.get ("lyricsOnline", true))
-    {
-        m->setLyrics (local, local.isEmpty() ? juce::String ("Pas de paroles pour ce morceau") : juce::String());
-        return;
-    }
-    m->setLyrics ({}, "Recherche des paroles…"_t);
-    const auto artist = t.displayArtist(), title = t.title, album = t.album;
-    const double duration = t.duration;
-    std::weak_ptr<int> token = alive;
-    juce::Thread::launch ([this, gen, artist, title, album, duration, token]
-    {
-        auto found = fetchOnlineLyrics (artist, title, album, duration);   // LRCLIB, then lyrics.ovh
-        juce::MessageManager::callAsync ([this, gen, found, token]
-        {
-            if (token.expired() || gen != lyricsGeneration) return;
-            if (auto* main = getMainComponent())
-                main->setLyrics (found.value_or (Lyrics()), found ? juce::String() : juce::String ("Pas de paroles trouvées"_t));
-        });
-    });
+    const auto local = loadLocalLyrics (t);      // local files and tags only: no online lyrics service
+    if (auto* m = getMainComponent())
+        m->setLyrics (local, local.isEmpty() ? juce::String ("Pas de paroles pour ce morceau"_t) : juce::String());
 }
 
 void AppController::timerCallback()

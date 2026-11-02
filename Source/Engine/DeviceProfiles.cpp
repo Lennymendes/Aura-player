@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 #include "DeviceProfiles.h"
 #include "../Core/Text.h"
 
@@ -81,7 +81,7 @@ juce::String profileName (DeviceFamily f, int i)
 {
     if (f == DeviceFamily::Merging) return anubisProfileName ((AnubisProfile) i);
     if (f == DeviceFamily::Fiio) return i == 0 ? "FiiO — DoP Bit-Perfect"_t : "FiiO — DSD vers DXD"_t;
-    if (i == 0) return "RME — SteadyClock DoP Native"_t;
+    if (i == 0) return "RME — Horloge DoP Haute Précision"_t;
     return "RME — AKM Velvet DXD"_t;
 }
 
@@ -161,7 +161,7 @@ EngineSettings resolveProfile (const EngineSettings& in, const juce::String& dev
     if (family == DeviceFamily::Rme)
     {
         s.profileTag = profileTag (family, (int) in.rmeProfile);
-        if (in.rmeProfile == RmeProfile::SteadyClockDoP)
+        if (in.rmeProfile == RmeProfile::HighPrecisionDoP)
         {
             s.dsdMode = DsdMode::DoP;
             s.dopAllowed = true;

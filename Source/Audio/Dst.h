@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // DST (Direct Stream Transfer) decoder: the lossless 1-bit coding of SACD discs and DSDIFF "DST " files,
 // ISO/IEC 14496-3 subpart 10. Written from the standard's decoding process (the MPEG-4 reference decoder
 // and FFmpeg's dstdec were used to check behaviour): segmentation and mapping of filters / probability

@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Reassignable keyboard shortcuts (Réglages › Interface › Raccourcis clavier). Stored in the settings as
 // { "shortcuts": { "playPause": "spacebar", "next": "command + cursor right", ... } } (juce::KeyPress text
 // descriptions); keys a Stream Deck can send (any key + modifiers) work the same way.

@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Output through a JUCE AudioIODeviceType: CoreAudio (macOS, with Hog Mode and an integer physical
 // format), ALSA (Linux, hw: devices are exclusive) and WASAPI shared mode (Windows fallback, goes
 // through the Windows mixer and is labelled as such).

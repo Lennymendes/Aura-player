@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Uncompressed PCM decoders: WAV / BWF / RF64 / BW64 and AIFF / AIFF-C.
 #pragma once
 

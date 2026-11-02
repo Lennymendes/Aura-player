@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Sidebar: three pillars (Local, Favoris, Playlists), the NAS / Jellyfin servers, Extensions & Thèmes and
 // the user's playlists. Wide (labels) or compact (icons only, tooltips). Tracks and albums dropped on a
 // playlist are appended to it; dropped on "Playlists" they start a new one; on "Favoris" they become favourites.

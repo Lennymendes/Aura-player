@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 #include "PlaybackEngine.h"
 #include <algorithm>
 #include "../Audio/SacdIso.h"

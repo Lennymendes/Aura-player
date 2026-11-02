@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Community plug-ins.
 //
 //  UI plug-ins  (Plugins/UI/<name>/manifest.json + plugin.js): JavaScript (QuickJS through JUCE),

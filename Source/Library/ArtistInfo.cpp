@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 #include "ArtistInfo.h"
 #include "../Providers/Http.h"
 
@@ -114,13 +114,23 @@ void ArtistInfoService::mergeWikipedia (ArtistMeta& m, const juce::var& json)
     }
 }
 
+void ArtistInfoService::setAudioDbKey (const juce::String& key)
+{
+    const auto clean = key.trim().retainCharacters ("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+    audioDbBase = clean.isNotEmpty() ? juce::String (audioDbRoot) + clean : juce::String();
+    if (clean.isEmpty()) library.forgetAudioDbArtistMeta();
+}
+
 ArtistMeta ArtistInfoService::fetchNow (const juce::String& artist)
 {
     ArtistMeta m;
     m.name = artist;
-    const auto adb = httpRequest ("GET", juce::URL (audioDbBase + "/search.php").withParameter ("s", artist), {}, {}, 10000);
-    if (adb.ok()) m = parseAudioDb (adb.json(), artist, language);
-    m.name = artist;
+    if (audioDbBase.isNotEmpty())
+    {
+        const auto adb = httpRequest ("GET", juce::URL (audioDbBase + "/search.php").withParameter ("s", artist), {}, {}, 10000);
+        if (adb.ok()) m = parseAudioDb (adb.json(), artist, language);
+        m.name = artist;
+    }
 
     if (m.bio.isEmpty() || m.imageUrl.isEmpty())
     {

@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 #include "TagReader.h"
 #include "../Audio/AudioDecoder.h"
 #include <cstring>
@@ -143,6 +143,25 @@ void parseId3v2 (const uint8_t* data, size_t size, TagData& t)
             size_t used = 0;
             id3Text (enc, p + 4, frameSize - 4, &used);
             t.set ("lyrics", id3Text (enc, p + 4 + used, frameSize - 4 - used));
+        }
+        else if ((id == "SYLT" || id == "SLT") && frameSize > 6 && p[4] == 2)
+        {
+            // Synchronised lyrics -> LRC text. shortcut: only millisecond time stamps (format 2); MPEG-frame stamps are skipped.
+            size_t off = 6, used = 0;
+            id3Text (enc, p + off, frameSize - off, &used);           // content descriptor
+            off += used;
+            juce::String lrc;
+            while (off < frameSize)
+            {
+                const auto line = id3Text (enc, p + off, frameSize - off, &used);
+                off += used;
+                if (off + 4 > frameSize) break;
+                const uint32_t ms = bytes::be32 (p + off);
+                off += 4;
+                lrc << juce::String::formatted ("[%02u:%02u.%02u]", ms / 60000, (ms / 1000) % 60, (ms % 1000) / 10)
+                    << line.trimCharactersAtStart ("\n\r") << "\n";
+            }
+            if (lrc.isNotEmpty()) t.set ("syncedlyrics", lrc);
         }
         else if ((id == "APIC" || id == "PIC") && t.picture.getSize() == 0 && frameSize > 4)
         {

@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // Artwork loading (library cache files and http URLs), and the image processing behind the
 // Cider-style look: fast blur (3 box passes ≈ Gaussian), saturation, dominant colour.
 #pragma once

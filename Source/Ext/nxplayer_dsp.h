@@ -1,4 +1,4 @@
-/* NX Player — MIT License
+/* NX Player plug-in SDK — MIT License (exception: this file may be used freely to write NX Player plug-ins)
  *
  * DSP plug-in ABI (plain C, stable across compilers). A DSP plug-in is a shared library
  * (.dll / .dylib / .so) placed in   Plugins/DSP/<name>/   next to a manifest.json, exporting:

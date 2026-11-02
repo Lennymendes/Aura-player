@@ -1,4 +1,4 @@
-// NX Player — MIT License
+// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
 // The player: a decoder thread fills a lock-free ring, the device's real-time thread empties it.
 //
 //   message thread : commands (play, seek, queue...), device (re)configuration, notifications
