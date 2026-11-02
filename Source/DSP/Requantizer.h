@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // double -> integer of B bits (left-justified in int32), TPDF dither of ±1 LSB.
 // Real-time safe (no allocation, xorshift noise). Only used when the signal is no longer bit-perfect
 // (digital volume, resampling, DSD -> PCM, DSP plug-ins, float sources).

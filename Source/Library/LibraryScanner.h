@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Indexes the library folders (local disks, mounted SMB / NFS shares) in the background and keeps
 // them in sync: directory modification times are polled every few seconds (cheap, works on network
 // shares where file-system events are unreliable), only changed directories are re-read, and a full

@@ -278,9 +278,30 @@ Thèmes : `docs/THEMES.md`. Plug-ins : `docs/PLUGINS.md`.
   conversion transmises en ligne de commande).
   Pas de bord de fenêtre personnalisé (barre de titre native).
 
+## Publier une mise à jour
+
+1. Changer la version dans `CMakeLists.txt` (`project(NXPlayer VERSION 1.0.1 ...)`), committer, puis créer le tag
+   `v1.0.1` : la CI compile macOS / Windows / Linux et publie les archives dans une Release GitHub.
+2. Une fois les archives en ligne, modifier `version.json` à la racine du dépôt :
+   ```json
+   {
+     "latestVersion": "1.0.1",
+     "releaseNotes":   ["• Correction de …", "• Nouveau : …"],
+     "releaseNotesEn": ["• Fixed …", "• New: …"],
+     "downloadUrlMac":   "https://…/NXPlayer-macOS.zip",
+     "downloadUrlWin":   "https://…/NXPlayer-Windows.zip",
+     "downloadUrlLinux": "https://…/NXPlayer-Linux.tar.gz",
+     "mandatory": false
+   }
+   ```
+3. Au lancement suivant (3 s après), chaque NX Player lit ce fichier et, si la version est plus récente, ouvre une
+   fenêtre « Mise à jour disponible » avec les nouveautés : **Mettre à jour** (ouvre le téléchargement pour son
+   système), **Pas maintenant**, **Ignorer cette version**. `"mandatory": true` retire « Ignorer ». La licence et les
+   réglages sont conservés. L'adresse du fichier se change avec le réglage `updateUrl` (par ex. sur votre site).
+
 ## Licences
 
-NX Player est un logiciel propriétaire : © 2026 Lenny Antunes Mendes (NX Audio), tous droits réservés (`LICENSE`).
+NX Player est un logiciel propriétaire : © 2026 NX Audio (ZEYN), tous droits réservés (`LICENSE`).
 Le kit de plug-ins DSP (`Source/Ext/nxplayer_dsp.h`) et les plug-ins d'exemple restent sous MIT. Il s'appuie sur :
 - **JUCE 8** : licence commerciale JUCE (obligatoire pour vendre un binaire propriétaire).
 - **SDK ASIO** (optionnel, non fourni) : licence Steinberg ou GPLv3. Un binaire compilé avec ASIO suit l'une d'elles.

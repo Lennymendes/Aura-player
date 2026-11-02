@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Pages.h"
 #include <random>
 #include <algorithm>
@@ -1560,7 +1560,7 @@ namespace
     juce::String creditsText()
     {
         juce::StringArray l;
-        l.add ("NX Player © 2026 Lenny Antunes Mendes (NX Audio). Tous droits réservés."_t);
+        l.add ("NX Player © 2026 NX Audio (ZEYN). Tous droits réservés."_t);
         l.add ("NX Player utilise les composants suivants ; nous remercions leurs auteurs."_t);
         l.add ({});
         l.add ("JUCE — © Raw Material Software Limited. Utilisé sous licence JUCE (licence commerciale)."_t);

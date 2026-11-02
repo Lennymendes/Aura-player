@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // NX Remote: a small HTTP server on the local network that serves a web app (phone / tablet) to control
 // the player: now playing, transport, volume, A-B loop, device profiles, library. Started on demand only
 // (settings or the remote button), stopped with the app. Every API call carries a random token (in the QR

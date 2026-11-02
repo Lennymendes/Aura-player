@@ -1,6 +1,8 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "NXPlayerApp.h"
 #include "AppController.h"
+#include "MainComponent.h"
+#include "../UI/SplashScreen.h"
 #if JUCE_WINDOWS
  #ifndef NOMINMAX
   #define NOMINMAX
@@ -44,6 +46,8 @@ void NXPlayerApplication::initialise (const juce::String& commandLine)
     }
 
     controller = std::make_unique<AppController>();
+    if (auto* content = controller->getMainComponent())       // launch animation over the main component (1.5 s)
+        splash = std::make_unique<SplashScreen> (*content);   // hides itself at the end, freed at shutdown
     juce::StringArray files;
     for (auto& a : args) if (! a.startsWith ("-")) files.add (a.unquoted());
     if (! files.isEmpty()) controller->openFiles (files);
@@ -51,6 +55,7 @@ void NXPlayerApplication::initialise (const juce::String& commandLine)
 
 void NXPlayerApplication::shutdown()
 {
+    splash.reset();
     controller.reset();
     instance = nullptr;
 }

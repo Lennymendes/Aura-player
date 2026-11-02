@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Message-thread analysis of what is playing (from the engine's lock-free tap): 64-band log
 // spectrum, VU / peak ballistics, oscilloscope. Feeds the built-in meters and the JS plug-ins.
 #pragma once

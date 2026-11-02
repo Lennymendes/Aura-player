@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Windows: media keys, the volume flyout and the lock screen through SystemMediaTransportControls (C++/WinRT),
 // attached to the main window with ISystemMediaTransportControlsInterop. Built with MSVC only.
 #include "../MediaControls.h"

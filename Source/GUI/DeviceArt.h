@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Vector drawings of the audio interfaces (dashboard, onboarding, player bar chip): a desktop network
 // interface with a touch screen and a big encoder (Merging Anubis style), a half-rack USB DAC with
 // display, two encoders and headphone jacks (RME ADI-2 style), and a generic DAC. Stylised, no logos.

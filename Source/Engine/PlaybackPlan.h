@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // How a track reaches the DAC: decided once per track from its format, the DAC's capabilities and the
 // user's settings. Two consecutive tracks with the same "wire" (format, rate, channels) are played
 // gaplessly; a different wire reopens the device at the track boundary.

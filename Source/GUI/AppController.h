@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Owns every service and the windows; implements AppContext for the interface.
 #pragma once
 
@@ -119,6 +119,8 @@ public:
     UpsellReason getLastUpsell() const noexcept { return lastUpsell; }
     static juce::String upsellTitle (UpsellReason why);
     static juce::String upsellMessage (UpsellReason why);
+    /** Text of the "update available" window: installed version, new version and its release notes. */
+    static juce::String updateMessage (const UpdateInfo& info, const juce::String& currentVersion, const juce::String& language);
     void showOnboarding() override;
     void setImmersive (bool on) override;
     void sendToAuraEngine (const std::vector<TrackInfo>& tracks) override;
@@ -181,7 +183,8 @@ private:
     std::unique_ptr<UpdateChecker> updateChecker;
     int upsellCount = 0;
     UpsellReason lastUpsell = UpsellReason::StudioMaster;
-    bool upsellOpen = false;
+    bool upsellOpen = false, updateOpen = false;
+    void showUpdateAvailable (const UpdateInfo& info, bool userAsked);
     void applyEdition();
     /** NX Player Free: the Studio Master tracks are left out of a list (the start index follows). */
     std::vector<TrackInfo> withoutStudioMasters (const std::vector<TrackInfo>& tracks, int& startIndex);

@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Bridge to AuraEngine X (AuraEngine DSD, same suite): "Analyser / Convertir dans AuraEngine X" sends the
 // selected files to the application, which opens them in its list (deep analysis first, then conversion).
 #pragma once

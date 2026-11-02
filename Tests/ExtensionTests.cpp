@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Brique 3 & 4: themes (CSS, hot reload, import / export), JS UI plug-ins, C DSP plug-ins, and the
 // whole interface rendered off-screen (screenshots of every page).
 #include "TestFramework.h"
@@ -25,6 +25,7 @@
 #include "../Source/Remote/RemoteServer.h"
 #include "../Source/Library/ArtistInfo.h"
 #include "../Source/DSP/StudioTools.h"
+#include "../Source/UI/SplashScreen.h"
 
 using namespace nxtest;
 
@@ -337,6 +338,16 @@ NX_TEST_SECTION (404, "Édition Free / Premium : clés de licence Ed25519, mises
         t.check (U::evaluate (json, "1.0.0").state == U::State::Available && U::evaluate (json, "1.2.0").state == U::State::UpToDate
                  && U::evaluate (json, "1.3.0-beta").state == U::State::UpToDate && U::evaluate ("[]", "1.0.0").state == U::State::Failed,
                  "comparaison avec la version courante : disponible / à jour / erreur"_t);
+        {
+            // release notes written as a list of lines, English variant; text of the "update available" window
+            const juce::String j2 = R"({ "latestVersion": "1.0.1", "releaseNotes": ["- Correctif A", "- Correctif B"],
+                                         "releaseNotesEn": "- Fix A", "downloadUrlMac": "m", "downloadUrlWin": "w", "downloadUrlLinux": "l" })";
+            nx::UpdateInfo i2;
+            const bool ok = U::parse (j2, i2, err) && i2.releaseNotes == "- Correctif A\n- Correctif B" && i2.releaseNotesEn == "- Fix A";
+            const auto fr = nx::AppController::updateMessage (i2, "1.0.0", "fr"), en = nx::AppController::updateMessage (i2, "1.0.0", "en");
+            t.check (ok && fr.contains ("1.0.0") && fr.contains ("1.0.1") && fr.contains ("- Correctif B") && en.contains ("- Fix A") && ! en.contains ("Correctif"),
+                     "mise à jour : notes en liste de lignes (FR / EN), fenêtre avec version installée, nouvelle version et nouveautés"_t);
+        }
 
         const auto file = t.tempDir.getChildFile ("version.json");
         file.replaceWithText (json);
@@ -1364,10 +1375,10 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
             keyField->setText ("nxp1-mauvaise-cle");
             keyField->onReturnKey();
             const bool rejected = ! app.isPremium();
-            keyField->setText (juce::String (licensefixture::key ("Lenny", "lenny@example.com")).toLowerCase());   // typed in lower case
+            keyField->setText (juce::String (licensefixture::key ("Alex", "alex@example.com")).toLowerCase());   // typed in lower case
             keyField->onReturnKey();
             settle (150);
-            t.check (rejected && app.isPremium() && app.license().getLicensee() == "Lenny <lenny@example.com>"
+            t.check (rejected && app.isPremium() && app.license().getLicensee() == "Alex <alex@example.com>"
                      && app.settings().get ("licenseKey").toString().startsWith ("NXP1-"),
                      "clé collée dans les Réglages : mauvaise clé refusée, bonne clé acceptée (même en minuscules) et enregistrée"_t);
         }
@@ -1393,6 +1404,44 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         sw2.close();
         app.navigate ({ nx::PageId::Home });
         shoot ("43_barre_laterale_premium");
+        {
+            // launch animation: over the main component, fades in, hides itself after 1.5 s
+            nx::SplashScreen splash (*main);
+            settle (60);
+            const bool covering = splash.isVisible() && splash.getBounds() == main->getLocalBounds() && ! splash.isFinished();
+            const auto mid = main->createComponentSnapshot (main->getLocalBounds(), true, 1.0f);
+            settle (400);
+            savePng (main->createComponentSnapshot (main->getLocalBounds(), true, 1.0f), shots.getChildFile ("00_demarrage.png"));
+            for (int i = 0; i < 200 && ! splash.isFinished(); ++i) settle (10);
+            t.check (covering && mid.isValid() && splash.isFinished() && ! splash.isVisible() && splash.progress() >= 1.0,
+                     "écran de démarrage : par-dessus l'interface, fondu, fermé tout seul après 1,5 s"_t);
+        }
+        {
+            // version.json announcing 1.0.1: the window offers the update, "Ignorer cette version" silences it
+            const auto vf = t.tempDir.getChildFile ("update_ui.json");
+            vf.replaceWithText (R"({ "latestVersion": "99.0.1", "releaseNotes": ["- Lecture plus rapide des DSF", "- Correctifs"],
+                                     "downloadUrlMac": "", "downloadUrlWin": "", "downloadUrlLinux": "" })");
+            const auto oldUrl = app.updates().getUrl();
+            app.updates().setUrl (vf.getFullPathName());
+            app.settings().set ("skippedVersion", juce::var());
+            app.checkForUpdates (false);
+            juce::AlertWindow* popup = nullptr;
+            for (int i = 0; i < 200 && popup == nullptr; ++i)
+            {
+                settle (10);
+                popup = dynamic_cast<juce::AlertWindow*> (juce::ModalComponentManager::getInstance()->getModalComponent (0));
+            }
+            const bool shown = popup != nullptr && popup->getNumButtons() == 3 && popup->getName().contains ("99.0.1");
+            if (popup != nullptr) { savePng (popup->createComponentSnapshot (popup->getLocalBounds()), shots.getChildFile ("45_mise_a_jour.png")); popup->exitModalState (2); }   // "Ignorer cette version"
+            settle (50);
+            app.checkForUpdates (false);
+            settle (400);
+            const bool silenced = juce::ModalComponentManager::getInstance()->getModalComponent (0) == nullptr
+                                  && app.settings().get ("skippedVersion").toString() == "99.0.1";
+            dismiss();
+            app.updates().setUrl (oldUrl);
+            t.check (shown && silenced, "mise à jour disponible : fenêtre avec les nouveautés (Mettre à jour / Pas maintenant / Ignorer), version ignorée ensuite"_t);
+        }
         // the key is read back at the next launch (it lives in the settings, outside the application)
         nx::LicenseManager next (licensefixture::publicKey());
         next.restore (app.settings().get ("licenseKey").toString());

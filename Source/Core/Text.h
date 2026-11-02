@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // UTF-8 literals for juce::String: "Réglages"_t. (juce::String (const char*) expects ASCII.)
 // The interface is written in French; "…"_t also translates the literal when the language is English
 // (dictionary Resources/i18n/en.json, key = the French text). Strings without a translation stay French.

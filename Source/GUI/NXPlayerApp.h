@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -9,6 +9,7 @@ namespace nx
 {
 
 class AppController;
+class SplashScreen;
 
 class NXPlayerApplication final : public juce::JUCEApplication
 {
@@ -28,6 +29,7 @@ public:
 
 private:
     std::unique_ptr<AppController> controller;
+    std::unique_ptr<SplashScreen> splash;
 };
 
 } // namespace nx

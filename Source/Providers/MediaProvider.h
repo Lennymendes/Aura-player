@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Sources of music other than the local library, and the UnifiedMediaProvider that merges them.
 //
 //  Engine route   : the provider hands an InputStream to NX Player's own decoders (UPnP / DLNA,

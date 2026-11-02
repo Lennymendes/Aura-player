@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Tag readers: ID3v2 (MP3, DSF, DFF, WAV, AIFF), FLAC Vorbis comments + PICTURE, WAV LIST/INFO,
 // MP4 / M4A ilst. Keys are normalised to lower case: title, artist, albumartist, album, genre,
 // composer, year, tracknumber, tracktotal, discnumber, lyrics, isrc, label, conductor, credits...

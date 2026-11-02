@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Lock-free single-producer / single-consumer ring of trivially copyable elements.
 // The producer (decoder / network thread) and the consumer (audio thread) never block,
 // never allocate and never take a lock. Capacity is fixed at construction.

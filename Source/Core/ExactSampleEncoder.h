@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Bit-exact transport of integer samples through a float API.
 //
 // JUCE (and CoreAudio's IOProc) only exchange float buffers. The driver, the OS (CoreAudio HAL) or

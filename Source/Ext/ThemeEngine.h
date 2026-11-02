@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Themes (.nxtheme): a folder (or a .zip renamed .nxtheme) with
 //   manifest.json   { "id", "name", "author", "version", "description", "stylesheet": "theme.css",
 //                     "background": { "type": "artwork" | "gradient" | "mesh" | "shader", "shader": "background.frag", ... } }

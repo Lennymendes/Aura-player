@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "UpdateChecker.h"
 #include "Text.h"
 #include <thread>
@@ -26,7 +26,19 @@ bool UpdateChecker::parse (const juce::String& json, UpdateInfo& out, juce::Stri
     if (json.trim().isEmpty() || juce::JSON::parse (json, v).failed() || ! v.isObject()) { error = "fichier de version illisible"_t; return false; }
     UpdateInfo i;
     i.latestVersion = v.getProperty ("latestVersion", {}).toString().trim();
-    i.releaseNotes = v.getProperty ("releaseNotes", {}).toString();
+    auto notes = [&v] (const char* key)        // a text, or a list of lines (easier to write in the JSON file)
+    {
+        const auto n = v.getProperty (key, {});
+        if (auto* lines = n.getArray())
+        {
+            juce::StringArray a;
+            for (auto& l : *lines) a.add (l.toString());
+            return a.joinIntoString ("\n");
+        }
+        return n.toString();
+    };
+    i.releaseNotes = notes ("releaseNotes");
+    i.releaseNotesEn = notes ("releaseNotesEn");
     i.downloadUrlMac = v.getProperty ("downloadUrlMac", {}).toString();
     i.downloadUrlWin = v.getProperty ("downloadUrlWin", {}).toString();
     i.downloadUrlLinux = v.getProperty ("downloadUrlLinux", {}).toString();

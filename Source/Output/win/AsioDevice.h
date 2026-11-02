@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // This file only links the Steinberg ASIO SDK (see Licences.txt).
 // ASIO output with integer PCM written straight into the driver's buffers and native DSD
 // (ASIOFuture kAsioSetIoFormat / kASIODSDFormat, 1-bit samples packed 8 per byte).

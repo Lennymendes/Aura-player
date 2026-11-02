@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Unified library (SQLite): local files, NAS / UPnP servers and streaming services live in the same
 // tables, each row tagged with its source. Albums and artists are derived views of the tracks.
 #pragma once

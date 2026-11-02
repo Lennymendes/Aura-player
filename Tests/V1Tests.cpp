@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // v1.0: Memory Play, studio tools, library filters / favourites / playlists / NAS clean-up, artist pages,
 // NX Remote (HTTP API, token, QR code), AuraEngine X bridge, English dictionary.
 #include "TestFramework.h"

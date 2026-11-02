@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // A small UPnP / DLNA media server for the tests: answers unicast M-SEARCH over UDP, serves its device
 // description, a ContentDirectory (Browse with a capped page size, like many real servers, and SOAP faults)
 // and the media files over HTTP. Everything runs on 127.0.0.1.

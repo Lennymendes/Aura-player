@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // A virtual DAC: records exactly what the engine sends. Used by PlayerSelfTest to prove the
 // bit-perfect path, gapless joins and DoP framing, and usable as a silent output for benchmarking.
 #pragma once

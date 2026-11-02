@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "AppController.h"
 #include "../Core/ImageDecode.h"
 #include "../Audio/SacdIso.h"
@@ -316,13 +316,46 @@ void AppController::checkForUpdates (bool userAsked)
     {
         if (weak.expired()) return;
         if (s.state == UpdateChecker::State::Available)
-            showMessage ("Mise à jour disponible : NX Player "_t + s.info.latestVersion + " — Réglages › À propos"_t);
+            showUpdateAvailable (s.info, userAsked);
         else if (userAsked && s.state == UpdateChecker::State::UpToDate)
             showMessage ("NX Player est à jour (v"_t + juce::String (NX_VERSION) + ")");
         else if (userAsked)
             showMessage ("Vérification des mises à jour impossible : "_t + s.error);
         if (auto* m = getMainComponent()) m->refreshCurrentPage();
     });
+}
+
+juce::String AppController::updateMessage (const UpdateInfo& info, const juce::String& currentVersion, const juce::String& language)
+{
+    const auto notes = (language.startsWith ("en") && info.releaseNotesEn.isNotEmpty() ? info.releaseNotesEn : info.releaseNotes).trim();
+    juce::String m;
+    m << "Version installée : "_t << currentVersion << "\n" << "Nouvelle version : "_t << info.latestVersion << "\n";
+    if (notes.isNotEmpty()) m << "\n" << "Nouveautés :"_t << "\n" << notes << "\n";
+    if (info.mandatory) m << "\n" << "Cette mise à jour est nécessaire pour continuer à utiliser NX Player."_t << "\n";
+    m << "\n" << "Votre licence et vos réglages sont conservés."_t;
+    return m;
+}
+
+void AppController::showUpdateAvailable (const UpdateInfo& info, bool userAsked)
+{
+    // "Ignorer cette version": no automatic popup for this version any more (unless mandatory or asked from the settings)
+    if (! userAsked && ! info.mandatory && appSettings.get ("skippedVersion").toString() == info.latestVersion) return;
+    if (updateOpen) return;
+    updateOpen = true;
+    auto* w = new juce::AlertWindow ("Mise à jour disponible — NX Player "_t + info.latestVersion,
+                                     updateMessage (info, NX_VERSION, i18n::getLanguage()), juce::MessageBoxIconType::NoIcon);
+    w->addButton ("Mettre à jour"_t, 1, juce::KeyPress (juce::KeyPress::returnKey));
+    w->addButton (info.mandatory ? "Plus tard"_t : "Pas maintenant"_t, 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    if (! info.mandatory) w->addButton ("Ignorer cette version"_t, 2);
+    std::weak_ptr<int> weak = alive;
+    const auto url = info.downloadUrlForThisOS(), version = info.latestVersion;
+    w->enterModalState (true, juce::ModalCallbackFunction::create ([this, weak, url, version] (int result)
+    {
+        if (weak.expired()) return;
+        updateOpen = false;
+        if (result == 1 && url.isNotEmpty()) juce::URL (url).launchInDefaultBrowser();
+        if (result == 2) appSettings.set ("skippedVersion", version);
+    }), true);
 }
 
 std::vector<TrackInfo> AppController::withoutStudioMasters (const std::vector<TrackInfo>& tracks, int& startIndex)

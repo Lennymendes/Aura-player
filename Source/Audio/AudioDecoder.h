@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Decoders deliver samples exactly as stored in the file:
 //  - integer PCM  -> int32 left-justified (a 24-bit sample k becomes k << 8), never through float
 //  - float PCM    -> double (32f / 64f, and lossy codecs)

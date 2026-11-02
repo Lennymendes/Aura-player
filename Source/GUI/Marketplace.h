@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // "Extensions & Thèmes" (a Spicetify-style gallery: every theme and plug-in as a card, switched on or off
 // in one click, with live previews) and "Plugins utilisateur" (the catalogue of extra plug-ins shipped with
 // NX Player, installed into the user's folder in one click, plus the user's own imported plug-ins).

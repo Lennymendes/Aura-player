@@ -1,8 +1,8 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Update check, the same for Free and Premium (one binary; the licence stays in the settings across updates).
 // Reads a small JSON file (default: version.json at the root of the GitHub repository):
-//   { "latestVersion": "1.1.0", "releaseNotes": "...", "downloadUrlMac": "...", "downloadUrlWin": "...",
-//     "downloadUrlLinux": "...", "mandatory": false }
+//   { "latestVersion": "1.1.0", "releaseNotes": ["line", "line"] or "text", "releaseNotesEn": [...] (optional),
+//     "downloadUrlMac": "...", "downloadUrlWin": "...", "downloadUrlLinux": "...", "mandatory": false }
 // The download itself is left to the browser (the installer for the right OS).
 #pragma once
 
@@ -16,7 +16,7 @@ namespace nx
 
 struct UpdateInfo
 {
-    juce::String latestVersion, releaseNotes, downloadUrlMac, downloadUrlWin, downloadUrlLinux;
+    juce::String latestVersion, releaseNotes, releaseNotesEn, downloadUrlMac, downloadUrlWin, downloadUrlLinux;
     bool mandatory = false;
     /** The installer for this operating system (empty if the file has none). */
     juce::String downloadUrlForThisOS() const;

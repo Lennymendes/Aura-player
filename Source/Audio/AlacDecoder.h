@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Apple Lossless (ALAC) in MP4 / M4A, decoded with Apple's open-source reference decoder
 // (ThirdParty/alac, Apache 2.0) on every platform, so the result is bit-exact everywhere.
 #pragma once

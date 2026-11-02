@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Memory Play: the whole file is copied into RAM before / while it plays, so the disk (or the NAS share)
 // is no longer touched during playback. Loading runs on a background thread and starts at once: reads
 // block only until the bytes they need are in memory. The data are the file's bytes, untouched — what

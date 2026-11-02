@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Last stage of the converted (DSD -> DXD, upsampled) stream, 64-bit, interleaved, in place:
 //  - "warmth": a touch of 2nd-order harmonic (−90 dBFS for a full-scale sine, DC removed) and a first-order
 //    high shelf of −0.5 dB above ~18 kHz (an analogue-console / tape flavour; 100 % optional)

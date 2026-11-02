@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // System media controls: the keyboard's media keys (play / pause, next, previous) even when NX Player is in
 // the background, and the "Now Playing" metadata shown by the system.
 //   macOS   : MPRemoteCommandCenter + MPNowPlayingInfoCenter (MediaControls_mac.mm)

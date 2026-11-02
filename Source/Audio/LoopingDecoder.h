@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // A-B loop at the decoder level: the engine keeps writing a continuous stream into the ring, so the device
 // is never stopped, reopened or re-clocked when the loop wraps.
 //  - PCM: the last `crossfade` frames before B are mixed with the first ones after A (raised-cosine,

@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 Lenny Antunes Mendes (NX Audio). Proprietary, all rights reserved (see LICENSE).
+// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Brique 1: decoders, DSP, exact float transport, and the engine end to end through a virtual DAC.
 #include "TestFramework.h"
 #include <juce_audio_formats/juce_audio_formats.h>
