@@ -52,7 +52,6 @@ public:
     void setVolumeLevel (double v);
     /** Waveform instead of the progress line (button left of the elapsed time; saved in the settings). */
     void setWaveformShown (bool on);
-    void showStudioMenu();
 
     std::function<void()> onToggleLyrics, onToggleQueue, onShowSignalPath, onOpenNowPlaying, onImmersive;
     bool shuffle = false, repeat = false;

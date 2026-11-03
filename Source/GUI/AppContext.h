@@ -100,6 +100,12 @@ public:
     virtual void selectDevice (const juce::String& name) = 0;
     /** Saves the chosen theme and offers a restart (no hot re-skin: it would invalidate LookAndFeel pointers). */
     virtual void applyTheme (const juce::String& id) = 0;
+    /** Appearance (Cider 2 style): "dark", "light" or "system" (follows the OS), and the accent colour
+        (transparent = the theme's own). Both are applied at once and remembered. */
+    virtual void setAppearance (const juce::String& mode) = 0;
+    virtual juce::String getAppearance() = 0;
+    virtual void setAccent (juce::Colour accent) = 0;
+    virtual juce::Colour getAccent() = 0;
     /** The theme that will be active at the next launch (the running one until a restart). */
     virtual juce::String selectedThemeId() { return theme().id; }
     virtual void showMessage (const juce::String& text) = 0;
@@ -111,6 +117,15 @@ public:
 
     /** Studio tools changed: rebuilds the DSP chain (DSD is converted to PCM while a tool is on). */
     virtual void applyStudioTools() = 0;
+    /** Headphone EQ of the MUSE panel: preset index (-1 = off) and bypass, applied at once and remembered. */
+    virtual void setHeadphoneEq (int presetIndex, bool bypass) = 0;
+    /** MUSE: the "Precision Audio Control" panel (source, headroom, sample rate conversion, filters). */
+    virtual void showMuse() = 0;
+    /** Official links (shop, Discord community); an empty Discord address hides its buttons. */
+    virtual juce::String shopUrl() = 0;
+    virtual juce::String discordUrl() = 0;
+    void openShop() { juce::URL (shopUrl()).launchInDefaultBrowser(); }
+    void openDiscord() { if (discordUrl().isNotEmpty()) juce::URL (discordUrl()).launchInDefaultBrowser(); }
     /** Volume of the player bar, 0..1 (1 = 100 % = bit-perfect). */
     virtual void setUserVolume (double v) = 0;
     virtual double getUserVolume() = 0;

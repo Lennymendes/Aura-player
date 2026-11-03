@@ -71,6 +71,13 @@ public:
     bool isZeynUnlocked() const noexcept { return zeynUnlocked; }
     static Theme makeZeynTheme();
 
+    /** Accent colour chosen by the user (Réglages › Apparence), over every theme. Transparent = the theme's own.
+        On a light theme a bright accent is darkened until it reads on the background. */
+    void setAccentOverride (juce::Colour c);
+    juce::Colour getAccentOverride() const noexcept { return accentOverride; }
+    static void applyAccent (Theme& t, juce::Colour accent);
+    bool isLight() const noexcept { return active.bg().getPerceivedBrightness() > 0.6f; }
+
     /** Called after apply() and after every hot reload. */
     std::function<void (const Theme&)> onThemeChanged;
     void checkForChanges() { timerCallback(); }   // tests
@@ -84,6 +91,7 @@ private:
     Theme active;
     juce::int64 activeFingerprint = 0;
     bool zeynUnlocked = false;
+    juce::Colour accentOverride { juce::Colours::transparentBlack };
 };
 
 } // namespace nx

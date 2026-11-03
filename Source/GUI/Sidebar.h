@@ -63,6 +63,7 @@ private:
     int hover = -1, dropHover = -1, listTop = 0, scroll = 0;
     bool quickHover = false;
     std::array<juce::uint32, 3> logoClicks {};   // last click times (ms)
+    juce::Rectangle<int> premiumPill;            // Free: "PASSER À PREMIUM" (opens the shop)
     int itemHeight = 32, headerHeight = 34;
 };
 

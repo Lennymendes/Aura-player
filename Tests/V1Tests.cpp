@@ -243,6 +243,66 @@ NX_TEST_SECTION (111, "Moteur v1 : Memory Play (fichier en RAM) et Outils Studio
     runProc();
     t.check (std::abs (L[(size_t) n / 2] - R[(size_t) n / 2]) < 1e-12 && state->describe().contains ("inactif"), "crossfeed coupé automatiquement en mono"_t);
     state->crossfeed = false;
+    state->monitor = nx::StudioToolsState::Monitor::Stereo;
+
+    // ---- Headphone EQ (MUSE): MOMENTUM M2 / M2 CL presets, automatic headroom, bypass -----------------
+    {
+        namespace hp = nx::hpeq;
+        const auto* m2 = hp::find ("momentum-m2");
+        const auto* cl = hp::find ("momentum-m2-cl");
+        bool exact = m2 != nullptr && cl != nullptr && m2->numBands == 7 && cl->numBands == 7;
+        if (exact)
+        {
+            const hp::Band want[] = { { hp::BandType::LowShelf, 105, 4.0, 0.7 }, { hp::BandType::Peak, 66, -6.5, 0.5 }, { hp::BandType::Peak, 220, -1.0, 0.8 },
+                                      { hp::BandType::Peak, 6500, -1.5, 3.0 }, { hp::BandType::Peak, 4000, 1.5, 2.5 }, { hp::BandType::Peak, 2700, -1.0, 2.8 },
+                                      { hp::BandType::HighShelf, 10000, 3.0, 0.7 } };
+            for (int b = 0; b < 7; ++b)
+            {
+                const auto& g = m2->bands[(size_t) b];
+                const auto& c = cl->bands[(size_t) b];
+                exact = exact && g.type == want[b].type && g.freq == want[b].freq && g.gain == want[b].gain && g.q == want[b].q
+                        && c.type == g.type && c.freq == g.freq && c.q == g.q && c.gain == (b == 6 ? 1.0 : g.gain);
+            }
+        }
+        t.check (exact, "égaliseur casque : MOMENTUM M2 (7 bandes exactes) et M2 CL (aigus +1,0 au lieu de +3,0)"_t);
+        // shelves: a low shelf gives its full gain far below, a high shelf far above; M2 - CL = 2 dB in the treble only
+        const double fs = 48000.0;
+        const double d16k = hp::responseDb (*m2, fs, 16000.0) - hp::responseDb (*cl, fs, 16000.0);
+        const double d100 = hp::responseDb (*m2, fs, 100.0) - hp::responseDb (*cl, fs, 100.0);
+        hp::Preset shelfOnly { "x", "x", "", false, 1, {{ { hp::BandType::LowShelf, 105.0, 4.0, 0.7 } }} };
+        t.check (std::abs (d16k - 2.0) < 0.15 && std::abs (d100) < 0.05 && std::abs (hp::responseDb (shelfOnly, fs, 20.0) - 4.0) < 0.2
+                 && std::abs (hp::responseDb (shelfOnly, fs, 5000.0)) < 0.05,
+                 "biquads RBJ : plateau grave +4 dB sous 105 Hz, 0 dB au-dessus ; M2 - M2 CL = "_t + juce::String (d16k, 2) + " dB à 16 kHz");
+
+        state->setEq (1, false);   // MOMENTUM M2 CL
+        const double preamp = state->eqPreampDb.load(), peak = hp::peakBoostDb (*cl, 48000.0);
+        double maxOut = 0.0;
+        fill (1000.0, 0.5, 1000.0, 0.5);
+        runProc();
+        double rmsOut = 0.0;
+        for (int i = n / 2; i < n; ++i) { rmsOut += L[(size_t) i] * L[(size_t) i]; maxOut = juce::jmax (maxOut, std::abs (L[(size_t) i])); }
+        const double gotDb = 20.0 * std::log10 (std::sqrt (2.0 * rmsOut / (n / 2)) / 0.5);
+        const double wantDb = hp::responseDb (*cl, 48000.0, 1000.0) + preamp;
+        t.check (! proc.isBypassed() && state->describe().contains ("MOMENTUM M2 CL") && preamp < 0.0 && std::abs (preamp + peak + 0.1) < 1e-9
+                 && std::abs (gotDb - wantDb) < 0.05,
+                 "EQ casque dans la chaîne 64 bits : gain à 1 kHz = courbe + headroom ("_t + juce::String (gotDb, 2) + " dB, headroom " + juce::String (preamp, 2) + " dB)");
+        // headroom: a full-scale sine at the boosted frequency never clips
+        double worst = 0.0;
+        for (double f : { 40.0, 100.0, 4000.0, 12000.0, 18000.0 })
+        {
+            fill (f, 1.0, f, 1.0);
+            runProc();
+            for (int i = n / 2; i < n; ++i) worst = juce::jmax (worst, std::abs (L[(size_t) i]));
+        }
+        state->setEq (1, true);   // bypass: the samples go through untouched
+        fill (1000, 0.5, 700, -0.3);
+        const auto inL = L;
+        runProc();
+        bool untouched = proc.isBypassed() && ! state->eqActive() && state->eqPresetInfo() != nullptr;
+        for (int i = 0; i < n; ++i) untouched = untouched && L[(size_t) i] == inL[(size_t) i];
+        t.check (worst <= 1.0 + 1e-6 && untouched, "headroom automatique : aucun écrêtage à 0 dBFS ("_t + juce::String (worst, 4) + ") ; contourné = bit-perfect"_t);
+        state->setEq (-1, false);
+    }
 
     // ---- Engine: studio tools in the chain, DSD converted to PCM while a tool is on -------------------
     {

@@ -244,9 +244,29 @@ bool ThemeManager::apply (const juce::String& id)
     const auto* t = findTheme (id);
     if (t == nullptr) return false;
     active = *t;
+    if (! accentOverride.isTransparent()) applyAccent (active, accentOverride);
     activeFingerprint = active.folder.isDirectory() ? fingerprint (active.folder) : 0;   // built-in themes have no folder
     if (onThemeChanged) onThemeChanged (active);
     return true;
+}
+
+void ThemeManager::applyAccent (Theme& t, juce::Colour accent)
+{
+    auto c = accent.withAlpha (1.0f);
+    const bool light = t.bg().getPerceivedBrightness() > 0.6f;
+    for (int i = 0; light && i < 12 && c.getPerceivedBrightness() > 0.42f; ++i) c = c.darker (0.25f);
+    auto hex = [] (juce::Colour x) { return "#" + x.toDisplayString (false); };
+    t.vars["--nx-accent"] = hex (c);
+    t.vars["--nx-quality-enhanced"] = hex (c);
+    t.vars["--nx-accent-2"] = hex (c.withRotatedHue (0.06f).brighter (light ? 0.0f : 0.15f));
+    t.vars["--nx-on-accent"] = c.getPerceivedBrightness() > 0.55f ? "#06120D" : "#FFFFFF";
+}
+
+void ThemeManager::setAccentOverride (juce::Colour c)
+{
+    accentOverride = c;
+    const auto id = active.id;
+    if (id.isNotEmpty()) apply (id);
 }
 
 juce::int64 ThemeManager::fingerprint (const juce::File& folder) const
@@ -269,6 +289,7 @@ void ThemeManager::timerCallback()
     {
         active = reloaded;
         for (auto& t : themes) if (t.id == active.id) t = active;
+        if (! accentOverride.isTransparent()) applyAccent (active, accentOverride);
         if (onThemeChanged) onThemeChanged (active);
     }
 }

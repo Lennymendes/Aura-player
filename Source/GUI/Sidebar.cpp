@@ -174,6 +174,11 @@ void Sidebar::logoClicked (juce::uint32 nowMs)
 
 void Sidebar::mouseUp (const juce::MouseEvent& e)
 {
+    if (! premiumPill.isEmpty() && premiumPill.contains (e.getPosition()) && ! ctx.isPremium())
+    {
+        ctx.openShop();
+        return;
+    }
     if (logoBounds().contains (e.getPosition()) && ! e.mods.isPopupMenu())
     {
         logoClicked (juce::jmax<juce::uint32> (1, juce::Time::getMillisecondCounter()));
@@ -299,6 +304,20 @@ void Sidebar::paint (juce::Graphics& g)
             g.setColour (t.accent());
             g.setFont (style::font (8.5f, true));
             g.drawText ("PREMIUM", pill, juce::Justification::centred);
+            premiumPill = {};
+        }
+        else
+        {
+            // Free: "PASSER À PREMIUM" opens the shop
+            const float x = (float) logo.getX() + juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), "NX Player") + 8.0f;
+            const auto pill = juce::Rectangle<float> (juce::jmin (96.0f, (float) logo.getRight() - x), 17.0f).withPosition (x, (float) logo.getCentreY() - 8.5f);
+            premiumPill = pill.toNearestInt();
+            const bool hot = premiumPill.contains (getMouseXYRelative());
+            g.setColour (t.accent().withAlpha (hot ? 1.0f : 0.9f));
+            g.fillRoundedRectangle (pill, 8.5f);
+            g.setColour (t.colour ("--nx-on-accent", juce::Colours::black));
+            g.setFont (style::font (8.5f, true));
+            g.drawText ("PASSER À PREMIUM"_t, pill, juce::Justification::centred);
         }
         style::drawIcon (g, style::Icon::Search, search.getBounds().toFloat().removeFromLeft (34).withSizeKeepingCentre (16, 16), t.textDim());
     }

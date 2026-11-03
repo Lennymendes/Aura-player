@@ -5,6 +5,7 @@
 #include <optional>
 #include "../Core/LicenseManager.h"
 #include "../Core/UpdateChecker.h"
+#include "../Core/Links.h"
 
 #include "AppContext.h"
 #include "Waveform.h"
@@ -35,7 +36,7 @@ class OverlayWindow;
 class MiniWindow;
 class MainComponent;
 
-class AppController final : public AppContext, private juce::Timer
+class AppController final : public AppContext, private juce::Timer, private juce::DarkModeSettingListener
 {
 public:
     struct Options
@@ -99,6 +100,13 @@ public:
     juce::String selectedThemeId() override { return appSettings.get ("theme", themeManager.current().id).toString(); }
     /** Immediate re-skin (tests only: the UI never calls it). */
     void applyThemeNow (const juce::String& id);
+    void setAppearance (const juce::String& mode) override;
+    juce::String getAppearance() override { return appSettings.get ("appearance", "dark").toString(); }
+    void setAccent (juce::Colour accent) override;
+    juce::Colour getAccent() override { return themeManager.getAccentOverride(); }
+    /** The theme the appearance stands for (dark: the chosen dark theme, light: Pure Light, system: the OS). */
+    juce::String themeForAppearance();
+    static constexpr const char* lightThemeId = "pure-light";
     /** Relaunches the application once this process has quit. */
     void restartApplication();
     void showMessage (const juce::String& text) override;
@@ -108,6 +116,10 @@ public:
     const juce::Image& backdrop() override;
     juce::Component* backdropOwner() override;
     void applyStudioTools() override;
+    void setHeadphoneEq (int presetIndex, bool bypass) override;
+    void showMuse() override;
+    juce::String shopUrl() override    { return links::resolve (appSettings.get ("purchaseUrl"), links::shop); }
+    juce::String discordUrl() override { return links::resolve (appSettings.get ("discordUrl"), links::discord); }
     void setUserVolume (double v) override;
     double getUserVolume() override;
     bool setRemoteEnabled (bool on) override;
@@ -154,6 +166,7 @@ public:
 
 private:
     void timerCallback() override;
+    void darkModeSettingChanged() override { if (getAppearance() == "system") applyThemeNow (themeForAppearance()); }
     void onTrackChanged();
     void loadLyrics (const TrackInfo& t);
     void saveEngineSettings();

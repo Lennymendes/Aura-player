@@ -13,6 +13,7 @@
 #include "SettingsWindow.h"
 #include "Onboarding.h"
 #include "Immersive.h"
+#include "Muse.h"
 
 namespace nx
 {
@@ -27,6 +28,24 @@ public:
 private:
     AppContext& ctx;
     float scroll = 0.0f;
+};
+
+/** Header (Cider 2 style): audio state at a glance. "● Bit-Perfect" (lit when the stream is untouched) opens MUSE;
+    "● MOMENTUM M2 CL" shows the headphone EQ profile, a click bypasses it or turns it back on. */
+class AudioStatusChip : public juce::Component, private juce::Timer
+{
+public:
+    explicit AudioStatusChip (AppContext& c) : ctx (c) { setRepaintsOnMouseActivity (true); startTimerHz (4); }
+    void paint (juce::Graphics&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    int idealWidth() const;
+    juce::Rectangle<int> eqArea() const;
+    bool isBitPerfect() const;
+    juce::String eqLabel() const;
+private:
+    void timerCallback() override;
+    AppContext& ctx;
+    juce::String shown;
 };
 
 class Toast : public juce::Component, private juce::Timer
@@ -89,6 +108,10 @@ public:
     PlayerBar player;
 
     IconButton sidebarButton, backButton, forwardButton, remoteButton, settingsButton, streamerButton;
+    AudioStatusChip audioStatus;
+    MusePanel muse;
+    int playerHeight() const;
+    void showMuse() { muse.open(); muse.setBounds (getLocalBounds()); muse.grabKeyboardFocus(); }
 
     /** Side mouse buttons (4 = back, 5 = forward) anywhere in the window. */
     struct SideButtons : juce::MouseListener

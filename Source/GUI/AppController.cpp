@@ -132,8 +132,12 @@ AppController::AppController (Options options)
         if (mainWindow) mainWindow->setBackgroundColour (t.bg());
     };
     if (appSettings.get ("theme").toString() == "ocean-blue") appSettings.set ("theme", "cobalt-minimal");   // merged in 1.0
+    if (const auto accent = appSettings.get ("accent").toString(); accent.startsWith ("#"))
+        themeManager.setAccentOverride (juce::Colour::fromString ("ff" + accent.substring (1)));
+    if (appSettings.get ("appearance").toString() == "system") appSettings.set ("theme", themeForAppearance());
     if (! themeManager.apply (appSettings.get ("theme", "nx-emerald").toString()))
         themeManager.apply ("nx-emerald");
+    juce::Desktop::getInstance().addDarkModeSettingListener (this);
     lookAndFeel.applyTheme (themeManager.current());
     juce::LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
 
@@ -160,7 +164,16 @@ AppController::AppController (Options options)
         rebuildDspChain();
         if (auto* m = getMainComponent()) m->pluginsChanged();
     };
-    rebuildDspChain();
+    {
+        // headphone EQ chosen in MUSE (kept across launches)
+        const auto eq = appSettings.get ("headphoneEq");
+        int index = -1;
+        for (int i = 0; i < (int) hpeq::presets().size(); ++i)
+            if (eq.getProperty ("preset", {}).toString() == hpeq::presets()[(size_t) i].id) index = i;
+        studio->autoHeadroom = (bool) eq.getProperty ("autoHeadroom", true);
+        studio->setEq (index, (bool) eq.getProperty ("bypass", false));
+    }
+    if (studio->anyActive()) applyStudioTools(); else rebuildDspChain();
 
     // Engine notifications (message thread)
     eng->onTrackChanged = [this] { onTrackChanged(); };
@@ -312,7 +325,7 @@ void AppController::showUpsell (UpsellReason why)
         if (weak.expired()) return;
         upsellOpen = false;
         if (result == 1) navigate ({ PageId::Settings, "apropos" });
-        if (result == 2) juce::URL (appSettings.get ("purchaseUrl", "https://github.com/Lennymendes/NX-Player#nx-player-premium").toString()).launchInDefaultBrowser();
+        if (result == 2) openShop();
     }), true);
 }
 
@@ -385,6 +398,7 @@ AppController::~AppController()
 {
     alive.reset();
     stopTimer();
+    juce::Desktop::getInstance().removeDarkModeSettingListener (this);
     remoteServer->stop();
     sleepBlocker.setActive (false);
     mediaControls.reset();
@@ -515,8 +529,38 @@ void AppController::applyThemeNow (const juce::String& id)
 
 void AppController::applyTheme (const juce::String& id)
 {
-    if (themeManager.findTheme (id) == nullptr) return;
+    const auto* th = themeManager.findTheme (id);
+    if (th == nullptr) return;
+    // a theme picked by hand becomes the dark (or light) theme of the appearance
+    const bool light = th->bg().getPerceivedBrightness() > 0.6f;
+    appSettings.set (light ? "lightTheme" : "darkTheme", id);
+    if (getAppearance() != "system") appSettings.set ("appearance", light ? "light" : "dark");
     applyThemeNow (id);                                    // hot: every component follows at once (no restart)
+}
+
+juce::String AppController::themeForAppearance()
+{
+    const auto mode = getAppearance();
+    const bool dark = mode == "dark" || (mode == "system" && juce::Desktop::getInstance().isDarkModeActive());
+    auto id = appSettings.get (dark ? "darkTheme" : "lightTheme", dark ? "nx-emerald" : lightThemeId).toString();
+    if (themeManager.findTheme (id) == nullptr) id = dark ? "nx-emerald" : lightThemeId;
+    return id;
+}
+
+void AppController::setAppearance (const juce::String& mode)
+{
+    if (mode != "dark" && mode != "light" && mode != "system") return;
+    // the current dark theme is kept as the one to come back to
+    if (const auto cur = themeManager.current(); cur.bg().getPerceivedBrightness() <= 0.6f && appSettings.get ("darkTheme").isVoid())
+        appSettings.set ("darkTheme", cur.id);
+    appSettings.set ("appearance", mode);
+    applyThemeNow (themeForAppearance());
+}
+
+void AppController::setAccent (juce::Colour accent)
+{
+    appSettings.set ("accent", accent.isTransparent() ? juce::String() : "#" + accent.toDisplayString (false));
+    themeManager.setAccentOverride (accent);
 }
 
 void AppController::restartApplication()
@@ -932,6 +976,23 @@ void AppController::applyStudioTools()
     if (auto* m = getMainComponent()) m->stateChanged();
 }
 
+void AppController::setHeadphoneEq (int presetIndex, bool bypass)
+{
+    studio->setEq (presetIndex, bypass);
+    auto* o = new juce::DynamicObject();
+    const auto* p = studio->eqPresetInfo();
+    o->setProperty ("preset", p != nullptr ? juce::String (p->id) : juce::String());
+    o->setProperty ("bypass", bypass);
+    o->setProperty ("autoHeadroom", studio->autoHeadroom.load());
+    appSettings.set ("headphoneEq", juce::var (o));
+    applyStudioTools();
+}
+
+void AppController::showMuse()
+{
+    if (auto* m = getMainComponent()) m->showMuse();
+}
+
 void AppController::setUserVolume (double v)
 {
     if (auto* m = getMainComponent()) m->player.setVolumeLevel (v);
@@ -971,6 +1032,10 @@ void AppController::applyLayoutSettings()
     const auto player = l.getProperty ("player", "bottom").toString();
     if (player == "top") o->setProperty ("playerPosition", "top");
     else o->removeProperty ("playerPosition");
+    // listening bar density: comfortable (floating card), compact (thinner), integrated (thin, flush with the edge)
+    const auto density = l.getProperty ("density", "comfortable").toString();
+    if (density == "compact" || density == "integrated") o->setProperty ("playerDensity", density);
+    else o->removeProperty ("playerDensity");
 }
 
 void AppController::setLayoutOption (const juce::String& key, const juce::var& value)

@@ -18,6 +18,7 @@
 #include "../DSP/StudioTools.h"
 #include "LibraryActions.h"
 #include "Dashboard.h"
+#include "Appearance.h"
 #include "NXPlayerData.h"
 
 namespace nx
@@ -1357,6 +1358,10 @@ namespace
                 else activate();
             };
             addAndMakeVisible (action);
+            buy.setButtonText ("Acheter NX Player Premium"_t);
+            buy.onClick = [this] { ctx.openShop(); };
+            addChildComponent (buy);
+            buy.setVisible (! premium);
             autoCheck.setButtonText ("Vérifier automatiquement les mises à jour au lancement"_t);
             autoCheck.setToggleState ((bool) ctx.settings().get ("autoUpdateCheck", true), juce::dontSendNotification);
             autoCheck.onClick = [this] { ctx.settings().set ("autoUpdateCheck", autoCheck.getToggleState()); };
@@ -1387,6 +1392,7 @@ namespace
             auto keyRow = r.removeFromTop (34);
             action.setBounds (keyRow.removeFromRight (ctx.isPremium() ? 230 : 120));
             keyRow.removeFromRight (10);
+            if (buy.isVisible()) { buy.setBounds (keyRow.removeFromRight (230)); keyRow.removeFromRight (10); }
             keyField.setBounds (keyRow);
             r.removeFromTop (68);
             auto buttons = r.removeFromTop (32);
@@ -1490,7 +1496,7 @@ namespace
         AppContext& ctx;
         std::function<void()> onChanged;
         juce::TextEditor keyField;
-        juce::TextButton action, checkNow, download;
+        juce::TextButton action, checkNow, download, buy;
         juce::ToggleButton autoCheck;
         int lastState = -1;
     };
@@ -1878,6 +1884,7 @@ void SettingsPage::buildInterface()
     {
         ctx.setLanguage (v == "English" ? "en" : "fr");
     }));
+    fullRow (new appearance::Picker (ctx, appearance::Picker::Kind::Appearance), appearance::Picker::idealHeight (appearance::Picker::Kind::Appearance));
     {
         juce::StringArray names, ids;
         for (auto& th : ctx.themes().getThemes()) { names.add (th.name); ids.add (th.id); }
@@ -1901,6 +1908,8 @@ void SettingsPage::buildInterface()
     }));
 
     section ("Disposition"_t);
+    row ("Densité de la barre d'écoute"_t, nullptr, 24);
+    fullRow (new appearance::Picker (ctx, appearance::Picker::Kind::Density), appearance::Picker::idealHeight (appearance::Picker::Kind::Density));
     const auto layout = ctx.settings().get ("layout");
     const juce::StringArray sidebarModes { "Étendue (icônes et libellés)"_t, "Compacte (icônes)"_t };
     row ("Barre latérale"_t, makeCombo (sidebarModes, layout.getProperty ("sidebar", "wide").toString() == "compact" ? sidebarModes[1] : sidebarModes[0],
@@ -1938,6 +1947,11 @@ void SettingsPage::buildInterface()
 
     section ("Assistant"_t);
     row ("Assistant de premier démarrage (langue, disposition, DAC, sources)"_t, makeButton ("Relancer l'assistant"_t, [this] { ctx.showOnboarding(); }));
+    if (ctx.discordUrl().isNotEmpty())
+    {
+        section ("Communauté"_t);
+        row ("Serveur Discord NX Audio : entraide, nouveautés, presets"_t, makeButton ("Rejoindre la communauté NX Audio"_t, [this] { ctx.openDiscord(); }), 36);
+    }
 }
 
 void SettingsPage::buildRemote()
@@ -2004,6 +2018,11 @@ void SettingsPage::buildAbout()
     header->text = ctx.theme().textCol();
     fullRow (header, 104);
     row ("NX Player " NX_VERSION " · NX Audio Suite · logiciel propriétaire"_t, nullptr, 26);
+    if (ctx.discordUrl().isNotEmpty())
+        row ("Questions, idées, presets d'égaliseur : rejoignez les autres auditeurs"_t,
+             makeButton ("Rejoindre la communauté NX Audio"_t, [this] { ctx.openDiscord(); }), 36);
+    if (! ctx.isPremium())
+        row ("DSD, DXD, SACD, mode exclusif, profils matériels, NX Remote"_t, makeButton ("Passer à NX Player Premium"_t, [this] { ctx.openShop(); }), 36);
 
     section ("Licences & mentions légales"_t);
     struct Title : juce::Component

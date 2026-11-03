@@ -247,6 +247,15 @@ la liste et en bas de la barre latérale ; le morceau rejoint ensuite la bibliot
 **Paroles** : fichier `.lrc` / `.txt` à côté du morceau, puis tags (SYLT synchronisé, USLT, LYRICS, ©lyr). Aucune
 requête en ligne.
 
+**Apparence (style Cider 2)** : Sombre / Clair / Système (suit le système), couleur d'accent en pastilles (émeraude NX
+#00F5A0 par défaut, assombrie automatiquement sur thème clair) ; dispositions Net, Minimal, Lecteur en haut et densité
+de la barre d'écoute (Confortable, Compact, Compact intégré au bord de la fenêtre), dans l'assistant et les réglages.
+**MUSE** (bouton Studio de la barre de lecture, ou l'en-tête) : source, gestion du headroom (automatique, jamais
+d'écrêtage), conversion vers DXD, crossfeed, égaliseur casque 64 bits (MOMENTUM M2, MOMENTUM M2 CL et courbes
+génériques, courbe de réponse affichée), monitoring Mono / Mid / Side et polarité. L'en-tête montre en permanence le
+témoin Bit-Perfect et le profil casque actif, contourné ou réactivé d'un clic.
+**Liens officiels** : boutique et Discord dans `Source/Core/Links.h` (ou `purchaseUrl` / `discordUrl` dans
+`settings.json`) ; les boutons Discord restent masqués tant que l'invitation n'est pas renseignée.
 **Thèmes livrés** : NX Emerald, Aura Neon, Glass Rose, Pure Light (clair, givré), Solar Amber, Cobalt Minimal,
 et le thème caché ZEYN (verre givré noir & blanc, triple clic sur le logo).
 **Navigation** : ‹ › en haut à gauche, Cmd/Ctrl + [ / ], Alt + ← / →, Retour arrière (hors champ de texte), boutons

@@ -12,7 +12,7 @@ namespace nx
 PlayerBar::PlayerBar (AppContext& c)
     : lyricsButton (style::Icon::Lyrics, "Paroles"_t, c),
       queueButton (style::Icon::Queue, "File d'attente"_t, c),
-      studioButton (style::Icon::Studio, "Outils Studio : mono, Mid / Side, phase, crossfeed"_t, c),
+      studioButton (style::Icon::Studio, "MUSE : égaliseur casque, crossfeed, headroom, mono / Mid / Side, phase"_t, c),
       immersiveButton (style::Icon::Fullscreen, "Vue immersive (F)"_t, c),
       deviceChip (c),
       ctx (c), artwork (c, 128),
@@ -35,7 +35,7 @@ PlayerBar::PlayerBar (AppContext& c)
     waveButton.onClick = [this] { setWaveformShown (! waveButton.active); };
     ctx.trackAnalyzer().addChangeListener (this);
     addAndMakeVisible (deviceChip);
-    studioButton.onClick = [this] { showStudioMenu(); };
+    studioButton.onClick = [this] { ctx.showMuse(); };
     immersiveButton.onClick = [this] { if (onImmersive) onImmersive(); };
     addAndMakeVisible (artwork);
     addAndMakeVisible (seek);
@@ -150,7 +150,8 @@ void PlayerBar::changeListenerCallback (juce::ChangeBroadcaster*)
 
 void PlayerBar::paint (juce::Graphics& g)
 {
-    style::paintGlass (g, *this, ctx, getLocalBounds().toFloat(), ctx.theme().radius(), true);
+    const bool integrated = ctx.layout.getProperty ("playerDensity", "").toString() == "integrated";
+    style::paintGlass (g, *this, ctx, getLocalBounds().toFloat(), integrated ? 0.0f : ctx.theme().radius(), true);
     const auto& t = ctx.theme();
     auto r = textArea;
     // technical line: channels (file header) + Peak / RMS / DR once the background scan is done
@@ -378,39 +379,6 @@ void PlayerBar::timerCallback()
 void PlayerBar::setVolumeLevel (double v)
 {
     if (volume.isEnabled()) volume.setValue (juce::jlimit (0.0, 1.0, v), juce::sendNotificationSync);
-}
-
-void PlayerBar::showStudioMenu()
-{
-    auto& st = ctx.studioTools();
-    using M = StudioToolsState::Monitor;
-    juce::PopupMenu m;
-    m.addSectionHeader ("Outils Studio (64 bits)"_t);
-    auto setMonitor = [this] (M mode) { auto& s = ctx.studioTools(); s.monitor = s.monitor.load() == mode ? M::Stereo : mode; ctx.applyStudioTools(); studioButton.active = s.anyActive(); studioButton.repaint(); };
-    m.addItem ("Mono (L+R)"_t, true, st.monitor.load() == M::Mono, [setMonitor] { setMonitor (M::Mono); });
-    m.addItem ("Solo Mid (M)", true, st.monitor.load() == M::MidSolo, [setMonitor] { setMonitor (M::MidSolo); });
-    m.addItem ("Solo Side (S)", true, st.monitor.load() == M::SideSolo, [setMonitor] { setMonitor (M::SideSolo); });
-    m.addSeparator();
-    m.addItem (juce::String::fromUTF8 ("Inversion de phase (\xc3\x98)"), true, st.invertPhase.load(), [this]
-    {
-        auto& s = ctx.studioTools(); s.invertPhase = ! s.invertPhase.load(); ctx.applyStudioTools(); studioButton.active = s.anyActive(); studioButton.repaint();
-    });
-    m.addItem ("Smart Crossfeed (casque)"_t, true, st.crossfeed.load(), [this]
-    {
-        auto& s = ctx.studioTools(); s.crossfeed = ! s.crossfeed.load(); ctx.applyStudioTools(); studioButton.active = s.anyActive(); studioButton.repaint();
-    });
-    m.addSeparator();
-    m.addItem ("Tout désactiver (retour au bit-perfect)"_t, st.anyActive(), false, [this]
-    {
-        auto& s = ctx.studioTools(); s.monitor = M::Stereo; s.invertPhase = false; s.crossfeed = false; ctx.applyStudioTools(); studioButton.active = false; studioButton.repaint();
-    });
-    if (const auto* t = ctx.currentTrack())
-    {
-        m.addSeparator();
-        const auto track = *t;
-        m.addItem ("Analyser / Convertir dans AuraEngine X"_t, [this, track] { ctx.sendToAuraEngine ({ track }); });
-    }
-    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&studioButton));
 }
 
 //==============================================================================

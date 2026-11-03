@@ -1,5 +1,6 @@
 // NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "MainComponent.h"
+#include "../DSP/StudioTools.h"
 #include "../Ext/PluginManager.h"
 #include "../Engine/DeviceProfiles.h"
 #include "../Library/ArtistInfo.h"
@@ -95,6 +96,90 @@ void Toast::paint (juce::Graphics& g)
 }
 
 //==============================================================================
+bool AudioStatusChip::isBitPerfect() const
+{
+    const auto path = ctx.engine().getSignalPath();
+    return ! path.nodes.empty() && path.overall == PathQuality::BitPerfect;
+}
+
+juce::String AudioStatusChip::eqLabel() const
+{
+    const auto* p = ctx.studioTools().eqPresetInfo();
+    return p != nullptr ? juce::String::fromUTF8 (p->name) : juce::String();
+}
+
+int AudioStatusChip::idealWidth() const
+{
+    const auto f = style::font (12.0f, true);
+    return 34 + (int) style::textWidth (f, "Bit-Perfect") + 10 + eqArea().getWidth() + 6;
+}
+
+juce::Rectangle<int> AudioStatusChip::eqArea() const
+{
+    if (eqLabel().isEmpty()) return {};
+    const int w = 26 + 22 + (int) std::ceil (style::textWidth (style::font (12.0f, true), eqLabel())) + 8;
+    return getLocalBounds().withWidth (juce::jmax (getWidth(), w)).removeFromRight (w).withX (juce::jmax (0, getWidth() - w));
+}
+
+void AudioStatusChip::timerCallback()
+{
+    if (! isShowing()) return;
+    const auto key = juce::String ((int) isBitPerfect()) + eqLabel() + juce::String ((int) ctx.studioTools().eqActive());
+    if (key == shown) return;
+    shown = key;
+    if (idealWidth() != getWidth() + 6) if (auto* p = getParentComponent()) p->resized();   // the EQ part appeared / went
+    repaint();
+}
+
+void AudioStatusChip::paint (juce::Graphics& g)
+{
+    const auto& t = ctx.theme();
+    auto r = getLocalBounds().toFloat();
+    g.setColour (style::neutral().withAlpha (isMouseOver (true) ? 0.10f : 0.06f));
+    g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+    g.setColour (t.border());
+    g.drawRoundedRectangle (r.reduced (0.5f), r.getHeight() * 0.5f, 1.0f);
+    auto led = [&] (juce::Rectangle<float> area, bool on, juce::Colour c)
+    {
+        auto d = juce::Rectangle<float> (8.0f, 8.0f).withCentre (area.getCentre());
+        if (on) { g.setColour (c.withAlpha (0.30f)); g.fillEllipse (d.expanded (3.5f)); }
+        g.setColour (on ? c : t.textDim().withAlpha (0.45f));
+        g.fillEllipse (d);
+    };
+    const auto f = style::font (12.0f, true);
+    g.setFont (f);
+    auto left = r.withTrimmedRight ((float) eqArea().getWidth());
+    const bool bp = isBitPerfect();
+    led (left.removeFromLeft (26.0f).withTrimmedLeft (6.0f), bp, style::qualityColour (t, PathQuality::BitPerfect));
+    g.setColour (bp ? t.textCol() : t.textDim());
+    g.drawText ("Bit-Perfect", left, juce::Justification::centredLeft, true);
+    if (auto eqR = eqArea().toFloat(); ! eqR.isEmpty())
+    {
+        g.setColour (t.border());
+        g.fillRect (eqR.getX(), r.getY() + 6.0f, 1.0f, r.getHeight() - 12.0f);
+        const bool on = ctx.studioTools().eqActive();
+        style::drawIcon (g, style::Icon::Headphones, eqR.removeFromLeft (26.0f).withSizeKeepingCentre (15.0f, 15.0f).translated (4.0f, 0.0f), on ? t.textCol() : t.textDim());
+        led (eqR.removeFromRight (20.0f).withTrimmedRight (6.0f), on, t.accent());
+        g.setColour (on ? t.textCol() : t.textDim());
+        g.drawText (eqLabel(), eqR, juce::Justification::centredLeft, true);
+    }
+}
+
+void AudioStatusChip::mouseUp (const juce::MouseEvent& e)
+{
+    if (! e.mouseWasClicked()) return;
+    auto& s = ctx.studioTools();
+    if (eqArea().contains (e.getPosition()))
+    {
+        ctx.setHeadphoneEq (s.eqPreset.load(), ! s.eqBypass.load());     // bypass / back on, in one click
+        ctx.showMessage (s.eqActive() ? "Égaliseur casque activé : "_t + eqLabel() : "Égaliseur casque contourné : "_t + eqLabel());
+        repaint();
+        return;
+    }
+    ctx.showMuse();
+}
+
+//==============================================================================
 MainComponent::MainComponent (AppContext& c)
     : background (c), sidebar (c), player (c),
       sidebarButton (style::Icon::SidebarToggle, "Afficher / masquer la barre latérale"_t, c),
@@ -103,6 +188,7 @@ MainComponent::MainComponent (AppContext& c)
       remoteButton (style::Icon::Phone, "NX Remote : piloter depuis le téléphone (QR code)"_t, c),
       settingsButton (style::Icon::Settings, "Réglages (Cmd/Ctrl + ,)"_t, c),
       streamerButton (style::Icon::Bolt, "Mode Streamer / Gaming : interface au repos (OBS, jeu), audio inchangé"_t, c),
+      audioStatus (c), muse (c),
       ctx (c), listing (c), nowPlaying (c), sourcePage (c), marketplace (c), queue (c), toast (c),
       settingsWindow (c), immersive (c), onboarding (c)
 {
@@ -114,6 +200,7 @@ MainComponent::MainComponent (AppContext& c)
     addChildComponent (sourcePage);
     addChildComponent (marketplace);
     for (auto* b : { &sidebarButton, &backButton, &forwardButton, &remoteButton, &settingsButton, &streamerButton }) addAndMakeVisible (b);
+    addAndMakeVisible (audioStatus);
     streamerButton.active = perf::streamer();
     streamerButton.onClick = [this] { ctx.setStreamerMode (! ctx.isStreamerMode()); };
     sidebarButton.onClick = [this] { setSidebarVisible (! sidebarVisible); };
@@ -138,6 +225,7 @@ MainComponent::MainComponent (AppContext& c)
     addChildComponent (queue);
     addChildComponent (immersive);
     addChildComponent (settingsWindow);
+    addChildComponent (muse);
     addChildComponent (onboarding);
     addChildComponent (toast);
     settingsWindow.onClose = [this] { grabKeyboardFocus(); };
@@ -283,9 +371,17 @@ void MainComponent::resized()
     const int margin = 12;
     auto r = getLocalBounds().reduced (margin);
 
-    const int playerH = (int) t.number ("--nx-player-height", 84.0f);
+    const auto density = ctx.layout.getProperty ("playerDensity", "comfortable").toString();
+    const int playerH = playerHeight();
     auto position = ctx.layout.getProperty ("playerPosition", t.text ("--nx-player-position", "bottom")).toString();
-    player.setBounds (position == "top" ? r.removeFromTop (playerH) : r.removeFromBottom (playerH));
+    if (density == "integrated")
+    {
+        // flush with the window edge, full width, no floating card
+        auto full = getLocalBounds();
+        player.setBounds (position == "top" ? full.removeFromTop (playerH) : full.removeFromBottom (playerH));
+        if (position == "top") r.removeFromTop (playerH); else r.removeFromBottom (playerH);
+    }
+    else player.setBounds (position == "top" ? r.removeFromTop (playerH) : r.removeFromBottom (playerH));
     if (position == "top") r.removeFromTop (margin); else r.removeFromBottom (margin);
 
     // Sidebar: slides out to the left (Cider-style toggle), the content takes the room.
@@ -306,6 +402,8 @@ void MainComponent::resized()
     nav.removeFromRight (4);
     remoteButton.setBounds (nav.removeFromRight (34).reduced (2));
     streamerButton.setBounds (nav.removeFromRight (34).reduced (2));
+    nav.removeFromRight (8);
+    audioStatus.setBounds (nav.removeFromRight (juce::jmin (audioStatus.idealWidth(), juce::jmax (0, nav.getWidth() - 20))).reduced (3, 3));
     remoteButton.active = ctx.remote().isRunning();
     r.removeFromTop (2);
 
@@ -313,8 +411,15 @@ void MainComponent::resized()
     if (queueVisible) r.removeFromRight (margin);
 
     for (auto* p : std::initializer_list<juce::Component*> { &listing, &nowPlaying, &sourcePage, &marketplace }) p->setBounds (r);
-    for (auto* o : std::initializer_list<juce::Component*> { &settingsWindow, &immersive, &onboarding }) o->setBounds (getLocalBounds());
+    for (auto* o : std::initializer_list<juce::Component*> { &settingsWindow, &muse, &immersive, &onboarding }) o->setBounds (getLocalBounds());
     placeToast();
+}
+
+int MainComponent::playerHeight() const
+{
+    const auto density = ctx.layout.getProperty ("playerDensity", "comfortable").toString();
+    const int base = (int) ctx.theme().number ("--nx-player-height", 84.0f);
+    return density == "compact" ? juce::jmax (60, base - 18) : density == "integrated" ? juce::jmax (56, base - 24) : base;
 }
 
 void MainComponent::placeToast()
@@ -325,7 +430,7 @@ void MainComponent::placeToast()
         toast.setBounds (juce::Rectangle<int> (24, 18, juce::jmin (520, getWidth() / 2 - 100), 40));
         return;
     }
-    const int playerH = (int) ctx.theme().number ("--nx-player-height", 84.0f);
+    const int playerH = playerHeight();
     toast.setBounds (getLocalBounds().withSizeKeepingCentre (juce::jmin (640, getWidth() - 40), 40).withY (getHeight() - playerH - 12 * 2 - 52));
 }
 
@@ -790,7 +895,8 @@ bool MainComponent::keyPressed (const juce::KeyPress& k)
     auto& e = ctx.engine();
     if (k == juce::KeyPress::escapeKey)
     {
-        if (settingsWindow.isVisible()) settingsWindow.close();
+        if (muse.isVisible()) muse.close();
+        else if (settingsWindow.isVisible()) settingsWindow.close();
         else if (immersive.isVisible()) setImmersive (false);
         grabKeyboardFocus();                                         // leave the search field
         return true;

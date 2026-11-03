@@ -864,6 +864,88 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     shoot ("15_barre_laterale_masquee");
     main->setSidebarVisible (true, false);
 
+    {
+        // MUSE (studio button), headphone EQ presets, header chip: Bit-Perfect LED + EQ profile, bypass in one click
+        main->player.studioButton.onClick();
+        const bool museOpen = main->muse.isVisible();
+        main->muse.choosePreset (1);
+        const bool clOn = app.studioTools().eqActive() && main->audioStatus.eqLabel() == "MOMENTUM M2 CL"
+                          && app.settings().get ("headphoneEq").getProperty ("preset", {}).toString() == "momentum-m2-cl";
+        main->muse.chooseMonitor (1);
+        const bool mono = app.studioTools().monitor.load() == nx::StudioToolsState::Monitor::Mono;
+        main->muse.chooseMonitor (0);
+        settle (100);
+        shoot ("46_muse");
+        main->muse.close();
+        main->resized();
+        settle (300);
+        auto click = [&] (juce::Component& c, juce::Point<int> pos)
+        {
+            auto src = juce::Desktop::getInstance().getMainMouseSource();
+            const juce::MouseEvent e (src, pos.toFloat(), juce::ModifierKeys(), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c,
+                                      juce::Time::getCurrentTime(), pos.toFloat(), juce::Time::getCurrentTime(), 1, false);
+            c.mouseUp (e);
+        };
+        const bool chipShown = main->audioStatus.isVisible() && ! main->audioStatus.eqArea().isEmpty() && ! main->audioStatus.isBitPerfect();
+        shoot ("47_entete_audio");
+        click (main->audioStatus, main->audioStatus.eqArea().getCentre());
+        const bool bypassed = ! app.studioTools().eqActive() && app.studioTools().eqPresetInfo() != nullptr
+                              && (bool) app.settings().get ("headphoneEq").getProperty ("bypass", false);
+        click (main->audioStatus, main->audioStatus.eqArea().getCentre());
+        const bool backOn = app.studioTools().eqActive();
+        click (main->audioStatus, { 10, main->audioStatus.getHeight() / 2 });
+        const bool museFromChip = main->muse.isVisible();
+        main->muse.close();
+        app.setHeadphoneEq (-1, false);
+        t.check (museOpen && clOn && mono && chipShown && bypassed && backOn && museFromChip && ! app.studioTools().anyActive(),
+                 "MUSE : profil MOMENTUM M2 CL, monitoring ; en-tête : témoin Bit-Perfect, EQ casque contourné / réactivé d'un clic"_t
+                 + " [" + juce::String ((int) museOpen) + juce::String ((int) clOn) + juce::String ((int) mono) + juce::String ((int) chipShown)
+                 + juce::String ((int) bypassed) + juce::String ((int) backOn) + juce::String ((int) museFromChip) + "]");
+    }
+    {
+        // appearance (Cider 2): dark / light / system, accent colour, listening-bar density
+        const auto darkBefore = app.theme().id;
+        app.setAppearance ("light");
+        const bool light = app.theme().id == "pure-light" && app.getAppearance() == "light";
+        app.setAppearance ("dark");
+        const bool dark = app.theme().id == darkBefore;
+        app.setAccent (juce::Colour (0xff8b5cf6));
+        const bool violet = app.theme().accent() == juce::Colour (0xff8b5cf6);
+        app.setAppearance ("light");
+        const bool readable = app.theme().accent().getPerceivedBrightness() <= 0.42f;
+        settle (100);
+        shoot ("48_apparence_clair_violet");
+        app.setAppearance ("dark");
+        app.setAccent (juce::Colours::transparentBlack);
+        const bool signature = app.theme().accent() == juce::Colour (0xff00f5a0) && app.settings().get ("accent").toString().isEmpty();
+        t.check (light && dark && violet && readable && signature,
+                 "apparence : Sombre / Clair, couleur d'accent (assombrie sur thème clair), retour à l'émeraude NX #00F5A0"_t);
+        app.setLayoutOption ("density", "integrated");
+        const bool flush = main->player.getX() == 0 && main->player.getRight() == main->getWidth() && main->player.getBottom() == main->getHeight();
+        settle (100);
+        shoot ("49_barre_compacte_integree");
+        app.setLayoutOption ("density", "compact");
+        const bool compactH = main->player.getHeight() == main->playerHeight() && main->playerHeight() < 84 && main->player.getX() > 0;
+        app.setLayoutOption ("density", "comfortable");
+        t.check (flush && compactH && main->player.getHeight() == 84, "densité de la barre d'écoute : Confortable, Compact, Compact intégré (bord de fenêtre)"_t);
+        // official links: Discord hidden while the invitation is unknown; the shop and Discord can be set in settings.json
+        const bool hidden = app.discordUrl().isEmpty();
+        app.settings().set ("discordUrl", "https://discord.gg/nxaudio-test");
+        app.settings().set ("purchaseUrl", "javascript:alert(1)");
+        const bool links = app.discordUrl() == "https://discord.gg/nxaudio-test" && app.shopUrl() == juce::String (nx::links::shop);
+        auto& sw3 = main->getSettingsWindow();
+        app.navigate ({ nx::PageId::Settings, "apropos" });
+        settle (100);
+        bool discordButton = false;
+        for (auto* c : sw3.getPage().content().getChildren())
+            if (auto* b = dynamic_cast<juce::TextButton*> (c); b != nullptr && b->getButtonText() == "Rejoindre la communauté NX Audio"_t) discordButton = true;
+        app.navigate ({ nx::PageId::Settings, "audio" });     // the next tests open the settings on their last tab
+        sw3.close();
+        app.settings().set ("discordUrl", juce::var());
+        app.settings().set ("purchaseUrl", juce::var());
+        t.check (hidden && links && discordButton, "liens officiels : Discord masqué sans invitation, affiché une fois renseigné ; boutique (adresse https uniquement)"_t);
+    }
+
     // Device profiles: the Merging Anubis banner (forced, the virtual DAC has another name), then RME
     {
         auto st = app.engine().getSettings();
@@ -1438,11 +1520,30 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     shoot ("32_assistant_english");
     ob.clickTile ("lang", "fr");
     t.check (en && ! nx::i18n::isEnglish(), "étape 1 : langue anglais / français appliquée à chaud"_t);
+    {
+        bool modeTiles = false, accentTiles = false;
+        for (auto& tile : ob.getTiles()) { modeTiles = modeTiles || tile.kind == "mode"; accentTiles = accentTiles || tile.kind == "accent"; }
+        const auto before = app.theme().id;
+        ob.clickTile ("mode", "light");
+        const bool light = app.theme().id == "pure-light";
+        ob.clickTile ("accent", "3");
+        const bool blue = ! app.getAccent().isTransparent();
+        ob.clickTile ("mode", "dark");
+        ob.clickTile ("accent", "0");
+        t.check (modeTiles && accentTiles && light && blue && app.theme().id == before && app.getAccent().isTransparent(),
+                 "étape 1 : apparence Sombre / Clair / Système et couleur d'accent (style Cider 2)"_t);
+    }
     ob.setStep (1);
     ob.clickTile ("layout", "compact");
     settle (100);
     const bool compact = main->sidebar.isCompact();
     shoot ("33_assistant_disposition");
+    {
+        bool density = false;
+        for (auto& tile : ob.getTiles()) density = density || tile.kind == "density";
+        t.check (density && app.settings().get ("layout").getProperty ("density", {}).toString() == "compact",
+                 "étape 2 : dispositions Net / Minimal / Lecteur en haut, densité de la barre d'écoute (Minimal = compacte)"_t);
+    }
     ob.clickTile ("layout", "cider");
     t.check (compact && ! main->sidebar.isCompact(), "étape 2 : disposition compacte (icônes) puis Cider 2 étendue"_t);
     ob.setStep (2);

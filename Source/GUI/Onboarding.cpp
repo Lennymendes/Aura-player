@@ -1,6 +1,7 @@
 // NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Onboarding.h"
 #include "DeviceArt.h"
+#include "Appearance.h"
 #include "../Providers/MediaProvider.h"
 #include "../Providers/UpnpProvider.h"
 #include "../Library/LibraryScanner.h"
@@ -170,10 +171,12 @@ void OnboardingWizard::clickTile (const juce::String& kind, const juce::String& 
 {
     if (kind == "lang") ctx.setLanguage (id);
     else if (kind == "theme") ctx.applyTheme (id);
+    else if (kind == "mode" || kind == "accent" || kind == "density") appearance::apply (ctx, kind, id);
     else if (kind == "layout")
     {
         ctx.setLayoutOption ("sidebar", id == "compact" ? "compact" : "wide");
         ctx.setLayoutOption ("player", id == "top" ? "top" : "bottom");
+        ctx.setLayoutOption ("density", id == "compact" ? "compact" : "comfortable");   // Minimal = compact bar
         ctx.settings().set ("layoutPreset", id);
     }
     else if (kind == "profile")
@@ -238,9 +241,9 @@ void OnboardingWizard::paint (juce::Graphics& g)
         g.fillRoundedRectangle (dot, 4.0f);
     }
     r.removeFromTop (18);
-    const juce::String titles[] = { "Langue & thème"_t, "Disposition de l'interface"_t, "Votre matériel audio"_t, "Vos sources musicales"_t };
-    const juce::String subs[] = { "Choisissez la langue de l'interface et son apparence. Tout se change ensuite dans les réglages."_t,
-                                  "Comment voulez-vous organiser le lecteur ?"_t,
+    const juce::String titles[] = { "Langue & apparence"_t, "Disposition de l'interface"_t, "Votre matériel audio"_t, "Vos sources musicales"_t };
+    const juce::String subs[] = { "Choisissez la langue, le mode sombre ou clair et votre couleur d'accent. Tout se change ensuite dans les réglages."_t,
+                                  "Comment voulez-vous organiser le lecteur, et quelle place pour la barre d'écoute ?"_t,
                                   "NX Player a détecté votre interface : activez le profil optimal en un clic."_t,
                                   "Indiquez où se trouve votre musique : un dossier local et / ou un serveur NAS / Jellyfin du réseau."_t };
     g.setColour (t.textDim());
@@ -307,36 +310,22 @@ void OnboardingWizard::paintLanguage (juce::Graphics& g, juce::Rectangle<int> r)
         tiles.push_back ({ "lang", list[i].first, tile });
     }
     r.removeFromTop (24);
+    // Cider 2 style: theme mode, then the accent colour
+    std::vector<std::pair<juce::String, juce::Rectangle<int>>> hits;
     g.setColour (t.textDim());
     g.setFont (style::font (12.5f, true));
-    g.drawText ("THÈME"_t, r.removeFromTop (20), juce::Justification::centredLeft);
+    g.drawText ("APPARENCE"_t, r.removeFromTop (20), juce::Justification::centredLeft);
     r.removeFromTop (8);
-    const auto themes = ctx.themes().getThemes();
-    const int n = juce::jmax (1, juce::jmin (5, (int) themes.size()));
-    const int tw = (r.getWidth() - 14 * (n - 1)) / n;
-    auto row = r.removeFromTop (juce::jmin (180, r.getHeight()));
-    for (int i = 0; i < n; ++i)
-    {
-        const auto& th = themes[(size_t) i];
-        auto tile = row.removeFromLeft (tw);
-        row.removeFromLeft (14);
-        const bool on = ctx.selectedThemeId() == th.id;
-        tileFrame (g, t, tile.toFloat(), on, tile.contains (mouse));
-        // swatch: background + glass + accents
-        auto sw = tile.reduced (14).removeFromTop (tile.getHeight() - 60).toFloat();
-        g.setColour (th.bg());
-        g.fillRoundedRectangle (sw, 10.0f);
-        g.setGradientFill (juce::ColourGradient (th.accent().withAlpha (0.65f), sw.getX(), sw.getBottom(), th.accent2().withAlpha (0.35f), sw.getRight(), sw.getY(), false));
-        g.fillRoundedRectangle (sw.reduced (sw.getWidth() * 0.35f, sw.getHeight() * 0.25f).translated (sw.getWidth() * 0.12f, 0), 8.0f);
-        g.setColour (th.surface().withAlpha (0.9f));
-        g.fillRoundedRectangle (sw.withWidth (sw.getWidth() * 0.26f).reduced (5.0f), 6.0f);
-        g.setColour (th.accent());
-        g.fillRoundedRectangle (sw.getX() + 10.0f, sw.getY() + 12.0f, sw.getWidth() * 0.14f, 4.0f, 2.0f);
-        g.setColour (t.textCol());
-        g.setFont (style::font (14.0f, true));
-        g.drawText (th.name, tile.reduced (16, 12).removeFromBottom (24), juce::Justification::centredLeft, true);
-        tiles.push_back ({ "theme", th.id, tile });
-    }
+    appearance::paintModes (g, ctx, r.removeFromTop (juce::jmin (150, r.getHeight() - 70)), mouse, hits);
+    for (auto& [id, b] : hits) tiles.push_back ({ "mode", id, b });
+    r.removeFromTop (16);
+    g.setColour (t.textDim());
+    g.setFont (style::font (12.5f, true));
+    g.drawText ("COULEUR D'ACCENT"_t, r.removeFromTop (20), juce::Justification::centredLeft);
+    r.removeFromTop (6);
+    hits.clear();
+    appearance::paintAccents (g, ctx, r.removeFromTop (34), mouse, hits);
+    for (auto& [id, b] : hits) tiles.push_back ({ "accent", id, b });
 }
 
 void OnboardingWizard::paintLayout (juce::Graphics& g, juce::Rectangle<int> r)
@@ -345,11 +334,11 @@ void OnboardingWizard::paintLayout (juce::Graphics& g, juce::Rectangle<int> r)
     const auto mouse = getMouseXYRelative();
     const juce::String current = ctx.settings().get ("layoutPreset", "cider").toString();
     struct L { const char* id; juce::String name, desc; bool compact, top; };
-    const L layouts[] = { { "cider", "Cider 2 moderne"_t, "Barre latérale étendue, lecteur en bas"_t, false, false },
-                          { "compact", "Compacte"_t, "Barre latérale en icônes, plus de place pour la musique"_t, true, false },
+    const L layouts[] = { { "cider", "Net"_t, "Barre latérale étendue, lecteur en bas (Cider 2)"_t, false, false },
+                          { "compact", "Minimal"_t, "Barre latérale en icônes, lecteur compact : la musique d'abord"_t, true, false },
                           { "top", "Lecteur en haut"_t, "Barre de lecture en haut, à la Roon"_t, false, true } };
     const int tw = (r.getWidth() - 32) / 3;
-    auto row = r.removeFromTop (juce::jmin (r.getHeight(), 330));
+    auto row = r.removeFromTop (juce::jmin (r.getHeight() - 170, 260));
     for (int i = 0; i < 3; ++i)
     {
         const auto& l = layouts[i];
@@ -395,6 +384,14 @@ void OnboardingWizard::paintLayout (juce::Graphics& g, juce::Rectangle<int> r)
         g.drawFittedText (l.desc, text, juce::Justification::topLeft, 2);
         tiles.push_back ({ "layout", l.id, tile });
     }
+    r.removeFromTop (18);
+    g.setColour (t.textDim());
+    g.setFont (style::font (12.5f, true));
+    g.drawText ("DENSITÉ DE LA BARRE D'ÉCOUTE"_t, r.removeFromTop (20), juce::Justification::centredLeft);
+    r.removeFromTop (8);
+    std::vector<std::pair<juce::String, juce::Rectangle<int>>> hits;
+    appearance::paintDensities (g, ctx, r.removeFromTop (juce::jmin (120, r.getHeight())), mouse, hits);
+    for (auto& [id, b] : hits) tiles.push_back ({ "density", id, b });
 }
 
 void OnboardingWizard::paintDevice (juce::Graphics& g, juce::Rectangle<int> r)

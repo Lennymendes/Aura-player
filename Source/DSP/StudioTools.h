@@ -4,11 +4,13 @@
 //   Solo Mid / Side M = (L + R) / 2 or S = (L − R) / 2 on both channels
 //   Phase (Ø)       polarity inversion of both channels (absolute phase)
 //   Smart crossfeed Bauer stereophonic-to-binaural crossfeed (bs2b, 700 Hz / 4.5 dB), off by itself in mono
+//   Headphone EQ    preset of HeadphoneEq.h (MOMENTUM M2...), with automatic headroom (no clipping), bypass switch
 // Any active tool takes the stream out of bit-perfect (the Signal Path says so); all off = bypassed.
 // The switches are atomics read by the audio thread: toggling never rebuilds the chain.
 #pragma once
 
 #include "../Engine/DspChain.h"
+#include "HeadphoneEq.h"
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -23,8 +25,29 @@ struct StudioToolsState
     std::atomic<Monitor> monitor { Monitor::Stereo };
     std::atomic<bool> invertPhase { false };
     std::atomic<bool> crossfeed { false };
+    // headphone EQ: preset index in hpeq::presets() (-1 = none), bypass keeps the choice, preamp from the headroom
+    std::atomic<int> eqPreset { -1 };
+    std::atomic<bool> eqBypass { false };
+    std::atomic<bool> autoHeadroom { true };
+    std::atomic<double> eqPreampDb { 0.0 };
+    std::atomic<int> eqVersion { 0 };
 
-    bool anyActive() const noexcept { return monitor.load() != Monitor::Stereo || invertPhase.load() || crossfeed.load(); }
+    bool eqActive() const noexcept { return eqPreset.load() >= 0 && ! eqBypass.load(); }
+    bool anyActive() const noexcept { return monitor.load() != Monitor::Stereo || invertPhase.load() || crossfeed.load() || eqActive(); }
+    const hpeq::Preset* eqPresetInfo() const noexcept
+    {
+        const int i = eqPreset.load();
+        return i >= 0 && i < (int) hpeq::presets().size() ? &hpeq::presets()[(size_t) i] : nullptr;
+    }
+    /** Message thread: chooses a preset (-1 = off) and works out the headroom; the audio thread picks it up. */
+    void setEq (int index, bool bypass)
+    {
+        eqPreset = index >= 0 && index < (int) hpeq::presets().size() ? index : -1;
+        eqBypass = bypass;
+        const auto* p = eqPresetInfo();
+        eqPreampDb = p != nullptr && autoHeadroom.load() ? -(hpeq::peakBoostDb (*p, 48000.0) + 0.1) : 0.0;
+        ++eqVersion;
+    }
     juce::String describe() const;
 };
 
@@ -39,6 +62,8 @@ public:
 
     bool prepare (double sampleRate, int, int) override
     {
+        fs = sampleRate;
+        seenEqVersion = -1;
         // bs2b default level: 700 Hz, 4.5 dB of feed
         constexpr double pi = 3.14159265358979323846;
         const double fcLo = 700.0, feed = 4.5;
@@ -55,10 +80,11 @@ public:
         return true;
     }
 
-    void reset() noexcept override { lo = {}; hi = {}; asis = {}; }
+    void reset() noexcept override { lo = {}; hi = {}; asis = {}; eqZ = {}; }
 
     void process (double* const* ch, int numChannels, int numFrames) noexcept override
     {
+        if (state->eqActive()) applyEq (ch, juce::jmin (numChannels, 2), numFrames);
         if (numChannels < 2) { if (state->invertPhase.load()) for (int i = 0; i < numFrames; ++i) ch[0][i] = -ch[0][i]; return; }
         const auto monitor = state->monitor.load();
         const bool invert = state->invertPhase.load();
@@ -96,7 +122,43 @@ public:
     }
 
 private:
+    void applyEq (double* const* ch, int numChannels, int numFrames) noexcept
+    {
+        if (const int v = state->eqVersion.load(); v != seenEqVersion)
+        {
+            // new preset: a handful of biquads designed here (no allocation, no lock)
+            seenEqVersion = v;
+            const auto* p = state->eqPresetInfo();
+            numEq = p != nullptr ? p->numBands : 0;
+            for (int b = 0; b < numEq; ++b) eqC[(size_t) b] = hpeq::design (p->bands[(size_t) b], fs);
+            preamp = std::pow (10.0, state->eqPreampDb.load() / 20.0);
+            eqZ = {};
+        }
+        for (int c = 0; c < numChannels; ++c)
+        {
+            double* x = ch[c];
+            for (int i = 0; i < numFrames; ++i)
+            {
+                double y = x[i] * preamp;
+                for (int b = 0; b < numEq; ++b)
+                {
+                    auto& z = eqZ[(size_t) c][(size_t) b];
+                    const auto& k = eqC[(size_t) b];
+                    const double out = k.b0 * y + z[0];              // transposed direct form II
+                    z[0] = k.b1 * y - k.a1 * out + z[1];
+                    z[1] = k.b2 * y - k.a2 * out;
+                    y = out;
+                }
+                x[i] = y;
+            }
+        }
+    }
+
     std::shared_ptr<StudioToolsState> state;
+    double fs = 44100.0, preamp = 1.0;
+    int seenEqVersion = -1, numEq = 0;
+    std::array<hpeq::Coeffs, 8> eqC {};
+    std::array<std::array<std::array<double, 2>, 8>, 2> eqZ {};
     double a0Lo = 0, b1Lo = 0, a0Hi = 0, a1Hi = 0, b1Hi = 0, gain = 1;
     std::array<double, 2> lo {}, hi {}, asis {};
 };
@@ -113,6 +175,7 @@ inline juce::String StudioToolsState::describe() const
     }
     if (invertPhase.load()) parts.add (juce::String::fromUTF8 ("Phase \xc3\x98"));
     if (crossfeed.load()) parts.add (monitor.load() == Monitor::Stereo ? "Crossfeed" : "Crossfeed (inactif en mono)");
+    if (eqActive()) parts.add (juce::String ("EQ ") + juce::String::fromUTF8 (eqPresetInfo()->name));
     return parts.isEmpty() ? juce::String ("aucun") : parts.joinIntoString (" + ");
 }
 
