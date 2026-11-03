@@ -165,13 +165,15 @@ AppController::AppController (Options options)
         if (auto* m = getMainComponent()) m->pluginsChanged();
     };
     {
-        // headphone EQ chosen in MUSE (kept across launches)
+        // headphone EQ chosen in AURA DSP (kept across launches)
         const auto eq = appSettings.get ("headphoneEq");
         int index = -1;
         for (int i = 0; i < (int) hpeq::presets().size(); ++i)
             if (eq.getProperty ("preset", {}).toString() == hpeq::presets()[(size_t) i].id) index = i;
         studio->autoHeadroom = (bool) eq.getProperty ("autoHeadroom", true);
         studio->setEq (index, (bool) eq.getProperty ("bypass", false));
+        const auto peq = appSettings.get ("parametricEq");
+        studio->setParametric (bandsFromVar (peq.getProperty ("bands", {})), (bool) peq.getProperty ("enabled", false));
     }
     if (studio->anyActive()) applyStudioTools(); else rebuildDspChain();
 
@@ -988,9 +990,85 @@ void AppController::setHeadphoneEq (int presetIndex, bool bypass)
     applyStudioTools();
 }
 
-void AppController::showMuse()
+juce::var AppController::bandsToVar (const hpeq::ParametricBands& b)
 {
-    if (auto* m = getMainComponent()) m->showMuse();
+    juce::Array<juce::var> list;
+    for (auto& band : b)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("type", hpeq::typeName (band.type));
+        o->setProperty ("freq", band.freq);
+        o->setProperty ("gain", band.gain);
+        o->setProperty ("q", band.q);
+        list.add (juce::var (o));
+    }
+    return list;
+}
+
+hpeq::ParametricBands AppController::bandsFromVar (const juce::var& v)
+{
+    auto b = hpeq::flatParametric();
+    if (auto* list = v.getArray())
+        for (int i = 0; i < juce::jmin ((int) b.size(), list->size()); ++i)
+        {
+            const auto& o = list->getReference (i);
+            b[(size_t) i] = hpeq::clampBand ({ hpeq::typeFromName (o.getProperty ("type", "peak").toString()), (double) o.getProperty ("freq", b[(size_t) i].freq),
+                                               (double) o.getProperty ("gain", 0.0), (double) o.getProperty ("q", b[(size_t) i].q) });
+        }
+    // Bass and Treble keep their shelf type, Band 2-4 stay peaks
+    b[0].type = hpeq::BandType::LowShelf;
+    b[6].type = hpeq::BandType::HighShelf;
+    for (size_t i = 2; i <= 4; ++i) b[i].type = hpeq::BandType::Peak;
+    return b;
+}
+
+void AppController::setParametricEq (const hpeq::ParametricBands& bands, bool enabled, bool persist)
+{
+    const bool wasActive = studio->anyActive();
+    studio->setParametric (bands, enabled);
+    if (persist)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("enabled", enabled);
+        o->setProperty ("bands", bandsToVar (studio->parametricBands()));
+        appSettings.set ("parametricEq", juce::var (o));
+    }
+    // a band moved: the processor reads the new values by itself; the chain is rebuilt only when the EQ goes on / off
+    if (wasActive != studio->anyActive()) applyStudioTools();
+    else if (auto* m = getMainComponent()) m->stateChanged();
+}
+
+juce::StringArray AppController::getParametricPresetNames()
+{
+    juce::StringArray names;
+    if (auto* o = appSettings.get ("peqPresets").getDynamicObject())
+        for (auto& p : o->getProperties()) names.add (p.name.toString());
+    names.sortNatural();
+    return names;
+}
+
+void AppController::saveParametricPreset (const juce::String& name)
+{
+    const auto n = name.trim();
+    if (n.isEmpty()) return;
+    auto* o = new juce::DynamicObject();
+    if (auto* old = appSettings.get ("peqPresets").getDynamicObject())
+        for (auto& p : old->getProperties()) o->setProperty (p.name, p.value);
+    o->setProperty (juce::Identifier (n), bandsToVar (studio->parametricBands()));
+    appSettings.set ("peqPresets", juce::var (o));
+}
+
+bool AppController::loadParametricPreset (const juce::String& name)
+{
+    const auto v = appSettings.get ("peqPresets").getProperty (juce::Identifier (name.trim().isEmpty() ? juce::String ("_") : name.trim()), {});
+    if (! v.isArray()) return false;
+    setParametricEq (bandsFromVar (v), true, true);
+    return true;
+}
+
+void AppController::showAuraDsp()
+{
+    if (auto* m = getMainComponent()) m->showAuraDsp();
 }
 
 void AppController::setUserVolume (double v)

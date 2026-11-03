@@ -6,6 +6,7 @@
 #include "../Library/Library.h"
 #include "../Engine/PlaybackEngine.h"
 #include "../Ext/ThemeEngine.h"
+#include "../DSP/HeadphoneEq.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 
 namespace nx
@@ -100,7 +101,7 @@ public:
     virtual void selectDevice (const juce::String& name) = 0;
     /** Saves the chosen theme and offers a restart (no hot re-skin: it would invalidate LookAndFeel pointers). */
     virtual void applyTheme (const juce::String& id) = 0;
-    /** Appearance (Cider 2 style): "dark", "light" or "system" (follows the OS), and the accent colour
+    /** Appearance: "dark", "light" or "system" (follows the OS), and the accent colour
         (transparent = the theme's own). Both are applied at once and remembered. */
     virtual void setAppearance (const juce::String& mode) = 0;
     virtual juce::String getAppearance() = 0;
@@ -117,10 +118,16 @@ public:
 
     /** Studio tools changed: rebuilds the DSP chain (DSD is converted to PCM while a tool is on). */
     virtual void applyStudioTools() = 0;
-    /** Headphone EQ of the MUSE panel: preset index (-1 = off) and bypass, applied at once and remembered. */
+    /** Headphone EQ of the AURA DSP panel: preset index (-1 = off) and bypass, applied at once and remembered. */
     virtual void setHeadphoneEq (int presetIndex, bool bypass) = 0;
-    /** MUSE: the "Precision Audio Control" panel (source, headroom, sample rate conversion, filters). */
-    virtual void showMuse() = 0;
+    /** Parametric EQ (7 bands): applied at once (live, while dragging); `persist` also saves it in settings.json. */
+    virtual void setParametricEq (const hpeq::ParametricBands& bands, bool enabled, bool persist) = 0;
+    /** User presets of the parametric EQ, kept in settings.json ("peqPresets"). */
+    virtual juce::StringArray getParametricPresetNames() = 0;
+    virtual void saveParametricPreset (const juce::String& name) = 0;
+    virtual bool loadParametricPreset (const juce::String& name) = 0;
+    /** AURA DSP: the "NX Precision Audio Control" panel (source, headroom, sample rate conversion, filters). */
+    virtual void showAuraDsp() = 0;
     /** Official links (shop, Discord community); an empty Discord address hides its buttons. */
     virtual juce::String shopUrl() = 0;
     virtual juce::String discordUrl() = 0;

@@ -1,5 +1,5 @@
 // NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Immersive view (full screen Now Playing, Cider 2 style): an animated background made of the artwork's
+// Immersive view (full screen Now Playing): an animated background made of the artwork's
 // colours, the HD artwork, large synced lyrics, a waveform progress bar and clean controls.
 //
 // Modular / community: what is shown and where comes from an ImmersiveConfig merged from

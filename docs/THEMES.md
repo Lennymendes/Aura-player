@@ -41,7 +41,7 @@ accepte un dossier ou une archive.
 
 | Valeur | Effet |
 |---|---|
-| `artwork` | pochette en cours, floutée, saturée et assombrie, fondu enchaîné au changement de morceau (style Cider) |
+| `artwork` | pochette en cours, floutée, saturée et assombrie, fondu enchaîné au changement de morceau |
 | `mesh` / `gradient` | dégradé maillé animé (accent, accent 2, couleur dominante de la pochette), réagit au niveau sonore |
 | `shader` | `background.frag` exécuté par OpenGL ; `fallback` est utilisé sans OpenGL |
 | `solid` | fond immobile : dégradé vertical `--nx-bg` → `--nx-bg-2`, sans vignettage (thèmes clairs) |

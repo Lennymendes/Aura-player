@@ -117,7 +117,13 @@ public:
     juce::Component* backdropOwner() override;
     void applyStudioTools() override;
     void setHeadphoneEq (int presetIndex, bool bypass) override;
-    void showMuse() override;
+    void setParametricEq (const hpeq::ParametricBands& bands, bool enabled, bool persist) override;
+    juce::StringArray getParametricPresetNames() override;
+    void saveParametricPreset (const juce::String& name) override;
+    bool loadParametricPreset (const juce::String& name) override;
+    static juce::var bandsToVar (const hpeq::ParametricBands& b);
+    static hpeq::ParametricBands bandsFromVar (const juce::var& v);
+    void showAuraDsp() override;
     juce::String shopUrl() override    { return links::resolve (appSettings.get ("purchaseUrl"), links::shop); }
     juce::String discordUrl() override { return links::resolve (appSettings.get ("discordUrl"), links::discord); }
     void setUserVolume (double v) override;

@@ -1,5 +1,5 @@
 // NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Roon-style signal path: every stage between the file and the DAC, with its quality.
+// Signal path: every stage between the file and the DAC, with its quality.
 #pragma once
 
 #include <juce_core/juce_core.h>

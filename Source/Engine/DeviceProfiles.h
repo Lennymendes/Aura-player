@@ -1,5 +1,5 @@
 // NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Device profiles (in the spirit of Roon's device setup): a recognised interface gets dedicated settings.
+// Device profiles: a recognised interface gets dedicated settings.
 // Merging Anubis / RAVENNA / AES67 (MT VAD driver): DoP switches the network stream between PCM and DSD
 // framing, which can upset ANEMAN / PTP with many channels and 1 ms latency. The profiles avoid it (DXD) or
 // make it safe (large buffer, 2 channels, DoP silence before the music).
@@ -30,7 +30,7 @@ juce::String profileName (DeviceFamily f, int index);
 juce::String profileTag (DeviceFamily f, int index);
 juce::String profileDescription (DeviceFamily f, int index);
 
-/** Equipment catalogue (Roon-style device setup): pick your model when the driver name is not recognised. */
+/** Equipment catalogue: pick your model when the driver name is not recognised. */
 struct DeviceModel
 {
     const char* id;          // saved in the settings

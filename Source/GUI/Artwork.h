@@ -1,6 +1,6 @@
 // NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Artwork loading (library cache files and http URLs), and the image processing behind the
-// Cider-style look: fast blur (3 box passes ≈ Gaussian), saturation, dominant colour.
+// Glass look: fast blur (3 box passes ≈ Gaussian), saturation, dominant colour.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>

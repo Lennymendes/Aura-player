@@ -150,9 +150,9 @@ void HardwareDashboard::paint (juce::Graphics& g)
                     head.removeFromTop (18), juce::Justification::centredLeft, true);
     }
     c.removeFromTop (8);
-    const float memFrac = snapshot.memUsed >= 0 && snapshot.memTotal > 0 ? (float) ((double) snapshot.memUsed / (double) snapshot.memTotal) : -1.0f;
+    const float memFrac = snapshot.memoryUsed >= 0 && snapshot.memTotal > 0 ? (float) ((double) snapshot.memoryUsed / (double) snapshot.memTotal) : -1.0f;
     gauge (g, c.removeFromTop (30), t, "Mémoire vive (RAM)"_t,
-           snapshot.memUsed >= 0 ? gb (snapshot.memUsed) + " / " + gb (snapshot.memTotal) : gb (snapshot.memTotal), memFrac);
+           snapshot.memoryUsed >= 0 ? gb (snapshot.memoryUsed) + " / " + gb (snapshot.memTotal) : gb (snapshot.memTotal), memFrac);
     c.removeFromTop (6);
     gauge (g, c.removeFromTop (30), t, "Charge CPU"_t, snapshot.cpuLoad >= 0 ? juce::String (juce::roundToInt (snapshot.cpuLoad * 100.0)) + " %" : "…"_t,
            (float) snapshot.cpuLoad);

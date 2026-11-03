@@ -102,10 +102,17 @@ bool AudioStatusChip::isBitPerfect() const
     return ! path.nodes.empty() && path.overall == PathQuality::BitPerfect;
 }
 
+bool AudioStatusChip::eqOn() const
+{
+    const auto& s = ctx.studioTools();
+    return s.eqPresetInfo() != nullptr ? s.eqActive() : s.peqActive();
+}
+
 juce::String AudioStatusChip::eqLabel() const
 {
-    const auto* p = ctx.studioTools().eqPresetInfo();
-    return p != nullptr ? juce::String::fromUTF8 (p->name) : juce::String();
+    const auto& s = ctx.studioTools();
+    if (const auto* p = s.eqPresetInfo()) return p->chipName();
+    return s.peqActive() ? juce::String ("EQ PARAMÉTRIQUE"_t) : juce::String();
 }
 
 int AudioStatusChip::idealWidth() const
@@ -124,7 +131,7 @@ juce::Rectangle<int> AudioStatusChip::eqArea() const
 void AudioStatusChip::timerCallback()
 {
     if (! isShowing()) return;
-    const auto key = juce::String ((int) isBitPerfect()) + eqLabel() + juce::String ((int) ctx.studioTools().eqActive());
+    const auto key = juce::String ((int) isBitPerfect()) + eqLabel() + juce::String ((int) eqOn());
     if (key == shown) return;
     shown = key;
     if (idealWidth() != getWidth() + 6) if (auto* p = getParentComponent()) p->resized();   // the EQ part appeared / went
@@ -157,7 +164,7 @@ void AudioStatusChip::paint (juce::Graphics& g)
     {
         g.setColour (t.border());
         g.fillRect (eqR.getX(), r.getY() + 6.0f, 1.0f, r.getHeight() - 12.0f);
-        const bool on = ctx.studioTools().eqActive();
+        const bool on = eqOn();
         style::drawIcon (g, style::Icon::Headphones, eqR.removeFromLeft (26.0f).withSizeKeepingCentre (15.0f, 15.0f).translated (4.0f, 0.0f), on ? t.textCol() : t.textDim());
         led (eqR.removeFromRight (20.0f).withTrimmedRight (6.0f), on, t.accent());
         g.setColour (on ? t.textCol() : t.textDim());
@@ -171,12 +178,13 @@ void AudioStatusChip::mouseUp (const juce::MouseEvent& e)
     auto& s = ctx.studioTools();
     if (eqArea().contains (e.getPosition()))
     {
-        ctx.setHeadphoneEq (s.eqPreset.load(), ! s.eqBypass.load());     // bypass / back on, in one click
-        ctx.showMessage (s.eqActive() ? "Égaliseur casque activé : "_t + eqLabel() : "Égaliseur casque contourné : "_t + eqLabel());
+        if (s.eqPresetInfo() != nullptr) ctx.setHeadphoneEq (s.eqPreset.load(), ! s.eqBypass.load());     // bypass / back on, in one click
+        else ctx.setParametricEq (s.parametricBands(), ! s.peqActive(), true);
+        ctx.showMessage (eqOn() ? "Égaliseur activé : "_t + eqLabel() : "Égaliseur contourné : "_t + eqLabel());
         repaint();
         return;
     }
-    ctx.showMuse();
+    ctx.showAuraDsp();
 }
 
 //==============================================================================
@@ -188,7 +196,7 @@ MainComponent::MainComponent (AppContext& c)
       remoteButton (style::Icon::Phone, "NX Remote : piloter depuis le téléphone (QR code)"_t, c),
       settingsButton (style::Icon::Settings, "Réglages (Cmd/Ctrl + ,)"_t, c),
       streamerButton (style::Icon::Bolt, "Mode Streamer / Gaming : interface au repos (OBS, jeu), audio inchangé"_t, c),
-      audioStatus (c), muse (c),
+      audioStatus (c), auraDsp (c),
       ctx (c), listing (c), nowPlaying (c), sourcePage (c), marketplace (c), queue (c), toast (c),
       settingsWindow (c), immersive (c), onboarding (c)
 {
@@ -225,7 +233,7 @@ MainComponent::MainComponent (AppContext& c)
     addChildComponent (queue);
     addChildComponent (immersive);
     addChildComponent (settingsWindow);
-    addChildComponent (muse);
+    addChildComponent (auraDsp);
     addChildComponent (onboarding);
     addChildComponent (toast);
     settingsWindow.onClose = [this] { grabKeyboardFocus(); };
@@ -384,7 +392,7 @@ void MainComponent::resized()
     else player.setBounds (position == "top" ? r.removeFromTop (playerH) : r.removeFromBottom (playerH));
     if (position == "top") r.removeFromTop (margin); else r.removeFromBottom (margin);
 
-    // Sidebar: slides out to the left (Cider-style toggle), the content takes the room.
+    // Sidebar: slides out to the left (animated toggle), the content takes the room.
     const int sideW = (int) ctx.layout.getProperty ("sidebarWidth", t.number ("--nx-sidebar-width", 236.0f));
     const float ease = sidebarAmount * sidebarAmount * (3.0f - 2.0f * sidebarAmount);
     const int shown = juce::roundToInt ((float) (sideW + margin) * ease);
@@ -411,7 +419,7 @@ void MainComponent::resized()
     if (queueVisible) r.removeFromRight (margin);
 
     for (auto* p : std::initializer_list<juce::Component*> { &listing, &nowPlaying, &sourcePage, &marketplace }) p->setBounds (r);
-    for (auto* o : std::initializer_list<juce::Component*> { &settingsWindow, &muse, &immersive, &onboarding }) o->setBounds (getLocalBounds());
+    for (auto* o : std::initializer_list<juce::Component*> { &settingsWindow, &auraDsp, &immersive, &onboarding }) o->setBounds (getLocalBounds());
     placeToast();
 }
 
@@ -895,7 +903,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& k)
     auto& e = ctx.engine();
     if (k == juce::KeyPress::escapeKey)
     {
-        if (muse.isVisible()) muse.close();
+        if (auraDsp.isVisible()) auraDsp.close();
         else if (settingsWindow.isVisible()) settingsWindow.close();
         else if (immersive.isVisible()) setImmersive (false);
         grabKeyboardFocus();                                         // leave the search field

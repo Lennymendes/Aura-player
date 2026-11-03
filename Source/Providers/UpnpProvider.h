@@ -1,5 +1,5 @@
 // NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// UPnP / DLNA media servers on the local network (MinimServer, Asset, Roon Server's DLNA, Synology,
+// UPnP / DLNA media servers on the local network (MinimServer, Asset, Synology,
 // QNAP, JRiver...): SSDP discovery, ContentDirectory Browse / Search, DIDL-Lite parsing. Tracks are
 // streamed over HTTP into NX Player's own decoders (bit-perfect). SMB / NFS shares are simply library
 // folders (mounted volumes) handled by the LibraryScanner.

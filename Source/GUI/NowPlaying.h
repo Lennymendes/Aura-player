@@ -1,5 +1,5 @@
 // NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Now Playing: large artwork, time-synced lyrics, Roon-style signal path, plug-in slot.
+// Now Playing: large artwork, time-synced lyrics, detailed signal path, plug-in slot.
 #pragma once
 
 #include "Widgets.h"

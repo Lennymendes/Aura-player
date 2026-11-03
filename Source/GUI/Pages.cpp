@@ -1151,7 +1151,7 @@ namespace
         std::vector<juce::Rectangle<int>> tiles;
     };
 
-    /** Equipment catalogue (Roon-style): search your model and apply its profile to the active output. */
+    /** Equipment catalogue: search your model and apply its profile to the active output. */
     /** Equipment manager: search field on top, then a compact list (≈ 190 px) that scrolls / swipes. */
     class DeviceCatalogPanel : public juce::Component
     {
@@ -1698,7 +1698,7 @@ void SettingsPage::buildAudio()
             ctx.engine().setSettings (st);
             ctx.applyEngineSettings();
             refresh();
-        }), 36, "Un périphérique reconnu reçoit des réglages dédiés (comme dans Roon) : Merging (« Merging », « Anubis », « RAVENNA », « VAD ») et RME (« RME », « ADI-2 »)."_t);
+        }), 36, "Un périphérique reconnu reçoit des réglages dédiés : Merging (« Merging », « Anubis », « RAVENNA », « VAD ») et RME (« RME », « ADI-2 »)."_t);
 
         const auto family = activeFamily (s, eng.getDeviceName());
         if (family != DeviceFamily::None)
@@ -1878,7 +1878,7 @@ void SettingsPage::buildLibrary()
 
 void SettingsPage::buildInterface()
 {
-    section ("Apparence"_t);
+    section ("Personnalisez NX Player"_t);
     const juce::StringArray langs { juce::String::fromUTF8 ("Fran\xc3\xa7" "ais"), "English" };
     row ("Langue / Language"_t, makeCombo (langs, i18n::isEnglish() ? juce::String ("English") : langs[0], [this] (const juce::String& v)
     {
@@ -1907,14 +1907,14 @@ void SettingsPage::buildInterface()
         refresh();
     }));
 
-    section ("Disposition"_t);
+    section ("Disposition NX"_t);
     row ("Densité de la barre d'écoute"_t, nullptr, 24);
     fullRow (new appearance::Picker (ctx, appearance::Picker::Kind::Density), appearance::Picker::idealHeight (appearance::Picker::Kind::Density));
     const auto layout = ctx.settings().get ("layout");
     const juce::StringArray sidebarModes { "Étendue (icônes et libellés)"_t, "Compacte (icônes)"_t };
     row ("Barre latérale"_t, makeCombo (sidebarModes, layout.getProperty ("sidebar", "wide").toString() == "compact" ? sidebarModes[1] : sidebarModes[0],
                                         [this, sidebarModes] (const juce::String& v) { ctx.setLayoutOption ("sidebar", v == sidebarModes[1] ? "compact" : "wide"); }));
-    const juce::StringArray playerModes { "En bas (Cider 2)"_t, "En haut"_t };
+    const juce::StringArray playerModes { "En bas"_t, "En haut"_t };
     row ("Barre de lecture"_t, makeCombo (playerModes, layout.getProperty ("player", "bottom").toString() == "top" ? playerModes[1] : playerModes[0],
                                           [this, playerModes] (const juce::String& v) { ctx.setLayoutOption ("player", v == playerModes[1] ? "top" : "bottom"); }));
 

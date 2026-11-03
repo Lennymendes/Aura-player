@@ -64,7 +64,7 @@ SystemSnapshot SystemMonitor::sample()
         vm_size_t pageSize = 4096;
         host_page_size (mach_host_self(), &pageSize);
         if (host_statistics64 (mach_host_self(), HOST_VM_INFO64, (host_info64_t) &vm, &vmCount) == KERN_SUCCESS)
-            s.memUsed = (juce::int64) ((juce::uint64) (vm.active_count + vm.wire_count + vm.compressor_page_count) * (juce::uint64) pageSize);
+            s.memoryUsed = (juce::int64) ((juce::uint64) (vm.active_count + vm.wire_count + vm.compressor_page_count) * (juce::uint64) pageSize);
         mach_task_basic_info_data_t task;
         mach_msg_type_number_t taskCount = MACH_TASK_BASIC_INFO_COUNT;
         if (task_info (mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t) &task, &taskCount) == KERN_SUCCESS)
@@ -83,7 +83,7 @@ SystemSnapshot SystemMonitor::sample()
         if (GlobalMemoryStatusEx (&ms))
         {
             s.memTotal = (juce::int64) ms.ullTotalPhys;
-            s.memUsed = (juce::int64) (ms.ullTotalPhys - ms.ullAvailPhys);
+            s.memoryUsed = (juce::int64) (ms.ullTotalPhys - ms.ullAvailPhys);
         }
         PROCESS_MEMORY_COUNTERS pmc;
         if (GetProcessMemoryInfo (GetCurrentProcess(), &pmc, sizeof (pmc))) s.appMemory = (juce::int64) pmc.WorkingSetSize;
@@ -110,7 +110,7 @@ SystemSnapshot SystemMonitor::sample()
             if (line.startsWith ("MemAvailable:")) memAvailKb = line.fromFirstOccurrenceOf (":", false, false).trim().getLargeIntValue();
         }
         if (memTotalKb > 0) s.memTotal = memTotalKb * 1024;
-        if (memTotalKb > 0 && memAvailKb >= 0) s.memUsed = (memTotalKb - memAvailKb) * 1024;
+        if (memTotalKb > 0 && memAvailKb >= 0) s.memoryUsed = (memTotalKb - memAvailKb) * 1024;
         juce::StringArray status;
         status.addLines (juce::File ("/proc/self/status").loadFileAsString());
         for (auto& line : status)

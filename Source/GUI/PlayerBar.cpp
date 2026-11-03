@@ -12,7 +12,7 @@ namespace nx
 PlayerBar::PlayerBar (AppContext& c)
     : lyricsButton (style::Icon::Lyrics, "Paroles"_t, c),
       queueButton (style::Icon::Queue, "File d'attente"_t, c),
-      studioButton (style::Icon::Studio, "MUSE : égaliseur casque, crossfeed, headroom, mono / Mid / Side, phase"_t, c),
+      studioButton (style::Icon::Studio, "AURA DSP : égaliseurs casque et paramétrique, crossfeed, headroom, mono / Mid / Side, phase"_t, c),
       immersiveButton (style::Icon::Fullscreen, "Vue immersive (F)"_t, c),
       deviceChip (c),
       ctx (c), artwork (c, 128),
@@ -35,7 +35,7 @@ PlayerBar::PlayerBar (AppContext& c)
     waveButton.onClick = [this] { setWaveformShown (! waveButton.active); };
     ctx.trackAnalyzer().addChangeListener (this);
     addAndMakeVisible (deviceChip);
-    studioButton.onClick = [this] { ctx.showMuse(); };
+    studioButton.onClick = [this] { ctx.showAuraDsp(); };
     immersiveButton.onClick = [this] { if (onImmersive) onImmersive(); };
     addAndMakeVisible (artwork);
     addAndMakeVisible (seek);

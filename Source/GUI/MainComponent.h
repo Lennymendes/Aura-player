@@ -13,7 +13,7 @@
 #include "SettingsWindow.h"
 #include "Onboarding.h"
 #include "Immersive.h"
-#include "Muse.h"
+#include "AuraDsp.h"
 
 namespace nx
 {
@@ -30,7 +30,7 @@ private:
     float scroll = 0.0f;
 };
 
-/** Header (Cider 2 style): audio state at a glance. "● Bit-Perfect" (lit when the stream is untouched) opens MUSE;
+/** Header: audio state at a glance. "● Bit-Perfect" (lit when the stream is untouched) opens AURA DSP;
     "● MOMENTUM M2 CL" shows the headphone EQ profile, a click bypasses it or turns it back on. */
 class AudioStatusChip : public juce::Component, private juce::Timer
 {
@@ -42,6 +42,7 @@ public:
     juce::Rectangle<int> eqArea() const;
     bool isBitPerfect() const;
     juce::String eqLabel() const;
+    bool eqOn() const;
 private:
     void timerCallback() override;
     AppContext& ctx;
@@ -109,9 +110,9 @@ public:
 
     IconButton sidebarButton, backButton, forwardButton, remoteButton, settingsButton, streamerButton;
     AudioStatusChip audioStatus;
-    MusePanel muse;
+    AuraDspPanel auraDsp;
     int playerHeight() const;
-    void showMuse() { muse.open(); muse.setBounds (getLocalBounds()); muse.grabKeyboardFocus(); }
+    void showAuraDsp() { auraDsp.open(); auraDsp.setBounds (getLocalBounds()); auraDsp.grabKeyboardFocus(); }
 
     /** Side mouse buttons (4 = back, 5 = forward) anywhere in the window. */
     struct SideButtons : juce::MouseListener

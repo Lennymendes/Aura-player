@@ -1,5 +1,5 @@
 // NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Settings as a modal window over the interface (Cider 2 style): dimmed glass backdrop, navigation on the
+// Settings as a modal window over the interface: dimmed glass backdrop, navigation on the
 // left (Audio & Système, Bibliothèque & NAS, Interface, NX Remote, Outils Studio, À propos), content on the right.
 #pragma once
 

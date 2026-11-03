@@ -281,7 +281,7 @@ juce::String pipelineLabel (const PlaybackPlan& plan, const juce::String& qualit
 ConnectionKind connectionKind (const juce::String& deviceName, const juce::String& backendName)
 {
     const auto n = deviceName.toLowerCase();
-    if (isMergingDevice (deviceName) || n.contains ("dante") || n.contains ("network") || n.contains ("airplay") || n.contains ("roon")
+    if (isMergingDevice (deviceName) || n.contains ("dante") || n.contains ("network") || n.contains ("airplay") 
         || n.contains ("ravenna") || n.contains ("aes67"))
         return ConnectionKind::Network;
     if (n.contains ("virtuel") || n.contains ("virtual") || n.contains ("silencieuse") || backendName.containsIgnoreCase ("virtuel"))

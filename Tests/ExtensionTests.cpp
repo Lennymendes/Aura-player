@@ -865,18 +865,56 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     main->setSidebarVisible (true, false);
 
     {
-        // MUSE (studio button), headphone EQ presets, header chip: Bit-Perfect LED + EQ profile, bypass in one click
+        // AURA DSP (studio button): headphone profile list (search), parametric EQ (knobs, handles, presets), header chip
+        auto& dsp = main->auraDsp;
         main->player.studioButton.onClick();
-        const bool museOpen = main->muse.isVisible();
-        main->muse.choosePreset (1);
+        const bool open = dsp.isVisible() && dsp.getView() == nx::AuraDspPanel::View::Headphone;
+        const int all = dsp.visiblePresetCount();
+        dsp.searchFor ("hd 650");
+        const bool search = dsp.visiblePresetCount() == 1 && dsp.visiblePresetName (0) == "Sennheiser HD 650";
+        dsp.searchFor ("momentum");
+        const bool search2 = dsp.visiblePresetCount() == 2;
+        dsp.searchFor ({});
+        dsp.choosePreset (1);
         const bool clOn = app.studioTools().eqActive() && main->audioStatus.eqLabel() == "MOMENTUM M2 CL"
                           && app.settings().get ("headphoneEq").getProperty ("preset", {}).toString() == "momentum-m2-cl";
-        main->muse.chooseMonitor (1);
-        const bool mono = app.studioTools().monitor.load() == nx::StudioToolsState::Monitor::Mono;
-        main->muse.chooseMonitor (0);
         settle (100);
-        shoot ("46_muse");
-        main->muse.close();
+        shoot ("46_aura_dsp_casque");
+        dsp.chooseMonitor (1);
+        const bool mono = app.studioTools().monitor.load() == nx::StudioToolsState::Monitor::Mono;
+        dsp.chooseMonitor (0);
+        // parametric view: knob, handle on the curve, reset, copy, user preset
+        dsp.peq.triggerClick();
+        settle (60);
+        const bool peqView = dsp.getView() == nx::AuraDspPanel::View::Parametric && app.studioTools().peqActive() && dsp.getBand (3).isVisible();
+        dsp.getBand (3).gain.setValue (5.5, juce::sendNotificationSync);
+        const bool knob = std::abs (app.studioTools().parametricBands()[3].gain - 5.5) < 1e-9;
+        dsp.getGraph().moveHandle (5, 8000.0, -3.2, true);
+        const auto b5 = app.studioTools().parametricBands()[5];
+        const bool handle = std::abs (b5.freq - 8000.0) < 0.5 && std::abs (b5.gain + 3.2) < 1e-9
+                            && dsp.getGraph().handleAt (dsp.getGraph().handlePosition (5)) == 5;
+        dsp.getBand (1).type.setSelectedId (2, juce::sendNotificationSync);
+        const bool typeChange = app.studioTools().parametricBands()[1].type == nx::hpeq::BandType::LowShelf;
+        const auto saved = app.settings().get ("parametricEq");
+        const bool persisted = (bool) saved.getProperty ("enabled", false) && saved.getProperty ("bands", {}).size() == 7
+                               && std::abs ((double) saved.getProperty ("bands", {})[5].getProperty ("freq", 0.0) - 8000.0) < 0.5;
+        app.saveParametricPreset ("Mon Momentum");
+        settle (100);
+        shoot ("46b_aura_dsp_parametrique");
+        dsp.resetButton.triggerClick();
+        settle (60);
+        bool flat = true;
+        for (auto& band : app.studioTools().parametricBands()) flat = flat && band.gain == 0.0;
+        dsp.copyButton.triggerClick();
+        settle (60);
+        const bool copied = app.studioTools().parametricBands()[0].gain == 4.0 && app.studioTools().parametricBands()[6].gain == 1.0;   // M2 CL treble
+        const bool loaded = app.loadParametricPreset ("Mon Momentum") && std::abs (app.studioTools().parametricBands()[3].gain - 5.5) < 1e-9
+                            && app.getParametricPresetNames().contains ("Mon Momentum");
+        // both equalisers together: headroom on the combined peak
+        const double combined = nx::hpeq::peakBoostOf ([&] (double f) { return app.studioTools().combinedDb (48000.0, f); });
+        const bool headroom = app.studioTools().eqActive() && app.studioTools().peqActive()
+                              && std::abs (app.studioTools().eqPreampDb.load() + combined + 0.1) < 1e-6;
+        dsp.close();
         main->resized();
         settle (300);
         auto click = [&] (juce::Component& c, juce::Point<int> pos)
@@ -894,16 +932,35 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         click (main->audioStatus, main->audioStatus.eqArea().getCentre());
         const bool backOn = app.studioTools().eqActive();
         click (main->audioStatus, { 10, main->audioStatus.getHeight() / 2 });
-        const bool museFromChip = main->muse.isVisible();
-        main->muse.close();
+        const bool fromChip = dsp.isVisible();
+        dsp.close();
         app.setHeadphoneEq (-1, false);
-        t.check (museOpen && clOn && mono && chipShown && bypassed && backOn && museFromChip && ! app.studioTools().anyActive(),
-                 "MUSE : profil MOMENTUM M2 CL, monitoring ; en-tête : témoin Bit-Perfect, EQ casque contourné / réactivé d'un clic"_t
-                 + " [" + juce::String ((int) museOpen) + juce::String ((int) clOn) + juce::String ((int) mono) + juce::String ((int) chipShown)
-                 + juce::String ((int) bypassed) + juce::String ((int) backOn) + juce::String ((int) museFromChip) + "]");
+        app.setParametricEq (nx::hpeq::flatParametric(), false, true);
+        t.check (open && all == 11 && search && search2 && clOn && mono, "AURA DSP : liste des profils casque (11), recherche « hd 650 » / « momentum », profil M2 CL, monitoring"_t
+                 + " [" + juce::String (all) + juce::String ((int) open) + juce::String ((int) search) + juce::String ((int) search2) + juce::String ((int) clOn) + juce::String ((int) mono) + " " + main->audioStatus.eqLabel() + " " + juce::String ((int) app.studioTools().eqActive()) + " " + app.settings().get ("headphoneEq").getProperty ("preset", {}).toString() + "]");
+        t.check (peqView && knob && handle && typeChange && persisted && flat && copied && loaded && headroom,
+                 "égaliseur paramétrique 7 bandes : potentiomètre, poignée sur la courbe, type de filtre, sauvegarde, réinitialiser, copier le casque, preset utilisateur, headroom combiné"_t
+                 + " [" + juce::String ((int) peqView) + juce::String ((int) knob) + juce::String ((int) handle) + juce::String ((int) typeChange) + juce::String ((int) persisted)
+                 + juce::String ((int) flat) + juce::String ((int) copied) + juce::String ((int) loaded) + juce::String ((int) headroom) + "]");
+        t.check (chipShown && bypassed && backOn && fromChip && ! app.studioTools().anyActive(),
+                 "en-tête : témoin Bit-Perfect, EQ casque contourné / réactivé d'un clic, ouvre AURA DSP"_t);
+        {
+            // no third-party product name anywhere in the interface (French and English dictionaries, sources);
+            // the names are assembled here so that this file stays free of them too
+            const juce::StringArray banned { juce::String ("mu") + "se", juce::String ("ci") + "der", juce::String ("ro") + "on" };
+            auto hasBanned = [&] (const juce::String& lower) { for (auto& w : banned) if (lower.contains (w)) return true; return false; };
+            const auto english = juce::String::fromUTF8 (NXData::en_json, NXData::en_jsonSize).toLowerCase();
+            bool clean = ! hasBanned (english);
+            juce::String offenders;
+            const auto root = juce::File (__FILE__).getParentDirectory().getParentDirectory();
+            for (auto* dir : { "Source", "Tests" })
+                for (const auto& e : juce::RangedDirectoryIterator (root.getChildFile (dir), true, "*.cpp;*.h;*.mm"))
+                    if (hasBanned (e.getFile().loadFileAsString().toLowerCase())) { clean = false; offenders << e.getFile().getFileName() << " "; }
+            t.check (clean, "marque : aucun nom de logiciel tiers dans l'interface FR / EN, les sources et les tests"_t + (offenders.isNotEmpty() ? " [" + offenders + "]" : juce::String()));
+        }
     }
     {
-        // appearance (Cider 2): dark / light / system, accent colour, listening-bar density
+        // appearance: dark / light / system, accent colour, listening-bar density
         const auto darkBefore = app.theme().id;
         app.setAppearance ("light");
         const bool light = app.theme().id == "pure-light" && app.getAppearance() == "light";
@@ -1531,7 +1588,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         ob.clickTile ("mode", "dark");
         ob.clickTile ("accent", "0");
         t.check (modeTiles && accentTiles && light && blue && app.theme().id == before && app.getAccent().isTransparent(),
-                 "étape 1 : apparence Sombre / Clair / Système et couleur d'accent (style Cider 2)"_t);
+                 "étape 1 : apparence Sombre / Clair / Système et couleur d'accent (Personnalisez NX Player)"_t);
     }
     ob.setStep (1);
     ob.clickTile ("layout", "compact");
@@ -1544,8 +1601,8 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         t.check (density && app.settings().get ("layout").getProperty ("density", {}).toString() == "compact",
                  "étape 2 : dispositions Net / Minimal / Lecteur en haut, densité de la barre d'écoute (Minimal = compacte)"_t);
     }
-    ob.clickTile ("layout", "cider");
-    t.check (compact && ! main->sidebar.isCompact(), "étape 2 : disposition compacte (icônes) puis Cider 2 étendue"_t);
+    ob.clickTile ("layout", "net");
+    t.check (compact && ! main->sidebar.isCompact(), "étape 2 : disposition Minimal (icônes) puis Net (étendue)"_t);
     ob.setStep (2);
     ob.clickTile ("profile", "0");
     t.check (app.engine().getSettings().anubisProfile == nx::AnubisProfile::StudioDxdReference, "étape 3 : Anubis détectée, profil optimal activé en un clic"_t);

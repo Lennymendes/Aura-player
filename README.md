@@ -5,12 +5,12 @@ Windows (ASIO, WASAPI exclusif) · Linux (ALSA). Logiciel **propriétaire** (voi
 
 - **Moteur bit-perfect** : les échantillons entiers ne passent jamais par le flottant ; DSD natif (ASIO),
   DoP partout, conversion DSD → DXD 64 bits si le DAC ne prend que le PCM ; gapless ; changement automatique de
-  fréquence du DAC ; Signal Path façon Roon.
+  fréquence du DAC ; Signal Path détaillé.
 - **Bibliothèque locale et réseau** (SQLite, recherche plein texte) : fichiers locaux et partages montés
   surveillés, serveurs UPnP / DLNA du NAS (découverte automatique ou adresse IP, navigation par dossiers et pochettes).
   Les connecteurs de streaming (Qobuz, Tidal, Spotify, YouTube Music) restent dans le code mais sont retirés de
   l'interface pour l'instant (`-DNX_ENABLE_STREAMING=ON` pour les rétablir).
-- **Interface façon Cider 2** : verre dépoli sur la pochette floutée, barre latérale en trois piliers (Local,
+- **Interface NX** : verre dépoli sur la pochette floutée, barre latérale en trois piliers (Local,
   Favoris, Playlists) étendue ou compacte, filtres par qualité en pastilles (DXD, DSD, Hi-Res, CD), pages artistes
   (photo, bannière, biographie), réglages en fenêtre modale avec tableau de bord matériel, vue immersive plein écran,
   assistant de premier démarrage, interface en français ou en anglais.
@@ -125,7 +125,7 @@ Le DAC du banc est virtuel (`CaptureBackend`) : il enregistre ce que le moteur e
    - **ALSA** (Linux) : périphériques `hw:` (exclusifs), avec l'encodeur exact adapté à la règle de conversion de JUCE.
    - Le WASAPI partagé reste proposé en secours ; le Signal Path le signale (« mixeur du système »).
 
-Le **Signal Path** reprend les catégories de Roon : *Bit-perfect* (violet), *Amélioré* (traitement volontaire),
+Le **Signal Path** classe chaque étape : *Bit-perfect* (violet), *Amélioré* (traitement volontaire),
 *Haute qualité* (sans perte mais modifié), *Qualité réduite* (source avec pertes, mixeur du système). Cliquez sur
 le badge de qualité de la barre de lecture.
 
@@ -247,13 +247,18 @@ la liste et en bas de la barre latérale ; le morceau rejoint ensuite la bibliot
 **Paroles** : fichier `.lrc` / `.txt` à côté du morceau, puis tags (SYLT synchronisé, USLT, LYRICS, ©lyr). Aucune
 requête en ligne.
 
-**Apparence (style Cider 2)** : Sombre / Clair / Système (suit le système), couleur d'accent en pastilles (émeraude NX
+**Apparence (Personnalisez NX Player)** : Sombre / Clair / Système (suit le système), couleur d'accent en pastilles (émeraude NX
 #00F5A0 par défaut, assombrie automatiquement sur thème clair) ; dispositions Net, Minimal, Lecteur en haut et densité
 de la barre d'écoute (Confortable, Compact, Compact intégré au bord de la fenêtre), dans l'assistant et les réglages.
-**MUSE** (bouton Studio de la barre de lecture, ou l'en-tête) : source, gestion du headroom (automatique, jamais
-d'écrêtage), conversion vers DXD, crossfeed, égaliseur casque 64 bits (MOMENTUM M2, MOMENTUM M2 CL et courbes
-génériques, courbe de réponse affichée), monitoring Mono / Mid / Side et polarité. L'en-tête montre en permanence le
-témoin Bit-Perfect et le profil casque actif, contourné ou réactivé d'un clic.
+**AURA DSP** (NX Precision Audio Control, bouton Studio de la barre de lecture ou en-tête) : source, gestion du headroom
+(automatique sur le pic de la courbe combinée, jamais d'écrêtage), conversion vers DXD, crossfeed, égaliseur casque et
+égaliseur paramétrique (cumulables, en série en 64 bits), polarité, monitoring Mono / Mid / Side.
+*Égaliseur casque* : liste avec recherche (Sennheiser Momentum M2 / M2 CL, HD 650, HD 600, HD 800 S, Beyerdynamic
+DT 1990 Pro, Focal Clear MG, EarSonics EM32, et les courbes studio Chaleur, Clarté, Écoute de nuit).
+*Égaliseur paramétrique* : 7 bandes (Bass, Band 1-5, Treble ; types réglables sur Band 1 et 5), potentiomètres (glisser,
+molette, valeur saisie), poignées sur la courbe (glisser = fréquence / gain, molette = Q), réinitialiser, copier la
+courbe du casque actif, presets utilisateur dans `settings.json`. L'en-tête montre le témoin Bit-Perfect et le profil
+actif, contourné ou réactivé d'un clic.
 **Liens officiels** : boutique et Discord dans `Source/Core/Links.h` (ou `purchaseUrl` / `discordUrl` dans
 `settings.json`) ; les boutons Discord restent masqués tant que l'invitation n'est pas renseignée.
 **Thèmes livrés** : NX Emerald, Aura Neon, Glass Rose, Pure Light (clair, givré), Solar Amber, Cobalt Minimal,

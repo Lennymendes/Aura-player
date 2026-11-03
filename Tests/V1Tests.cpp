@@ -245,7 +245,7 @@ NX_TEST_SECTION (111, "Moteur v1 : Memory Play (fichier en RAM) et Outils Studio
     state->crossfeed = false;
     state->monitor = nx::StudioToolsState::Monitor::Stereo;
 
-    // ---- Headphone EQ (MUSE): MOMENTUM M2 / M2 CL presets, automatic headroom, bypass -----------------
+    // ---- Headphone EQ (AURA DSP): MOMENTUM M2 / M2 CL presets, automatic headroom, bypass -----------------
     {
         namespace hp = nx::hpeq;
         const auto* m2 = hp::find ("momentum-m2");
@@ -269,7 +269,7 @@ NX_TEST_SECTION (111, "Moteur v1 : Memory Play (fichier en RAM) et Outils Studio
         const double fs = 48000.0;
         const double d16k = hp::responseDb (*m2, fs, 16000.0) - hp::responseDb (*cl, fs, 16000.0);
         const double d100 = hp::responseDb (*m2, fs, 100.0) - hp::responseDb (*cl, fs, 100.0);
-        hp::Preset shelfOnly { "x", "x", "", false, 1, {{ { hp::BandType::LowShelf, 105.0, 4.0, 0.7 } }} };
+        hp::Preset shelfOnly { "x", "x", "", "", false, 1, {{ { hp::BandType::LowShelf, 105.0, 4.0, 0.7 } }} };
         t.check (std::abs (d16k - 2.0) < 0.15 && std::abs (d100) < 0.05 && std::abs (hp::responseDb (shelfOnly, fs, 20.0) - 4.0) < 0.2
                  && std::abs (hp::responseDb (shelfOnly, fs, 5000.0)) < 0.05,
                  "biquads RBJ : plateau grave +4 dB sous 105 Hz, 0 dB au-dessus ; M2 - M2 CL = "_t + juce::String (d16k, 2) + " dB à 16 kHz");
@@ -283,7 +283,7 @@ NX_TEST_SECTION (111, "Moteur v1 : Memory Play (fichier en RAM) et Outils Studio
         for (int i = n / 2; i < n; ++i) { rmsOut += L[(size_t) i] * L[(size_t) i]; maxOut = juce::jmax (maxOut, std::abs (L[(size_t) i])); }
         const double gotDb = 20.0 * std::log10 (std::sqrt (2.0 * rmsOut / (n / 2)) / 0.5);
         const double wantDb = hp::responseDb (*cl, 48000.0, 1000.0) + preamp;
-        t.check (! proc.isBypassed() && state->describe().contains ("MOMENTUM M2 CL") && preamp < 0.0 && std::abs (preamp + peak + 0.1) < 1e-9
+        t.check (! proc.isBypassed() && state->describe().contains ("Sennheiser Momentum M2 CL") && preamp < 0.0 && std::abs (preamp + peak + 0.1) < 1e-9
                  && std::abs (gotDb - wantDb) < 0.05,
                  "EQ casque dans la chaîne 64 bits : gain à 1 kHz = courbe + headroom ("_t + juce::String (gotDb, 2) + " dB, headroom " + juce::String (preamp, 2) + " dB)");
         // headroom: a full-scale sine at the boosted frequency never clips
@@ -301,6 +301,58 @@ NX_TEST_SECTION (111, "Moteur v1 : Memory Play (fichier en RAM) et Outils Studio
         bool untouched = proc.isBypassed() && ! state->eqActive() && state->eqPresetInfo() != nullptr;
         for (int i = 0; i < n; ++i) untouched = untouched && L[(size_t) i] == inL[(size_t) i];
         t.check (worst <= 1.0 + 1e-6 && untouched, "headroom automatique : aucun écrêtage à 0 dBFS ("_t + juce::String (worst, 4) + ") ; contourné = bit-perfect"_t);
+        state->setEq (-1, false);
+
+        // new headphone profiles (exact bands), studio curves, search
+        auto bandsOf = [] (const char* id) { return hp::find (id); };
+        const auto* hd650 = bandsOf ("hd-650");
+        const auto* dt = bandsOf ("dt-1990-pro");
+        const bool catalogue = hp::presets().size() == 11 && hd650 != nullptr && hd650->numBands == 5 && hd650->bands[0].type == hp::BandType::LowShelf
+                               && hd650->bands[0].freq == 70.0 && hd650->bands[0].gain == 3.5 && hd650->bands[3].freq == 4500.0 && hd650->bands[3].q == 3.0
+                               && hd650->bands[4].type == hp::BandType::HighShelf && dt != nullptr && dt->numBands == 3 && dt->bands[2].gain == -5.5 && dt->bands[2].q == 4.5
+                               && bandsOf ("hd-800-s")->bands[2].gain == -4.5 && bandsOf ("clear-mg")->bands[1].freq == 1200.0 && bandsOf ("em32")->bands[2].freq == 12000.0
+                               && bandsOf ("hd-600")->bands[2].freq == 3300.0 && hp::find ("night")->studioCurve && ! hd650->studioCurve;
+        int found650 = 0, foundFocal = 0, foundSenn = 0;
+        for (auto& p : hp::presets())
+        {
+            found650 += hp::matches (p, "hd650") ? 1 : 0;
+            foundFocal += hp::matches (p, "Focal") ? 1 : 0;
+            foundSenn += hp::matches (p, "sennheiser momentum") ? 1 : 0;
+        }
+        t.check (catalogue && found650 == 1 && foundFocal == 1 && foundSenn == 2,
+                 "profils casque : HD 650 / 600 / 800 S, DT 1990 Pro, Clear MG, EM32 (bandes exactes) ; recherche « hd650 », « Focal », « sennheiser momentum »"_t);
+
+        // parametric EQ: 7 bands edited by hand, in series after the headphone profile, one headroom for the sum
+        auto peq = hp::flatParametric();
+        peq[3] = { hp::BandType::Peak, 1000.0, 6.0, 1.0 };
+        state->setParametric (peq, true);
+        fill (1000.0, 0.25, 1000.0, 0.25);
+        runProc();
+        double rms = 0.0;
+        for (int i = n / 2; i < n; ++i) rms += L[(size_t) i] * L[(size_t) i];
+        const double peqDb = 20.0 * std::log10 (std::sqrt (2.0 * rms / (n / 2)) / 0.25);
+        const bool peqOk = state->peqActive() && ! proc.isBypassed() && std::abs (peqDb - (6.0 + state->eqPreampDb.load())) < 0.05
+                           && std::abs (state->eqPreampDb.load() + 6.1) < 0.05;
+        state->setEq (0, false);                  // Momentum M2 + the parametric EQ
+        const double combinedPeak = hp::peakBoostOf ([&] (double f) { return hp::responseDb (*hp::find ("momentum-m2"), 48000.0, f)
+                                                                       + hp::responseDb (peq.data(), 7, 48000.0, f); });
+        double worst2 = 0.0;
+        for (double f : { 40.0, 1000.0, 12000.0 })
+        {
+            fill (f, 1.0, f, 1.0);
+            runProc();
+            for (int i = n / 2; i < n; ++i) worst2 = juce::jmax (worst2, std::abs (L[(size_t) i]));
+        }
+        const auto clamped = hp::clampBand ({ hp::BandType::Peak, 5.0, 20.04, 30.0 });
+        t.check (peqOk && std::abs (state->eqPreampDb.load() + combinedPeak + 0.1) < 1e-6 && worst2 <= 1.0 + 1e-6
+                 && clamped.freq == 20.0 && clamped.gain == 12.0 && clamped.q == 10.0 && state->describe().contains ("EQ param"),
+                 "EQ paramétrique 7 bandes (+6 dB à 1 kHz mesuré), en série avec l'EQ casque, headroom sur le pic combiné ("_t
+                 + juce::String (state->eqPreampDb.load(), 2) + " dB), aucun écrêtage ; plages ±12 dB, 20 Hz-20 kHz, Q 0,5-10");
+        // copy the headphone curve into the 7 slots
+        const auto copied = hp::toParametric (*hp::find ("momentum-m2"));
+        t.check (copied[0].type == hp::BandType::LowShelf && copied[0].gain == 4.0 && copied[1].freq == 66.0 && copied[5].freq == 2700.0
+                 && copied[6].type == hp::BandType::HighShelf && copied[6].gain == 3.0, "courbe du Momentum M2 copiée dans les 7 bandes de l'EQ paramétrique"_t);
+        state->setParametric (hp::flatParametric(), false);
         state->setEq (-1, false);
     }
 
@@ -567,8 +619,8 @@ NX_TEST_SECTION (501, "NX Remote (HTTP, jeton, QR code), pont AuraEngine X, syst
     juce::Thread::sleep (120);
     const auto snap = mon.sample();
     t.check (snap.osName.isNotEmpty() && snap.memTotal > 0, "tableau de bord : "_t + snap.osName + ", " + juce::String (snap.memTotal / (1024 * 1024)) + " Mo de RAM");
-    t.check (snap.memUsed > 0 && snap.memUsed <= snap.memTotal, "mémoire utilisée et charge CPU mesurées ("_t
-             + juce::String (snap.memUsed / (1024 * 1024)) + " Mo, " + juce::String (juce::roundToInt (snap.cpuLoad * 100.0)) + " %)");
+    t.check (snap.memoryUsed > 0 && snap.memoryUsed <= snap.memTotal, "mémoire utilisée et charge CPU mesurées ("_t
+             + juce::String (snap.memoryUsed / (1024 * 1024)) + " Mo, " + juce::String (juce::roundToInt (snap.cpuLoad * 100.0)) + " %)");
 
     // English dictionary
     t.check (nx::i18n::dictionarySize() > 300, "dictionnaire anglais : "_t + juce::String (nx::i18n::dictionarySize()) + " entrées");

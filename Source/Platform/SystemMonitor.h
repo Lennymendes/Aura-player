@@ -15,7 +15,7 @@ struct SystemSnapshot
     int cpuCores = 0;
     double cpuLoad = -1.0;          // 0..1 for the whole machine, −1 = unknown
     juce::int64 memTotal = 0;       // bytes
-    juce::int64 memUsed = -1;       // bytes, −1 = unknown
+    juce::int64 memoryUsed = -1;       // bytes, −1 = unknown
     juce::int64 appMemory = -1;     // resident size of NX Player, bytes (−1 = unknown)
 };
 

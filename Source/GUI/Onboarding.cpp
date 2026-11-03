@@ -241,7 +241,7 @@ void OnboardingWizard::paint (juce::Graphics& g)
         g.fillRoundedRectangle (dot, 4.0f);
     }
     r.removeFromTop (18);
-    const juce::String titles[] = { "Langue & apparence"_t, "Disposition de l'interface"_t, "Votre matériel audio"_t, "Vos sources musicales"_t };
+    const juce::String titles[] = { "Personnalisez NX Player"_t, "Disposition NX"_t, "Votre matériel audio"_t, "Vos sources musicales"_t };
     const juce::String subs[] = { "Choisissez la langue, le mode sombre ou clair et votre couleur d'accent. Tout se change ensuite dans les réglages."_t,
                                   "Comment voulez-vous organiser le lecteur, et quelle place pour la barre d'écoute ?"_t,
                                   "NX Player a détecté votre interface : activez le profil optimal en un clic."_t,
@@ -310,7 +310,7 @@ void OnboardingWizard::paintLanguage (juce::Graphics& g, juce::Rectangle<int> r)
         tiles.push_back ({ "lang", list[i].first, tile });
     }
     r.removeFromTop (24);
-    // Cider 2 style: theme mode, then the accent colour
+    // theme mode, then the accent colour
     std::vector<std::pair<juce::String, juce::Rectangle<int>>> hits;
     g.setColour (t.textDim());
     g.setFont (style::font (12.5f, true));
@@ -332,11 +332,12 @@ void OnboardingWizard::paintLayout (juce::Graphics& g, juce::Rectangle<int> r)
 {
     const auto& t = ctx.theme();
     const auto mouse = getMouseXYRelative();
-    const juce::String current = ctx.settings().get ("layoutPreset", "cider").toString();
+    auto current = ctx.settings().get ("layoutPreset", "net").toString();
+    if (current != "compact" && current != "top") current = "net";      // presets saved by older versions
     struct L { const char* id; juce::String name, desc; bool compact, top; };
-    const L layouts[] = { { "cider", "Net"_t, "Barre latérale étendue, lecteur en bas (Cider 2)"_t, false, false },
+    const L layouts[] = { { "net", "Net"_t, "Barre latérale étendue, lecteur en bas"_t, false, false },
                           { "compact", "Minimal"_t, "Barre latérale en icônes, lecteur compact : la musique d'abord"_t, true, false },
-                          { "top", "Lecteur en haut"_t, "Barre de lecture en haut, à la Roon"_t, false, true } };
+                          { "top", "Lecteur en haut"_t, "Barre de lecture en haut, comme une console"_t, false, true } };
     const int tw = (r.getWidth() - 32) / 3;
     auto row = r.removeFromTop (juce::jmin (r.getHeight() - 170, 260));
     for (int i = 0; i < 3; ++i)
