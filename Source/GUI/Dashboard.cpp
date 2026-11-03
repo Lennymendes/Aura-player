@@ -45,6 +45,7 @@ void HardwareDashboard::refresh()
 void HardwareDashboard::timerCallback()
 {
     perf::retune (*this, 30, 2);
+    if (! isShowing()) return;              // the settings window is closed: nothing to animate
     const int rate = perf::hz (30, 2);
     phase += 1.0 / rate;
     const bool wasPlaying = playing;

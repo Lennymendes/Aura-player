@@ -37,12 +37,14 @@ public:
         bool catalogue = false;
         bool removable = false;        // lives in the user's folder
         juce::String unavailable;      // DSP library missing...
+        bool suspended = false;        // visual extension switched off by the Streamer / Gaming mode
         int paramCount = 0;
         Theme theme;                   // themes: colours for the mock-up
         PluginManager* renderer = nullptr;
     };
 
     MarketCard (AppContext& c, Data d);
+    bool isToggleEnabled() const { return toggle.isEnabled(); }
     const Data& getData() const noexcept { return data; }
     void paint (juce::Graphics&) override;
     void resized() override;

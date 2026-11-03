@@ -1,5 +1,6 @@
 // NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Streamer / Gaming mode: one global flag read by the interface timers. The audio thread never looks at it.
+// Streamer / Gaming mode: one global flag read by the timers of the *visualisers* (animated background, spectrum,
+// lyrics, previews). The transport (clock, seek bar, buttons), the engine timer and the audio thread never look at it.
 #pragma once
 
 #include <juce_events/juce_events.h>
@@ -16,8 +17,8 @@ inline void setStreamer (bool on) { streamerFlag() = on; }
 inline std::atomic<bool>& backgroundFlag() { static std::atomic<bool> f { false }; return f; }
 inline void setBackground (bool on) { backgroundFlag() = on; }
 
-/** Timer rate for the interface: `normal`, or `low` (a few Hz) in Streamer mode, 1 Hz there when the window is
-    in the background. */
+/** Timer rate for a visualiser: `normal`, or `low` (a few Hz) in Streamer mode, 1 Hz there when the window is
+    in the background. Never use it for the transport. */
 inline int hz (int normal, int low) { return streamer() ? (backgroundFlag().load() ? 1 : low) : normal; }
 
 /** Called at the top of a timerCallback(): switches the timer to the rate of the current mode. */

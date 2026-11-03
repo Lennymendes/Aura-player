@@ -291,6 +291,7 @@ void ImmersiveView::renderField()
 void ImmersiveView::timerCallback()
 {
     perf::retune (*this, 30, 6);
+    if (! isShowing()) return;
     phase += 1.0 / perf::hz (30, 6);
     auto& e = ctx.engine();
     double dur = e.getDurationSeconds();

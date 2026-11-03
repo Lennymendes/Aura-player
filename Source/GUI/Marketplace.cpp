@@ -91,6 +91,12 @@ MarketCard::MarketCard (AppContext& c, Data d)
     addChildComponent (installButton);
     addChildComponent (removeButton);
     toggle.setVisible (showToggle);
+    if (data.suspended)
+    {
+        toggle.setOn (false);
+        toggle.setEnabled (false);
+        setAlpha (0.55f);
+    }
     installButton.setVisible (data.catalogue && ! data.installed);
     removeButton.setVisible (data.removable);
     setRepaintsOnMouseActivity (true);
@@ -203,7 +209,7 @@ void MarketCard::paint (juce::Graphics& g)
     {
         g.setColour (t.bg().withAlpha (0.6f));
         g.fillRect (prev);
-        if (data.renderer != nullptr)
+        if (data.renderer != nullptr && ! data.suspended)
             data.renderer->render (data.id, data.slot, g, prev.reduced (12.0f, 10.0f), true);
     }
     g.restoreState();
@@ -223,7 +229,8 @@ void MarketCard::paint (juce::Graphics& g)
     body.removeFromTop (4);
     g.setColour (t.textCol().withAlpha (0.72f));
     g.setFont (style::font (12.5f));
-    const auto desc = data.unavailable.isNotEmpty() ? "Indisponible : "_t + data.unavailable : data.description;
+    const auto desc = data.suspended ? "Désactivé par le Mode Streamer / Gaming : se réactive quand le mode est coupé."_t
+                    : data.unavailable.isNotEmpty() ? "Indisponible : "_t + data.unavailable : data.description;
     g.drawFittedText (desc, body.removeFromTop (50), juce::Justification::topLeft, 3, 0.9f);
 
     // chip
@@ -427,6 +434,8 @@ void MarketplacePage::build()
                         "ou créez le vôtre : un manifest.json et un plugin.js suffisent (voir docs/PLUGINS.md)."_t;
     }
 
+    if (ctx.isStreamerMode())
+        for (auto& d : list) if (d.kind == MarketCard::Kind::UiPlugin && d.installed) d.suspended = true;
     for (auto& d : list)
     {
         if (! matches (d)) continue;

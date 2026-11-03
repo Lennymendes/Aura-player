@@ -97,8 +97,8 @@ NX_TEST_SECTION (401, "Thèmes .nxtheme : CSS, rechargement à chaud, import / e
     userDir.createDirectory();
     tm.setSearchFolders ({ resources().getChildFile ("Themes"), userDir });
     t.check (tm.getThemeIds().contains ("nx-emerald") && tm.getThemeIds().contains ("aura-neon") && tm.getThemeIds().contains ("glass-rose")
-             && tm.getThemeIds().contains ("ocean-blue") && tm.getThemeIds().contains ("pure-light") && tm.getThemeIds().contains ("solar-amber")
-             && tm.getThemeIds().contains ("cobalt-minimal"), "7 thèmes livrés : "_t + tm.getThemeIds().joinIntoString (", "));
+             && ! tm.getThemeIds().contains ("ocean-blue") && tm.getThemeIds().contains ("pure-light") && tm.getThemeIds().contains ("solar-amber")
+             && tm.getThemeIds().contains ("cobalt-minimal") && tm.getThemeIds().size() == 6, "6 thèmes livrés (Ocean Blue fusionné dans Cobalt Minimal) : "_t + tm.getThemeIds().joinIntoString (", "));
     t.check (tm.apply ("nx-emerald") && tm.current().accent() == juce::Colour (0xff00f5a0) && tm.current().bg() == juce::Colour (0xff0a0c0e),
              "NX Emerald : fond #0A0C0E, accent #00F5A0");
     t.check (tm.findTheme ("aura-neon") != nullptr && tm.findTheme ("aura-neon")->shaderCode.contains ("gl_FragColor"),
@@ -411,6 +411,8 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
 
     nx::AppController::Options opts;
     opts.dataDir = t.tempDir.getChildFile ("appdata301");
+    opts.dataDir.createDirectory();
+    opts.dataDir.getChildFile ("settings.json").replaceWithText (R"({ "theme": "ocean-blue" })");   // a 1.0 beta profile
     opts.resourcesDir = resources();
     opts.createWindow = false;
     auto cap = std::make_unique<nx::CaptureBackend>();
@@ -419,6 +421,9 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     opts.backend = std::move (cap);
     opts.licensePublicKey = licensefixture::publicKey();
     nx::AppController app (std::move (opts));
+    t.check (app.theme().id == "cobalt-minimal" && app.settings().get ("theme").toString() == "cobalt-minimal",
+             "thème Ocean Blue d'un ancien profil : basculé sur Cobalt Minimal"_t);
+    app.applyThemeNow ("nx-emerald");
     {
         // the interface tests below use every Premium feature
         juce::String licenceError;
@@ -688,6 +693,34 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
                  && shoot ("05_theme_" + juce::String (id)) > 20;
         }
         t.check (ok, "thèmes Pure Light, Solar Amber et Cobalt Minimal : appliqués à chaud, texte contrasté"_t);
+        {
+            // hot theme: combo boxes follow at once; NX Remote receives the theme with its exact colours
+            app.applyThemeNow ("pure-light");
+            app.navigate ({ nx::PageId::Albums });
+            settle (100);
+            int combos = 0, wrong = 0;
+            std::function<void (juce::Component&)> scan = [&] (juce::Component& c)
+            {
+                if (auto* cb = dynamic_cast<juce::ComboBox*> (&c); cb != nullptr && cb->isVisible())
+                    for (auto* ch : cb->getChildren())
+                        if (auto* l = dynamic_cast<juce::Label*> (ch)) { ++combos; if (l->findColour (juce::Label::textColourId) != app.theme().textCol()) ++wrong; }
+                for (auto* ch : c.getChildren()) scan (*ch);
+            };
+            scan (*main);
+            const auto st = juce::JSON::parse (app.buildRemoteState());
+            const auto th = st.getProperty ("theme", {});
+            const bool remote = th.getProperty ("id", {}).toString() == "pure-light" && th.getProperty ("bg", {}).toString() == "#F4F5F7"
+                                && th.getProperty ("text", {}).toString() == "#111827" && th.getProperty ("accent", {}).toString() == "#000000"
+                                && (bool) th.getProperty ("isLight", false) && th.getProperty ("surfaceLight", {}).toString().length() == 9
+                                && th.getProperty ("textMuted", {}).toString().startsWith ("#") && th.getProperty ("border", {}).toString().startsWith ("#")
+                                && th.getProperty ("surface", {}).toString() == "#FFFFFF";
+            app.applyThemeNow ("solar-amber");
+            const auto th2 = juce::JSON::parse (app.buildRemoteState()).getProperty ("theme", {});
+            const bool follows = th2.getProperty ("accent", {}).toString() == "#F59E0B" && ! (bool) th2.getProperty ("isLight", true);
+            t.check (combos > 0 && wrong == 0 && remote && follows,
+                     "thème à chaud (listes déroulantes comprises) et thème transmis à NX Remote (couleurs hexadécimales, clair / sombre)"_t
+                     + " [" + juce::String (combos) + "/" + juce::String (wrong) + juce::String ((int) remote) + juce::String ((int) follows) + "]");
+        }
     }
     app.applyThemeNow ("nx-emerald");
 
@@ -744,11 +777,11 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     auto& market = main->getMarketplace();
     app.navigate ({ nx::PageId::Marketplace });
     const int galleryCards = market.getNumCards();
-    t.check (galleryCards >= 7, "Extensions & Thèmes : "_t + juce::String (galleryCards) + " cartes (7 thèmes, plug-ins d'interface et DSP)"_t);
+    t.check (galleryCards >= 7, "Extensions & Thèmes : "_t + juce::String (galleryCards) + " cartes (6 thèmes, plug-ins d'interface et DSP)"_t);
     t.check (shoot ("12_extensions_themes") > 60, "galerie avec aperçus en direct"_t);
     app.navigate ({ nx::PageId::Marketplace, "themes" });
     const int themeCards = market.getNumCards();
-    t.check (themeCards == 7, "onglet Thèmes : "_t + juce::String (themeCards) + " cartes");
+    t.check (themeCards == 6, "onglet Thèmes : "_t + juce::String (themeCards) + " cartes");
     app.navigate ({ nx::PageId::UserPlugins, "catalogue" });
     const int catalogueCards = market.getNumCards();
     t.check (catalogueCards == 5, "Plugins utilisateur › Catalogue : "_t + juce::String (catalogueCards) + " plug-ins en plus (4 interface, 1 DSP)");
@@ -909,7 +942,35 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         app.engine().setSettings (st);
         app.applyEngineSettings();
 
+        bool uiBefore = false;
+        for (auto& p : app.plugins().getUiPlugins()) uiBefore = uiBefore || (p.id == "nx.spectrum" && p.enabled);
         app.setStreamerMode (true);
+        {
+            // visual extensions off for the session, greyed in Extensions & Thèmes; the transport is never throttled
+            bool anyUiOn = false;
+            for (auto& p : app.plugins().getUiPlugins()) anyUiOn = anyUiOn || p.enabled;
+            app.navigate ({ nx::PageId::Marketplace, "interface" });
+            settle (100);
+            int greyed = 0, uiCards = 0;
+            for (auto* c : main->getMarketplace().content().getChildren())
+                if (auto* card = dynamic_cast<nx::MarketCard*> (c); card != nullptr && card->getData().kind == nx::MarketCard::Kind::UiPlugin)
+                {
+                    ++uiCards;
+                    if (card->getData().suspended && ! card->isToggleEnabled() && card->getAlpha() < 0.9f) ++greyed;
+                }
+            shoot ("16e_extensions_mode_streamer");
+            nx::perf::setBackground (true);
+            app.tickForTests();
+            const bool clockFluid = main->player.getClockIntervalMs() <= 34 && app.getTickIntervalMs() <= 67;
+            nx::perf::setBackground (false);
+            // OBS export: queued in a few microseconds, written by the worker thread
+            const double t0 = juce::Time::getMillisecondCounterHiRes();
+            app.exportNowPlaying();
+            const double queued = juce::Time::getMillisecondCounterHiRes() - t0;
+            t.check (uiBefore && ! anyUiOn && uiCards > 0 && greyed == uiCards && clockFluid && queued < 5.0,
+                     "mode Streamer : extensions visuelles coupées et grisées, horloge et contrôles jamais bridés, export OBS hors du fil principal"_t
+                     + " [" + juce::String (greyed) + "/" + juce::String (uiCards) + ", " + juce::String (queued, 2) + " ms]");
+        }
         nx::perf::setBackground (false);
         t.check (app.isStreamerMode() && (bool) app.settings().get ("streamerMode", false) && main->streamerButton.active
                  && nx::perf::hz (30, 4) == 4, "mode Streamer : activé, enregistré, bouton allumé, timers ralentis"_t);
@@ -951,6 +1012,11 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         }
         app.setStreamerMode (false);
         nx::perf::setBackground (false);
+        {
+            bool restored = false;
+            for (auto& p : app.plugins().getUiPlugins()) restored = restored || (p.id == "nx.spectrum" && p.enabled);
+            t.check (restored && app.settings().get ("streamerSuspendedUi").isVoid(), "mode Streamer coupé : extensions visuelles restaurées"_t);
+        }
         t.check (! app.isStreamerMode() && nx::perf::hz (30, 4) == 30, "mode Streamer : désactivé, cadence normale"_t);
     }
     // A-B loop markers on the seek bar

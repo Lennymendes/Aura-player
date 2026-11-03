@@ -123,10 +123,15 @@ AppController::AppController (Options options)
     themeManager.onThemeChanged = [this] (const Theme& t)
     {
         lookAndFeel.applyTheme (t);
+        // lookAndFeelChanged() everywhere: combo boxes, text fields and labels copy their colours at that moment
+        if (mainWindow) mainWindow->sendLookAndFeelChange();
+        else if (auto* m = getMainComponent()) m->sendLookAndFeelChange();
+        for (juce::Component* w : { (juce::Component*) miniWindow.get(), (juce::Component*) overlayWindow.get() })
+            if (w != nullptr) { w->sendLookAndFeelChange(); w->repaint(); }
         if (auto* m = getMainComponent()) m->themeChanged();
-        if (miniWindow) miniWindow->repaint();
         if (mainWindow) mainWindow->setBackgroundColour (t.bg());
     };
+    if (appSettings.get ("theme").toString() == "ocean-blue") appSettings.set ("theme", "cobalt-minimal");   // merged in 1.0
     if (! themeManager.apply (appSettings.get ("theme", "nx-emerald").toString()))
         themeManager.apply ("nx-emerald");
     lookAndFeel.applyTheme (themeManager.current());
@@ -511,21 +516,7 @@ void AppController::applyThemeNow (const juce::String& id)
 void AppController::applyTheme (const juce::String& id)
 {
     if (themeManager.findTheme (id) == nullptr) return;
-    appSettings.set ("theme", id);                       // read at the next launch
-    if (id == themeManager.current().id || mainWindow == nullptr || restartPromptOpen) return;
-
-    restartPromptOpen = true;
-    std::weak_ptr<int> weak = alive;
-    const auto options = juce::MessageBoxOptions().withIconType (juce::MessageBoxIconType::QuestionIcon)
-                             .withTitle ("Thème modifié"_t)
-                             .withMessage ("Le nouveau thème sera appliqué au prochain démarrage de NX Player. Redémarrer maintenant ?"_t)
-                             .withButton ("Redémarrer maintenant"_t).withButton ("Plus tard"_t);
-    juce::AlertWindow::showAsync (options, [this, weak] (int result)
-    {
-        if (weak.expired()) return;
-        restartPromptOpen = false;
-        if (result == 1) restartApplication();           // first button
-    });
+    applyThemeNow (id);                                    // hot: every component follows at once (no restart)
 }
 
 void AppController::restartApplication()
@@ -730,6 +721,24 @@ void AppController::setNowPlayingOverlay (bool show)
 
 bool AppController::isNowPlayingOverlayVisible() { return overlayWindow != nullptr && overlayWindow->isVisible(); }
 
+void AppController::exportNowPlaying()
+{
+    if (! perf::streamer()) { exportedNowPlaying = {}; return; }
+    // OBS files: only when the track or its artwork changes, written on a worker thread (never here, never on the
+    // audio thread). The cover comes from the artwork cache (already decoded in the background).
+    const auto* t = currentTrack();
+    const auto cover = t != nullptr ? artworkCache->get (t->artworkKey, 600) : juce::Image();
+    const auto key = t != nullptr ? juce::String (t->id) + "|" + t->title + "|" + (cover.isValid() ? t->artworkKey : juce::String()) : juce::String ("-");
+    if (key == exportedNowPlaying) return;
+    exportedNowPlaying = key;
+    std::optional<TrackInfo> track;
+    if (t != nullptr) track = *t;
+    const auto dir = dataDir;
+    const auto image = cover.isValid() ? cover.createCopy() : juce::Image();
+    obsWriter.removeAllJobs (false, 0);                   // only the latest track matters
+    obsWriter.addJob ([dir, track, image] { writeNowPlayingFiles (dir, track ? &*track : nullptr, image); });
+}
+
 bool AppController::writeNowPlayingFiles (const juce::File& dir, const TrackInfo* t, const juce::Image& cover)
 {
     juce::String line;
@@ -853,28 +862,19 @@ void AppController::loadLyrics (const TrackInfo& t)
 
 void AppController::timerCallback()
 {
-    perf::retune (*this, 30, 8);
+    // A fixed rate: this timer serves the transport, NX Remote and the OS media keys (never 1 Hz).
+    if (const int interval = perf::streamer() ? 1000 / 15 : 1000 / 30; getTimerInterval() != interval) startTimer (interval);
     const double now = juce::Time::getMillisecondCounterHiRes() / 1000.0;
     const double dt = juce::jlimit (0.001, 0.2, now - lastFrame);
     lastFrame = now;
     const bool playing = eng->getState() == PlaybackEngine::State::Playing;
-    audioAnalyzer->update (dt, playing);
+    const bool visualisers = ! perf::streamer();          // Streamer mode: no FFT / VU for visualisers that are off
+    if (visualisers) audioAnalyzer->update (dt, playing);
 
     pluginManager.setState ("time", now);
     perf::setBackground (mainWindow != nullptr && ! juce::Process::isForegroundProcess());
-    if (perf::streamer())
-    {
-        // OBS files, written again only when the track or its artwork changes
-        const auto* t = currentTrack();
-        const auto cover = t != nullptr ? artworkCache->get (t->artworkKey, 600) : juce::Image();
-        const auto key = t != nullptr ? juce::String (t->id) + "|" + t->title + "|" + (cover.isValid() ? t->artworkKey : juce::String()) : juce::String ("-");
-        if (key != exportedNowPlaying)
-        {
-            exportedNowPlaying = key;
-            writeNowPlayingFiles (dataDir, t, cover);
-        }
-    }
-    else exportedNowPlaying = {};
+    appActivity.setPlaying (playing);
+    exportNowPlaying();
     updateSystemNowPlaying (false);
     sleepBlocker.setActive (playing && (bool) appSettings.get ("preventSleep", true));
     if (remoteServer->isRunning() && now - lastRemoteState > 0.25)
@@ -882,7 +882,7 @@ void AppController::timerCallback()
         lastRemoteState = now;
         remoteServer->setState (buildRemoteState());
     }
-    pluginManager.setState ("audio", audioAnalyzer->toVar());
+    if (visualisers) pluginManager.setState ("audio", audioAnalyzer->toVar());
     auto* player = new juce::DynamicObject();
     if (const auto* t = currentTrack())
     {
@@ -1009,7 +1009,23 @@ bool AppController::handleShortcutKey (const juce::KeyPress& k)
 
 void AppController::setStreamerMode (bool on)
 {
-    perf::setStreamer (on);
+    if (on == perf::streamer() && on == (bool) appSettings.get ("streamerMode", false)) return;
+    if (on)
+    {
+        // visual extensions off for the session, their state kept to be restored afterwards
+        juce::Array<juce::var> suspended;
+        for (auto& p : pluginManager.getUiPlugins()) if (p.enabled) suspended.add (p.id);
+        appSettings.set ("streamerSuspendedUi", suspended);
+        perf::setStreamer (true);
+        for (auto& p : suspended) pluginManager.setUiPluginEnabled (p.toString(), false);
+    }
+    else
+    {
+        perf::setStreamer (false);
+        if (auto* list = appSettings.get ("streamerSuspendedUi").getArray())
+            for (auto& id : *list) pluginManager.setUiPluginEnabled (id.toString(), true);
+        appSettings.set ("streamerSuspendedUi", juce::var());
+    }
     appSettings.set ("streamerMode", on);
     if (auto* m = getMainComponent())
     {
@@ -1096,6 +1112,33 @@ juce::MemoryBlock AppController::remoteArtwork (const juce::String& requested, i
     return jpg;
 }
 
+juce::var AppController::remoteTheme (const Theme& th)
+{
+    // "#RRGGBB", or "#RRGGBBAA" for translucent colours (CSS reads both)
+    auto hex = [] (juce::Colour c)
+    {
+        auto s = "#" + c.toDisplayString (false);
+        if (c.getAlpha() < 255) s << juce::String::toHexString ((int) c.getAlpha()).paddedLeft ('0', 2).toUpperCase();
+        return s;
+    };
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("id", th.id);
+    o->setProperty ("name", th.name);
+    o->setProperty ("bg", hex (th.bg()));
+    o->setProperty ("bg2", hex (th.colour ("--nx-bg-2", th.bg())));
+    o->setProperty ("surface", hex (th.surface()));
+    o->setProperty ("surfaceLight", hex (th.glassTint()));
+    o->setProperty ("text", hex (th.textCol()));
+    o->setProperty ("textMuted", hex (th.textDim()));
+    o->setProperty ("accent", hex (th.accent()));
+    o->setProperty ("accent2", hex (th.accent2()));
+    o->setProperty ("onAccent", hex (th.colour ("--nx-on-accent", juce::Colours::black)));
+    o->setProperty ("border", hex (th.border()));
+    o->setProperty ("bitPerfect", hex (th.colour ("--nx-quality-bitperfect", juce::Colour (0xffb07cff))));
+    o->setProperty ("isLight", th.bg().getPerceivedBrightness() > 0.6f);
+    return juce::var (o);
+}
+
 juce::String AppController::buildRemoteState()
 {
     auto* o = new juce::DynamicObject();
@@ -1136,6 +1179,7 @@ juce::String AppController::buildRemoteState()
     o->setProperty ("profiles", profiles);
     o->setProperty ("profile", family == DeviceFamily::None ? -1 : familyCurrentProfile (settings, family));
     o->setProperty ("studio", studio->anyActive() ? studio->describe() : juce::String());
+    o->setProperty ("theme", remoteTheme (theme()));
     return juce::JSON::toString (juce::var (o), true);
 }
 

@@ -31,6 +31,18 @@ private:
     std::unique_ptr<Impl> impl;
 };
 
+/** macOS: while music plays, an NSProcessInfo "latency critical" activity keeps App Nap and timer coalescing away
+    from the decoder thread and the interface (a game in front, NX Player hidden). Other systems: nothing to do. */
+class PlaybackActivity
+{
+public:
+    ~PlaybackActivity() { setPlaying (false); }
+    void setPlaying (bool playing);
+    bool isHeld() const noexcept { return token != nullptr; }
+private:
+    void* token = nullptr;
+};
+
 /** Keeps the computer awake while audio plays (the display may still sleep). */
 class SleepBlocker
 {

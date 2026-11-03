@@ -36,6 +36,8 @@ public:
     /** Shuffle / repeat buttons follow the engine (also changed by a "shuffle the collection" or the phone). */
     void syncTransportButtons();
     void refreshPlugins() { pluginSlot.refreshPlugins(); resized(); }
+    /** Refresh period of the clock / seek bar (tests: never throttled). */
+    int getClockIntervalMs() const { return getTimerInterval(); }
 
     // A-B loop (button, keys I / O / L, markers on the seek bar)
     /** Keyboard shortcuts: volume ± (slider position, 0..1) and mute / unmute (back to the previous level). */

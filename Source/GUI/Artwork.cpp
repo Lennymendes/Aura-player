@@ -3,6 +3,8 @@
 #include "../Library/Library.h"
 #include "../Core/ImageDecode.h"
 #include <juce_cryptography/juce_cryptography.h>
+#include <map>
+#include <mutex>
 
 namespace nx
 {
@@ -101,6 +103,23 @@ namespace imaging
     }
 
     juce::Image placeholder (const juce::String& text, int size, juce::Colour a, juce::Colour b)
+    {
+        // drawn once per (text, size, colours): grids and rows call this from paint()
+        static std::mutex cacheLock;
+        static std::map<juce::String, juce::Image> cache;
+        const auto key = text + "|" + juce::String (size) + "|" + a.toString() + b.toString();
+        {
+            std::lock_guard<std::mutex> l (cacheLock);
+            if (auto it = cache.find (key); it != cache.end()) return it->second;
+        }
+        auto img = renderPlaceholder (text, size, a, b);
+        std::lock_guard<std::mutex> l (cacheLock);
+        if (cache.size() > 512) cache.clear();
+        cache[key] = img;
+        return img;
+    }
+
+    juce::Image renderPlaceholder (const juce::String& text, int size, juce::Colour a, juce::Colour b)
     {
         juce::Image img (juce::Image::ARGB, size, size, true);
         juce::Graphics g (img);

@@ -24,6 +24,7 @@ namespace imaging
     juce::Image coverFit (const juce::Image& src, int w, int h);
     /** Placeholder artwork: gradient from a hash of the text + initials. */
     juce::Image placeholder (const juce::String& text, int size, juce::Colour a, juce::Colour b);
+    juce::Image renderPlaceholder (const juce::String& text, int size, juce::Colour a, juce::Colour b);   // uncached
 }
 
 class ArtworkCache : public juce::ChangeBroadcaster

@@ -367,7 +367,7 @@ void PlayerBar::stateChanged()
 
 void PlayerBar::timerCallback()
 {
-    perf::retune (*this, 30, 4);
+    // transport, clock and seek bar: never throttled (Streamer mode only calms the visualisers)
     syncTransportButtons();
     const auto& e = ctx.engine();
     double dur = e.getDurationSeconds();

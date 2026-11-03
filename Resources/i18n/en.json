@@ -520,12 +520,9 @@
  "Infos techniques (DSD / DXD, chemin du signal)": "Technical info (DSD / DXD, signal path)",
  "Aucun morceau à lire": "No tracks to play",
  "Forme d'onde à la place de la barre de progression": "Waveform instead of the progress bar",
- "Le nouveau thème sera appliqué au prochain démarrage de NX Player. Redémarrer maintenant ?": "The new theme will be applied the next time NX Player starts. Restart now?",
  "Local": "Local",
  "Plus tard": "Later",
  "Redémarrage automatique impossible : relancez NX Player manuellement.": "Automatic restart failed: please relaunch NX Player manually.",
- "Redémarrer maintenant": "Restart now",
- "Thème modifié": "Theme changed",
  "Volume Fixe / DoP": "Fixed Volume / DoP",
  "Volume Fixe": "Fixed Volume",
  "Volume fixe en DoP : le flux DSD est transmis tel quel, réglez le niveau en analogique.": "Fixed volume in DoP: the DSD stream is sent untouched, set the level on the analogue side.",
@@ -839,5 +836,10 @@
  "vue liste : pochettes opaques et nettes (": "list view: opaque, sharp artwork (",
  "navigation : Cmd/Ctrl + [ ], Alt + flèches, Retour arrière, boutons souris 4 / 5, Cmd/Ctrl + B (barre latérale)": "navigation: Cmd/Ctrl + [ ], Alt + arrows, Backspace, mouse buttons 4 / 5, Cmd/Ctrl + B (sidebar)",
  "thèmes Pure Light, Solar Amber et Cobalt Minimal : appliqués à chaud, texte contrasté": "Pure Light, Solar Amber and Cobalt Minimal themes: applied live, contrasted text",
- "mode Streamer : 1 image / s en arrière-plan, now_playing.txt + pochette JPEG pour OBS, overlay « Now Playing »": "Streamer mode: 1 frame / s in the background, now_playing.txt + JPEG artwork for OBS, “Now Playing” overlay"
+ "mode Streamer : 1 image / s en arrière-plan, now_playing.txt + pochette JPEG pour OBS, overlay « Now Playing »": "Streamer mode: 1 frame / s in the background, now_playing.txt + JPEG artwork for OBS, “Now Playing” overlay",
+ "Désactivé par le Mode Streamer / Gaming : se réactive quand le mode est coupé.": "Turned off by Streamer / Gaming mode: back on when the mode is turned off.",
+ "thème Ocean Blue d'un ancien profil : basculé sur Cobalt Minimal": "Ocean Blue theme from an older profile: switched to Cobalt Minimal",
+ "mode Streamer : extensions visuelles coupées et grisées, horloge et contrôles jamais bridés, export OBS hors du fil principal": "Streamer mode: visual extensions off and greyed, clock and controls never throttled, OBS export off the main thread",
+ "mode Streamer coupé : extensions visuelles restaurées": "Streamer mode off: visual extensions restored",
+ "thème à chaud (listes déroulantes comprises) et thème transmis à NX Remote (couleurs hexadécimales, clair / sombre)": "live theme (combo boxes included) and theme sent to NX Remote (hex colours, light / dark)"
 }

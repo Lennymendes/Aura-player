@@ -138,7 +138,7 @@ void LyricsView::layoutLines()
 void LyricsView::timerCallback()
 {
     perf::retune (*this, 60, 10);
-    if (! isVisible() || getWidth() <= 0) return;
+    if (! isShowing() || getWidth() <= 0) return;
     const double now = juce::Time::getMillisecondCounterHiRes() / 1000.0;
     if (lyrics.synced && ! lineBounds.empty())
     {

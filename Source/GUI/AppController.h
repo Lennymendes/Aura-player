@@ -80,6 +80,11 @@ public:
     bool isNowPlayingOverlayVisible() override;
     /** Streamer mode: now_playing.txt ("Artiste — Titre") and now_playing_cover.jpg in `dir` (empty text when stopped). */
     static bool writeNowPlayingFiles (const juce::File& dir, const TrackInfo* track, const juce::Image& cover);
+    /** Message thread, from the timer: queues the OBS files when the track / artwork changed (returns at once). */
+    void exportNowPlaying();
+    bool isExportingNowPlaying() const { return obsWriter.getNumJobs() > 0; }
+    int getTickIntervalMs() const { return getTimerInterval(); }
+    void tickForTests() { timerCallback(); }
     OverlayWindow* getOverlayWindow() { return overlayWindow.get(); }
     void setShuffle (bool on) override;
     void setRepeat (PlaybackEngine::Repeat mode) override;
@@ -135,6 +140,8 @@ public:
     /** Remote commands (also used by the tests). Message thread. */
     void handleRemoteCommand (const juce::String& command, const juce::StringPairArray& params);
     juce::String buildRemoteState();
+    /** The active theme for NX Remote: id, name and exact colours (hex), isLight. */
+    static juce::var remoteTheme (const Theme& theme);
     juce::String buildRemoteLibrary (const juce::StringPairArray& params);
     /** Cover for the phone: baseline RGB JPEG, at most maxSize x maxSize; key = artwork key or "track:<id>". Empty = none. */
     juce::MemoryBlock remoteArtwork (const juce::String& key, int maxSize);
@@ -186,6 +193,8 @@ private:
     std::unique_ptr<MiniWindow> miniWindow;
     std::unique_ptr<OverlayWindow> overlayWindow;
     juce::String exportedNowPlaying;        // what the OBS files hold ("" = not written yet)
+    juce::ThreadPool obsWriter { 1 };        // writes now_playing.txt / .jpg
+    PlaybackActivity appActivity;           // macOS: no App Nap / timer coalescing while music plays
     std::unique_ptr<MainComponent> headlessMain;   // tests without a window
     std::unique_ptr<LicenseManager> licenseManager;
     std::unique_ptr<UpdateChecker> updateChecker;
@@ -200,7 +209,6 @@ private:
     std::vector<TrackInfo> queueTracks;            // parallel to the engine queue
     TrackInfo externalTrack;                        // Spotify / YouTube hand-off
     bool externalPlaying = false;
-    bool restartPromptOpen = false;
     // Endless shuffle: shuffled passes over the whole collection, queued a chunk at a time.
     juce::String shuffleScope;                      // empty = no endless shuffle running
     std::vector<TrackInfo> shufflePass;             // current pass, already shuffled
