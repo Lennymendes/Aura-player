@@ -367,6 +367,8 @@ NX_TEST_SECTION (404, "Édition Free / Premium : clés de licence Ed25519, mises
                  "vérification en tâche de fond (fichier version.json) : mise à jour 1.2.0 trouvée ; source absente = échec propre"_t);
         const auto repoFile = juce::File (__FILE__).getParentDirectory().getParentDirectory().getChildFile ("version.json");
         nx::UpdateInfo repo;
+        t.check (juce::String (U::defaultUrl) == "https://raw.githubusercontent.com/Lennymendes/nx-audio-releases/main/version.json",
+                 "mises à jour : version.json lu dans le dépôt public nx-audio-releases (fichier brut)"_t);
         t.check (! repoFile.existsAsFile() || (U::parse (repoFile.loadFileAsString(), repo, err) && U::compareVersions (repo.latestVersion, NX_VERSION) == 0),
                  "version.json du dépôt : lisible, version = celle de l'application"_t);
     }

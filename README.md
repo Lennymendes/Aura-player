@@ -292,7 +292,8 @@ Thèmes : `docs/THEMES.md`. Plug-ins : `docs/PLUGINS.md`.
 
 1. Changer la version dans `CMakeLists.txt` (`project(NXPlayer VERSION 1.0.1 ...)`), committer, puis créer le tag
    `v1.0.1` : la CI compile macOS / Windows / Linux et publie les archives dans une Release GitHub.
-2. Une fois les archives en ligne, modifier `version.json` à la racine du dépôt :
+2. Une fois les archives en ligne, modifier `version.json` dans le dépôt public `Lennymendes/nx-audio-releases`
+   (NX Player le lit sur https://raw.githubusercontent.com/Lennymendes/nx-audio-releases/main/version.json) :
    ```json
    {
      "latestVersion": "1.0.1",

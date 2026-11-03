@@ -1,6 +1,6 @@
 // NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Update check, the same for Free and Premium (one binary; the licence stays in the settings across updates).
-// Reads a small JSON file (default: version.json at the root of the GitHub repository):
+// Reads a small JSON file (default: version.json of the public repository Lennymendes/nx-audio-releases):
 //   { "latestVersion": "1.1.0", "releaseNotes": ["line", "line"] or "text", "releaseNotesEn": [...] (optional),
 //     "downloadUrlMac": "...", "downloadUrlWin": "...", "downloadUrlLinux": "...", "mandatory": false }
 // The download itself is left to the browser (the installer for the right OS).
@@ -25,7 +25,7 @@ struct UpdateInfo
 class UpdateChecker
 {
 public:
-    static constexpr const char* defaultUrl = "https://raw.githubusercontent.com/Lennymendes/NX-Player/main/version.json";
+    static constexpr const char* defaultUrl = "https://raw.githubusercontent.com/Lennymendes/nx-audio-releases/main/version.json";
 
     enum class State { Idle, Checking, UpToDate, Available, Failed };
     struct Status
