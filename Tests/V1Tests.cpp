@@ -552,6 +552,9 @@ NX_TEST_SECTION (501, "NX Remote (HTTP, jeton, QR code), pont AuraEngine X, syst
     t.check (page.body.contains ("classList.add('ok')") && page.body.contains (".ph img { display:block") && page.body.contains ("visibility:hidden"),
              "pochette web : image cachée tant qu'elle n'est pas chargée (jamais d'icône cassée)"_t);
     t.check (page.body.contains ("state.volumeFixed") && page.body.contains ("Volume Fixe / DoP"), "volume web : grisé et « Volume Fixe / DoP » en DoP"_t);
+    t.check (page.body.contains ("Point A pos") && page.body.contains ("Boucle active") && page.body.contains ("loopPendingA"),
+             "boucle A-B web : confirmation écrite (point A posé, boucle active avec les temps)"_t);
+    t.check (page.body.contains ("dataset.retry"), "pochette web : un nouvel essai si le chargement échoue"_t);
     const auto denied = nx::httpRequest ("GET", juce::URL (base + "/api/state?k=wrong"));
     t.check (denied.status == 403, "sans le jeton du QR code : 403"_t);
     const auto st = nx::httpRequest ("GET", juce::URL (base + "/api/state?k=" + token));

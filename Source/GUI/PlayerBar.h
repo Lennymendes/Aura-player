@@ -45,6 +45,7 @@ public:
     void toggleMute();
     double getVolumePosition() const { return volume.getValue(); }
     void markLoopA();
+    double getPendingLoopA() const noexcept { return pendingLoopA; }
     void markLoopB();
     void clearLoop();
 

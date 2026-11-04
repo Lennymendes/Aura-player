@@ -2,6 +2,8 @@
 // Owns every service and the windows; implements AppContext for the interface.
 #pragma once
 
+#include <set>
+
 #include <optional>
 #include "../Core/LicenseManager.h"
 #include "../Core/UpdateChecker.h"
@@ -200,6 +202,8 @@ private:
     std::unique_ptr<RemoteServer> remoteServer;
     std::mutex remoteArtLock;
     std::vector<std::pair<juce::String, juce::MemoryBlock>> remoteArtCache;
+    std::set<juce::String> remoteHttpArt;       // online covers handed to the phone: the only URLs /api/art will fetch
+    juce::String remoteArtKey (const juce::String& key);
     std::shared_ptr<StudioToolsState> studio = std::make_shared<StudioToolsState>();
     std::unique_ptr<TrackAnalyzer> trackScan = std::make_unique<TrackAnalyzer>();   // outlives the windows (listeners)
     juce::String analysisPath;                     // local file of the current track

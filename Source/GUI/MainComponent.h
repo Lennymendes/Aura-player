@@ -86,6 +86,7 @@ public:
     void trackChanged();
     void stateChanged();
     void themeChanged();
+    void rebuildPagesLater();
     void pluginsChanged();
     void showMessage (const juce::String& text) { placeToast(); toast.show (text); }
     void setLyrics (const Lyrics& l, const juce::String& status) { nowPlaying.setLyrics (l, status); immersive.setLyrics (l, status); }

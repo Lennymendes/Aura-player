@@ -82,6 +82,7 @@ public:
     bool removeUserPlugin (const juce::String& id, juce::String& error);
     PluginManager& getCatalogue() { return *catalogue; }
     int getNumCards() const { return cards.size(); }
+    MarketCard* getCard (int i) const { return cards[i]; }
 
 private:
     void timerCallback() override;

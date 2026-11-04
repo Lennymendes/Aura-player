@@ -853,10 +853,22 @@ void MainComponent::themeChanged()
     background.themeChanged();
     resized();
     for (auto* p : std::initializer_list<juce::Component*> { &listing, &sourcePage }) p->resized();
-    if (settingsWindow.isVisible()) settingsWindow.refresh();
-    if (immersive.isVisible()) immersive.refreshConfig();
-    if (current.page == PageId::Marketplace || current.page == PageId::UserPlugins) marketplace.refresh();
+    rebuildPagesLater();
     repaint();
+}
+
+void MainComponent::rebuildPagesLater()
+{
+    // Async: the change usually comes from a control on one of these pages (theme switch, theme combo, accent dot);
+    // rebuilding them now would delete that control inside its own callback (use after free, the theme crash).
+    juce::Component::SafePointer<MainComponent> safe (this);
+    juce::MessageManager::callAsync ([safe]
+    {
+        if (safe == nullptr) return;
+        if (safe->settingsWindow.isVisible()) safe->settingsWindow.refresh();
+        if (safe->immersive.isVisible()) safe->immersive.refreshConfig();
+        if (safe->current.page == PageId::Marketplace || safe->current.page == PageId::UserPlugins) safe->marketplace.refresh();
+    });
 }
 
 void MainComponent::pluginsChanged()
@@ -866,9 +878,7 @@ void MainComponent::pluginsChanged()
     nowPlaying.refreshPlugins();
     homeSlot->refreshPlugins();
     if (current.page == PageId::Home) listing.refresh();
-    if (settingsWindow.isVisible()) settingsWindow.refresh();
-    if (immersive.isVisible()) immersive.refreshConfig();
-    if (current.page == PageId::Marketplace || current.page == PageId::UserPlugins) marketplace.refresh();
+    rebuildPagesLater();
 }
 
 void MainComponent::timerCallback()

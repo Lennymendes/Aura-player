@@ -1280,6 +1280,12 @@ juce::MemoryBlock AppController::remoteArtwork (const juce::String& requested, i
         }
     }
     if (key.isEmpty()) return {};
+    if (key.startsWith ("http") && ! requested.startsWith ("track:"))
+    {
+        // never an open proxy: only the covers of the library that the app itself sent to the phone
+        std::lock_guard<std::mutex> l (remoteArtLock);
+        if (remoteHttpArt.count (key) == 0) return {};
+    }
     const auto id = key + "@" + juce::String (maxSize);
     {
         std::lock_guard<std::mutex> l (remoteArtLock);
@@ -1298,6 +1304,18 @@ juce::MemoryBlock AppController::remoteArtwork (const juce::String& requested, i
     remoteArtCache.emplace_back (id, jpg);
     if (remoteArtCache.size() > 120) remoteArtCache.erase (remoteArtCache.begin());
     return jpg;
+}
+
+juce::String AppController::remoteArtKey (const juce::String& key)
+{
+    // Online covers (http) used to be left out, so those albums never had a picture on the phone.
+    if (key.startsWith ("http"))
+    {
+        std::lock_guard<std::mutex> l (remoteArtLock);
+        if (remoteHttpArt.size() > 5000) remoteHttpArt.clear();
+        remoteHttpArt.insert (key);
+    }
+    return key;
 }
 
 juce::var AppController::remoteTheme (const Theme& th)
@@ -1336,7 +1354,7 @@ juce::String AppController::buildRemoteState()
         o->setProperty ("title", t->title);
         o->setProperty ("artist", t->displayArtist());
         o->setProperty ("album", t->album);
-        o->setProperty ("art", t->artworkKey.startsWith ("http") ? juce::String() : t->artworkKey);
+        o->setProperty ("art", remoteArtKey (t->artworkKey));
         o->setProperty ("id", t->id);
         o->setProperty ("artV", juce::String (t->id) + "-" + t->artworkKey.substring (0, 12));   // cache-buster: changes with the track / cover
         o->setProperty ("format", t->resolutionBadge());
@@ -1350,11 +1368,13 @@ juce::String AppController::buildRemoteState()
         // same rule as the player bar: DoP is a bit-exact carrier, the volume is held at 100 %
         const bool dop = t != nullptr && ! eng->getSignalPath().nodes.empty() && eng->getCurrentPlan().wire == WireFormat::DoP;
         o->setProperty ("dop", dop);
-        o->setProperty ("volumeFixed", dop || eng->isFixedVolume());
+        // not isFixedVolume(): that is also "100 % = bit-perfect", which locked the phone slider at 100 % in PCM / DXD
+        o->setProperty ("volumeFixed", dop || eng->isVolumeLockedByProfile());
     }
     o->setProperty ("loop", eng->isLoopActive());
     o->setProperty ("loopA", eng->getLoopA());
     o->setProperty ("loopB", eng->getLoopB());
+    if (auto* m = getMainComponent()) o->setProperty ("loopPendingA", m->player.getPendingLoopA());   // A set, waiting for B
     const auto path = eng->getSignalPath();
     o->setProperty ("path", path.nodes.empty() ? juce::String() : pipelineLabel (eng->getCurrentPlan(), toString (path.overall)));
     o->setProperty ("quality", path.nodes.empty() ? juce::String() : toString (path.overall));
@@ -1383,7 +1403,7 @@ juce::String AppController::buildRemoteLibrary (const juce::StringPairArray& par
             auto* x = new juce::DynamicObject();
             x->setProperty ("title", a.title);
             x->setProperty ("artist", a.artist);
-            x->setProperty ("art", a.artworkKey.startsWith ("http") ? juce::String() : a.artworkKey);
+            x->setProperty ("art", remoteArtKey (a.artworkKey));
             x->setProperty ("badge", a.badge());
             albums.add (juce::var (x));
         }
@@ -1400,7 +1420,7 @@ juce::String AppController::buildRemoteLibrary (const juce::StringPairArray& par
             x->setProperty ("artist", tr.displayArtist());
             x->setProperty ("album", tr.album);
             x->setProperty ("badge", tr.resolutionBadge());
-            x->setProperty ("art", tr.artworkKey.startsWith ("http") ? juce::String() : tr.artworkKey);
+            x->setProperty ("art", remoteArtKey (tr.artworkKey));
             tracks.add (juce::var (x));
         }
         o->setProperty ("tracks", tracks);

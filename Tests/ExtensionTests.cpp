@@ -809,6 +809,19 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         app.navigate ({ nx::PageId::Marketplace, "themes" });
         const bool listed = market.getNumCards() == 12;
         shoot ("52_themes_importes");
+        {
+            // crash regression: switching a theme on from its card used to rebuild the cards inside the switch's own
+            // callback (use after free). The card must outlive its callback; the gallery is rebuilt afterwards.
+            nx::MarketCard* card = nullptr;
+            for (int i = 0; i < market.getNumCards(); ++i)
+                if (auto* c = market.getCard (i); c->getData().id == "cobalt-minimal") card = c;
+            juce::Component::SafePointer<nx::MarketCard> alive (card);
+            if (card != nullptr) card->onToggle (true);
+            const bool survived = alive != nullptr && app.theme().id == "cobalt-minimal";
+            settle (150);
+            t.check (card != nullptr && survived && alive == nullptr && market.getNumCards() == 12,
+                     "thème activé depuis sa carte : pas de plantage (cartes reconstruites après le clic, pas pendant)"_t);
+        }
         // a shared file can never replace a built-in theme; unsafe content is refused
         const auto fake = t.tempDir.getChildFile ("fake_emerald.json");
         fake.replaceWithText (R"({ "nxtheme": 1, "id": "nx-emerald", "name": "Faux", "variables": { "--nx-bg": "#FF0000", "--nx-accent": "#00FF00" } })");
@@ -1393,6 +1406,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
                  && streamer && ! app.isStreamerMode(),
                  "raccourcis actifs : aléatoire, répéter, volume +/−, muet puis retour au niveau, mode Streamer"_t);
         main->player.stepVolume (1.0);
+        settle (50);   // the settings page is rebuilt after a theme / extensions change (asynchronously)
 
         // reassign from the settings: click a row, press the new keys; a key already used is refused; reset
         juce::Component* muteRow = nullptr;
@@ -1457,6 +1471,15 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         const auto state = juce::JSON::parse (app.buildRemoteState());
         t.check (state.getProperty ("family", {}).toString() == "merging" && state.getProperty ("profiles", {}).size() == 3,
                  "état NX Remote : morceau, volume, profils Anubis ("_t + state.getProperty ("device", {}).toString() + ")");
+        {
+            // A / B from the phone: point A is reported as soon as it is set (the page shows "Point A posé à…")
+            juce::StringPairArray none;
+            app.handleRemoteCommand ("loopA", none);
+            const double pending = (double) juce::JSON::parse (app.buildRemoteState()).getProperty ("loopPendingA", -1.0);
+            app.handleRemoteCommand ("loopClear", none);
+            const double cleared = (double) juce::JSON::parse (app.buildRemoteState()).getProperty ("loopPendingA", 0.0);
+            t.check (pending >= 0.0 && cleared < 0.0, "NX Remote A-B : point A transmis au téléphone dès qu'il est posé, effacé par Arrêt"_t);
+        }
         juce::StringPairArray p;
         p.set ("v", "0.5");
         // the volume slider is greyed (and the command ignored) while the previous track still holds a fixed volume:
@@ -1482,8 +1505,9 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         {
             const auto st = juce::JSON::parse (app.buildRemoteState());
             const bool dopNow = app.engine().getCurrentPlan().wire == nx::WireFormat::DoP;
-            t.check ((bool) st.getProperty ("volumeFixed", false) == app.engine().isFixedVolume() || (dopNow && (bool) st.getProperty ("volumeFixed", false)),
-                     "état NX Remote : volume fixe (DoP / bit-perfect) transmis au téléphone"_t);
+            // 100 % bit-perfect is not a lock: in PCM / DXD the phone keeps its slider (it used to stay stuck at 100 %)
+            t.check ((bool) st.getProperty ("volumeFixed", false) == (dopNow || app.engine().isVolumeLockedByProfile()),
+                     "état NX Remote : volume fixe seulement en DoP ou profil RME DSD Direct (pas à 100 % en PCM / DXD)"_t);
             t.check (! dopNow || (bool) st.getProperty ("dop", false), "état NX Remote : DoP signalé quand la piste passe en DoP"_t);
         }
     }

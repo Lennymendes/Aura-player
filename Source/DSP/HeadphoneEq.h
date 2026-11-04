@@ -34,13 +34,13 @@ inline const std::array<Preset, 11>& presets()
 {
     using T = BandType;
     static const std::array<Preset, 11> list {{
-        { "momentum-m2", "Momentum M2", "Sennheiser", "", false, 7, {{
+        { "momentum-m2", "Momentum M2", "Sennheiser", "Profil — ZEYN", false, 7, {{
             { T::LowShelf, 105.0, 4.0, 0.7 }, { T::Peak, 66.0, -6.5, 0.5 }, { T::Peak, 220.0, -1.0, 0.8 }, { T::Peak, 6500.0, -1.5, 3.0 },
             { T::Peak, 4000.0, 1.5, 2.5 }, { T::Peak, 2700.0, -1.0, 2.8 }, { T::HighShelf, 10000.0, 3.0, 0.7 } }} },
         { "momentum-m2-cl", "Momentum M2 CL", "Sennheiser", "Clear — ZEYN", false, 7, {{
             { T::LowShelf, 105.0, 4.0, 0.7 }, { T::Peak, 66.0, -6.5, 0.5 }, { T::Peak, 220.0, -1.0, 0.8 }, { T::Peak, 6500.0, -1.5, 3.0 },
             { T::Peak, 4000.0, 1.5, 2.5 }, { T::Peak, 2700.0, -1.0, 2.8 }, { T::HighShelf, 10000.0, 1.0, 0.7 } }} },
-        { "hd-650", "HD 650", "Sennheiser", "", false, 5, {{
+        { "hd-650", "HD 650", "Sennheiser", "Profil — ZEYN", false, 5, {{
             { T::LowShelf, 70.0, 3.5, 0.7 }, { T::Peak, 160.0, -2.0, 1.0 }, { T::Peak, 2100.0, 1.5, 1.4 }, { T::Peak, 4500.0, -2.5, 3.0 },
             { T::HighShelf, 10000.0, 2.0, 0.7 } }} },
         { "hd-600", "HD 600", "Sennheiser", "", false, 4, {{
