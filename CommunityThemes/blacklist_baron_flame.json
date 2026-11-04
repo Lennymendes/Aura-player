@@ -1,0 +1,39 @@
+{
+  "nxtheme": 1,
+  "id": "blacklist-baron-flame",
+  "name": "Blacklist Baron Flame",
+  "author": "NX Audio Community",
+  "version": "1.0",
+  "description": "Asphalte noir carbone, contours rouge flamme, accent jaune-orange.",
+  "background": {
+    "type": "artwork",
+    "fallback": "mesh",
+    "speed": 0.1
+  },
+  "variables": {
+    "--nx-bg": "#0A0A0B",
+    "--nx-bg-2": "#121214",
+    "--nx-surface": "#1A1412",
+    "--nx-glass-tint": "rgba(26, 20, 18, 0.62)",
+    "--nx-glass-strong": "rgba(10, 10, 11, 0.92)",
+    "--nx-border": "rgba(230, 25, 25, 0.45)",
+    "--nx-highlight": "rgba(255, 42, 0, 0.08)",
+    "--nx-shadow": "rgba(0, 0, 0, 0.70)",
+    "--nx-text": "#FFFFFF",
+    "--nx-text-dim": "#A89F91",
+    "--nx-accent": "#FFD000",
+    "--nx-accent-2": "#FF5500",
+    "--nx-on-accent": "#0A0A0B",
+    "--nx-quality-bitperfect": "#FFD000",
+    "--nx-quality-enhanced": "var(--nx-accent)",
+    "--nx-quality-high": "#FF5500",
+    "--nx-quality-low": "#FF2A00",
+    "--nx-radius": "10px",
+    "--nx-radius-small": "8px",
+    "--nx-artwork-blur": "56",
+    "--nx-artwork-dim": "0.72",
+    "--nx-artwork-saturation": "0.9",
+    "--nx-lyrics-active": "var(--nx-text)",
+    "--nx-lyrics-inactive": "rgba(168, 159, 145, 0.32)"
+  }
+}

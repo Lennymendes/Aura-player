@@ -101,6 +101,13 @@ public:
     virtual void selectDevice (const juce::String& name) = 0;
     /** Saves the chosen theme and offers a restart (no hot re-skin: it would invalidate LookAndFeel pointers). */
     virtual void applyTheme (const juce::String& id) = 0;
+    /** Community themes: imports a theme file (.json, .nxtheme folder or .zip) into the user's themes and applies it
+        (returns its id, or "" with `error`); exports the current theme, accent included, as one .json file. */
+    virtual juce::String importThemeFile (const juce::File& file, juce::String& error) = 0;
+    virtual bool exportCurrentTheme (const juce::File& destination) = 0;
+    /** The file choosers of the two buttons (Extensions & Thèmes, Réglages › Interface). */
+    void chooseThemeToImport();
+    void chooseThemeExport();
     /** Appearance: "dark", "light" or "system" (follows the OS), and the accent colour
         (transparent = the theme's own). Both are applied at once and remembered. */
     virtual void setAppearance (const juce::String& mode) = 0;

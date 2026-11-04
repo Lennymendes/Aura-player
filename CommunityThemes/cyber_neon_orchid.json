@@ -1,0 +1,39 @@
+{
+  "nxtheme": 1,
+  "id": "cyber-neon-orchid",
+  "name": "Cyber Neon Orchid",
+  "author": "NX Audio Community",
+  "version": "1.0",
+  "description": "Bleu minuit, orchidée magenta et halo bleu ciel.",
+  "background": {
+    "type": "artwork",
+    "fallback": "mesh",
+    "speed": 0.08
+  },
+  "variables": {
+    "--nx-bg": "#161230",
+    "--nx-bg-2": "#2A2356",
+    "--nx-surface": "#25204D",
+    "--nx-glass-tint": "rgba(37, 32, 77, 0.60)",
+    "--nx-glass-strong": "rgba(22, 18, 48, 0.90)",
+    "--nx-border": "rgba(88, 106, 226, 0.38)",
+    "--nx-highlight": "rgba(110, 203, 245, 0.07)",
+    "--nx-shadow": "rgba(6, 4, 20, 0.62)",
+    "--nx-text": "#E0D9F6",
+    "--nx-text-dim": "#9E97C4",
+    "--nx-accent": "#C252E1",
+    "--nx-accent-2": "#6ECBF5",
+    "--nx-on-accent": "#FFFFFF",
+    "--nx-quality-bitperfect": "#6ECBF5",
+    "--nx-quality-enhanced": "var(--nx-accent)",
+    "--nx-quality-high": "#586AE2",
+    "--nx-quality-low": "#FFB86B",
+    "--nx-radius": "14px",
+    "--nx-radius-small": "8px",
+    "--nx-artwork-blur": "56",
+    "--nx-artwork-dim": "0.66",
+    "--nx-artwork-saturation": "0.9",
+    "--nx-lyrics-active": "var(--nx-text)",
+    "--nx-lyrics-inactive": "rgba(158, 151, 196, 0.32)"
+  }
+}

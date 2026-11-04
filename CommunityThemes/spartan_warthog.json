@@ -1,0 +1,39 @@
+{
+  "nxtheme": 1,
+  "id": "spartan-warthog",
+  "name": "Spartan Warthog",
+  "author": "NX Audio Community",
+  "version": "1.0",
+  "description": "Gris blindage, olive tactique et vert militaire.",
+  "background": {
+    "type": "artwork",
+    "fallback": "mesh",
+    "speed": 0.05
+  },
+  "variables": {
+    "--nx-bg": "#232426",
+    "--nx-bg-2": "#4E4E50",
+    "--nx-surface": "#333A21",
+    "--nx-glass-tint": "rgba(51, 58, 33, 0.58)",
+    "--nx-glass-strong": "rgba(35, 36, 38, 0.92)",
+    "--nx-border": "rgba(98, 111, 54, 0.48)",
+    "--nx-highlight": "rgba(226, 226, 226, 0.05)",
+    "--nx-shadow": "rgba(0, 0, 0, 0.55)",
+    "--nx-text": "#E2E2E2",
+    "--nx-text-dim": "#B8B5AD",
+    "--nx-accent": "#94AB57",
+    "--nx-accent-2": "#7E9149",
+    "--nx-on-accent": "#16180F",
+    "--nx-quality-bitperfect": "#94AB57",
+    "--nx-quality-enhanced": "var(--nx-accent)",
+    "--nx-quality-high": "#7E9149",
+    "--nx-quality-low": "#E0A84A",
+    "--nx-radius": "8px",
+    "--nx-radius-small": "8px",
+    "--nx-artwork-blur": "56",
+    "--nx-artwork-dim": "0.66",
+    "--nx-artwork-saturation": "0.7",
+    "--nx-lyrics-active": "var(--nx-text)",
+    "--nx-lyrics-inactive": "rgba(184, 181, 173, 0.32)"
+  }
+}

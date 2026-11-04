@@ -264,7 +264,8 @@ void MarketCard::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-MarketplacePage::MarketplacePage (AppContext& c) : ScrollPage (c), importButton ("Importer un plugin…"_t), folderButton ("Ouvrir le dossier des plugins")
+MarketplacePage::MarketplacePage (AppContext& c) : ScrollPage (c), importButton ("Importer un plugin…"_t), folderButton ("Ouvrir le dossier des plugins"),
+      importThemeButton ("Importer un thème (.json)"_t), exportThemeButton ("Exporter le thème actuel"_t)
 {
     contentComp.addAndMakeVisible (header);
     filter.setTextToShowWhenEmpty ("Filtrer…"_t, ctx.theme().textDim());
@@ -279,6 +280,10 @@ MarketplacePage::MarketplacePage (AppContext& c) : ScrollPage (c), importButton 
     contentComp.addChildComponent (emptyLabel);
     contentComp.addChildComponent (folderButton);
     importButton.onClick = [this] { importPlugin(); };
+    contentComp.addChildComponent (importThemeButton);
+    contentComp.addChildComponent (exportThemeButton);
+    importThemeButton.onClick = [this] { ctx.chooseThemeToImport(); };
+    exportThemeButton.onClick = [this] { ctx.chooseThemeExport(); };
     folderButton.onClick = [this]
     {
         auto root = userPluginsRoot();
@@ -338,6 +343,9 @@ void MarketplacePage::refresh()
         contentComp.addAndMakeVisible (b);
     }
     importButton.setVisible (mode == Mode::UserPlugins);
+    const bool themeTab = mode == Mode::Gallery && (tab == "tout" || tab == "themes");
+    importThemeButton.setVisible (themeTab);
+    exportThemeButton.setVisible (themeTab);
     folderButton.setVisible (mode == Mode::UserPlugins);
     build();
 }
@@ -594,6 +602,14 @@ void MarketplacePage::layoutContent (int width)
     filter.setBounds (row.removeFromRight (juce::jmin (260, juce::jmax (140, row.getWidth()))));
     y += 34 + 14;
 
+    if (importThemeButton.isVisible())
+    {
+        auto actions = juce::Rectangle<int> (pad, y, inner, 34);
+        importThemeButton.setBounds (actions.removeFromLeft (230));
+        actions.removeFromLeft (10);
+        exportThemeButton.setBounds (actions.removeFromLeft (230));
+        y += 34 + 16;
+    }
     if (mode == Mode::UserPlugins)
     {
         auto actions = juce::Rectangle<int> (pad, y, inner, 34);

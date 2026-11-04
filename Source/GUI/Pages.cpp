@@ -1895,6 +1895,10 @@ void SettingsPage::buildInterface()
             if (i >= 0) ctx.applyTheme (ids[i]);
         }), 36, "Plus de thèmes et plug-ins : barre latérale › Extensions & Thèmes."_t);
     }
+    row ("Thèmes de la communauté : un fichier .json se partage et s'importe en un clic"_t,
+         makeButton ("Importer un thème (.json)"_t, [this] { ctx.chooseThemeToImport(); }), 36);
+    row ("Votre thème (avec votre couleur d'accent), à partager sur Discord"_t,
+         makeButton ("Exporter le thème actuel"_t, [this] { ctx.chooseThemeExport(); }), 36);
 
     section ("Raccourcis clavier"_t);
     for (auto& sc : shortcuts::all())

@@ -784,6 +784,61 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     app.navigate ({ nx::PageId::Marketplace, "themes" });
     const int themeCards = market.getNumCards();
     t.check (themeCards == 6, "onglet Thèmes : "_t + juce::String (themeCards) + " cartes");
+    {
+        // community themes: the 6 .json files of CommunityThemes/ (not in the binary) imported as a user would
+        const auto dir = juce::File (__FILE__).getParentDirectory().getParentDirectory().getChildFile ("CommunityThemes");
+        const char* files[] = { "vice_sunset", "cyber_2077_yellow", "cyber_neon_orchid", "spartan_warthog", "halo_ring_horizon", "blacklist_baron_flame" };
+        const juce::uint32 accents[] = { 0xfff36a78, 0xffdce026, 0xffc252e1, 0xff94ab57, 0xff92caeb, 0xffffd000 };
+        const juce::uint32 backgrounds[] = { 0xff1a0933, 0xff121512, 0xff161230, 0xff232426, 0xff152036, 0xff0a0a0b };
+        bool imported = true;
+        juce::String why;
+        for (int i = 0; i < 6; ++i)
+        {
+            juce::String err;
+            const auto id = app.importThemeFile (dir.getChildFile (juce::String (files[i]) + ".json"), err);
+            const auto remote = juce::JSON::parse (app.buildRemoteState()).getProperty ("theme", {});
+            const bool ok = id == juce::String (files[i]).replaceCharacter ('_', '-') && app.theme().id == id
+                            && app.theme().accent() == juce::Colour (accents[i]) && app.theme().bg() == juce::Colour (backgrounds[i])
+                            && remote.getProperty ("id", {}).toString() == id
+                            && app.themes().findTheme (id) != nullptr && app.themes().findTheme (id)->folder.isAChildOf (app.userDataDirectory());
+            if (! ok) why << files[i] << " " << err << "; ";
+            imported = imported && ok;
+            if (i == 0) { settle (100); shoot ("50_theme_vice_sunset"); }
+            if (i == 5) { settle (100); shoot ("51_theme_baron_flame"); }
+        }
+        app.navigate ({ nx::PageId::Marketplace, "themes" });
+        const bool listed = market.getNumCards() == 12;
+        shoot ("52_themes_importes");
+        // a shared file can never replace a built-in theme; unsafe content is refused
+        const auto fake = t.tempDir.getChildFile ("fake_emerald.json");
+        fake.replaceWithText (R"({ "nxtheme": 1, "id": "nx-emerald", "name": "Faux", "variables": { "--nx-bg": "#FF0000", "--nx-accent": "#00FF00" } })");
+        juce::String err;
+        const auto fakeId = app.importThemeFile (fake, err);
+        const bool builtInSafe = fakeId == "nx-emerald-perso" && app.themes().findTheme ("nx-emerald")->accent() == juce::Colour (0xff00f5a0);
+        const auto bad = t.tempDir.getChildFile ("bad.json");
+        bad.replaceWithText (R"J({ "name": "Bad", "variables": { "--nx-bg": "#000000", "--nx-accent": "#FFFFFF", "color": "red } body { x: url(http://x)" } })J");
+        const bool refused = app.importThemeFile (bad, err).isEmpty() && err.isNotEmpty();
+        // export -> import round trip (with the accent override)
+        app.applyThemeNow ("cobalt-minimal");
+        app.setAccent (juce::Colour (0xfff59e0b));
+        const auto out = t.tempDir.getChildFile ("mon_theme.json");
+        const bool exported = app.exportCurrentTheme (out);
+        app.setAccent (juce::Colours::transparentBlack);
+        const auto back = juce::JSON::parse (out);
+        nx::Theme rt;
+        juce::String rtErr;
+        const bool roundTrip = exported && nx::ThemeManager::themeFromJson (back, rt, rtErr) && rt.accent() == juce::Colour (0xfff59e0b)
+                               && rt.bg() == app.themes().findTheme ("cobalt-minimal")->bg() && back.getProperty ("nxtheme", 0).equals (1);
+        // clean up: the following tests count the shipped themes
+        for (auto* f : files) app.themes().findTheme (juce::String (f).replaceCharacter ('_', '-'))->folder.deleteRecursively();
+        app.themes().findTheme ("nx-emerald-perso")->folder.deleteRecursively();
+        app.themes().rescan();
+        app.applyThemeNow ("nx-emerald");
+        t.check (imported && listed && builtInSafe && refused && roundTrip,
+                 "thèmes communautaires : 6 fichiers .json importés et appliqués (NX Remote suit), thème intégré jamais remplacé, contenu dangereux refusé, export / réimport"_t
+                 + " [" + why + juce::String ((int) listed) + juce::String ((int) builtInSafe) + juce::String ((int) refused) + juce::String ((int) roundTrip) + "]");
+        app.navigate ({ nx::PageId::Marketplace, "themes" });
+    }
     app.navigate ({ nx::PageId::UserPlugins, "catalogue" });
     const int catalogueCards = market.getNumCards();
     t.check (catalogueCards == 5, "Plugins utilisateur › Catalogue : "_t + juce::String (catalogueCards) + " plug-ins en plus (4 interface, 1 DSP)");

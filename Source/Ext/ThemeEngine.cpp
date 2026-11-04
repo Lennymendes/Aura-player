@@ -300,6 +300,46 @@ juce::String ThemeManager::importTheme (const juce::File& source, juce::String& 
     const auto userFolder = searchFolders.getLast();
     userFolder.createDirectory();
 
+    // ids of the themes shipped with the app (and the hidden one): never replaced by an import
+    juce::StringArray builtIn { "zeyn", "builtin" };
+    for (int i = 0; i < searchFolders.size() - 1; ++i)
+        for (const auto& e : juce::RangedDirectoryIterator (searchFolders[i], false, "*", juce::File::findDirectories))
+        {
+            Theme b;
+            juce::String ignored;
+            if (loadTheme (e.getFile(), b, ignored)) builtIn.add (b.id);
+        }
+    auto freeId = [&] (juce::String id) { while (builtIn.contains (id)) id << "-perso"; return id; };
+
+    if (source.existsAsFile() && source.hasFileExtension ("json"))     // single-file theme (community)
+    {
+        if (source.getSize() > 256 * 1024) { error = "fichier trop volumineux pour un thème"_t; return {}; }
+        juce::var json;
+        if (juce::JSON::parse (source.loadFileAsString(), json).failed()) { error = "JSON invalide"_t; return {}; }
+        Theme t;
+        if (! themeFromJson (json, t, error)) return {};
+        t.id = freeId (t.id);
+        const auto dest = userFolder.getChildFile (t.id + ".nxtheme");
+        dest.deleteRecursively();
+        dest.createDirectory();
+        auto manifest = themeToJson (t);
+        auto* m = manifest.getDynamicObject();
+        m->removeProperty ("variables");
+        m->removeProperty ("nxtheme");
+        m->setProperty ("stylesheet", "theme.css");
+        juce::String css;
+        css << "/* " << t.name << " - imported theme */\n:root {\n";
+        for (auto& [k, v] : t.vars) css << "  " << k << ": " << v << ";\n";
+        css << "}\n";
+        if (! dest.getChildFile ("manifest.json").replaceWithText (juce::JSON::toString (manifest)) || ! dest.getChildFile ("theme.css").replaceWithText (css))
+        {
+            error = "copie impossible"_t;
+            return {};
+        }
+        rescan();
+        return t.id;
+    }
+
     juce::File folder = source;
     juce::TemporaryFile temp;
     if (source.existsAsFile())     // zipped theme
@@ -316,12 +356,97 @@ juce::String ThemeManager::importTheme (const juce::File& source, juce::String& 
 
     Theme t;
     if (! loadTheme (folder, t, error)) return {};
+    if (builtIn.contains (t.id)) { error = "un thème intégré ne peut pas être remplacé : changez son « id »"_t; return {}; }
     const auto dest = userFolder.getChildFile (juce::File::createLegalFileName (t.id) + ".nxtheme");
     dest.deleteRecursively();
     if (! folder.copyDirectoryTo (dest)) { error = "copie impossible"_t; return {}; }
     temp.getFile().deleteRecursively();
     rescan();
     return t.id;
+}
+
+bool ThemeManager::themeFromJson (const juce::var& json, Theme& t, juce::String& error)
+{
+    if (! json.isObject()) { error = "ce fichier n'est pas un thème NX Player"_t; return false; }
+    const auto vars = json.getProperty ("variables", {});
+    auto* vo = vars.getDynamicObject();
+    if (vo == nullptr || vo->getProperties().isEmpty()) { error = "le thème n'a pas de « variables »"_t; return false; }
+    auto clean = [] (const juce::var& v, int maxLen) { return v.toString().removeCharacters ("\r\n\t{};<>").trim().substring (0, maxLen); };
+    t = {};
+    t.name = clean (json.getProperty ("name", {}), 60);
+    juce::String id;
+    for (auto ch : clean (json.getProperty ("id", t.name), 60).toLowerCase())
+        id << (juce::CharacterFunctions::isLetterOrDigit (ch) && ch < 128 ? juce::String::charToString (ch) : juce::String ("-"));
+    while (id.contains ("--")) id = id.replace ("--", "-");
+    t.id = id.trimCharactersAtStart ("-").trimCharactersAtEnd ("-");
+    if (t.id.isEmpty()) { error = "le thème doit avoir un « id » ou un « name »"_t; return false; }
+    if (t.name.isEmpty()) t.name = t.id;
+    t.author = clean (json.getProperty ("author", {}), 60);
+    t.version = clean (json.getProperty ("version", "1.0"), 16);
+    t.description = clean (json.getProperty ("description", {}), 200);
+
+    int count = 0;
+    for (auto& p : vo->getProperties())
+    {
+        const auto key = p.name.toString();
+        const auto value = clean (p.value, 120);
+        if (! key.startsWith ("--nx-") || ! key.containsOnly ("-abcdefghijklmnopqrstuvwxyz0123456789") || key.length() > 40)
+        {
+            error = "variable non autorisée : "_t + key;
+            return false;
+        }
+        if (value.isEmpty() || value.containsChar ('\\') || value.containsIgnoreCase ("url(")) { error = "valeur non autorisée pour "_t + key; return false; }
+        if (++count > 80) { error = "trop de variables"_t; return false; }
+        t.vars[key] = value;
+    }
+    juce::Colour c;
+    if (! parseCssColour (t.vars.count ("--nx-bg") ? t.vars["--nx-bg"] : juce::String(), c)
+        || ! parseCssColour (t.vars.count ("--nx-accent") ? t.vars["--nx-accent"] : juce::String(), c))
+    {
+        error = "--nx-bg et --nx-accent doivent être des couleurs (#RRGGBB)"_t;
+        return false;
+    }
+
+    // background: no shader in a single file (it would need code next to it)
+    const auto bg = json.getProperty ("background", {});
+    auto* o = new juce::DynamicObject();
+    const juce::StringArray allowed { "artwork", "mesh", "gradient", "solid" };
+    const auto type = bg.getProperty ("type", "mesh").toString();
+    o->setProperty ("type", allowed.contains (type) ? type : juce::String ("mesh"));
+    const auto fallback = bg.getProperty ("fallback", "mesh").toString();
+    o->setProperty ("fallback", allowed.contains (fallback) && fallback != "artwork" ? fallback : juce::String ("mesh"));
+    o->setProperty ("speed", juce::jlimit (0.0, 1.0, (double) bg.getProperty ("speed", 0.08)));
+    t.background = juce::var (o);
+    return true;
+}
+
+juce::var ThemeManager::themeToJson (const Theme& t)
+{
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("nxtheme", 1);
+    o->setProperty ("id", t.id);
+    o->setProperty ("name", t.name);
+    o->setProperty ("author", t.author);
+    o->setProperty ("version", t.version.isNotEmpty() ? t.version : juce::String ("1.0"));
+    o->setProperty ("description", t.description);
+    auto bg = t.background;
+    if (bg.getProperty ("type", {}).toString() == "shader")
+    {
+        auto* b = new juce::DynamicObject();
+        b->setProperty ("type", "mesh");
+        b->setProperty ("speed", bg.getProperty ("speed", 0.08));
+        bg = juce::var (b);
+    }
+    o->setProperty ("background", bg.isObject() ? bg : juce::var (new juce::DynamicObject()));
+    auto* v = new juce::DynamicObject();
+    for (auto& [k, value] : t.vars) v->setProperty (juce::Identifier (k), value);
+    o->setProperty ("variables", juce::var (v));
+    return juce::var (o);
+}
+
+bool ThemeManager::exportThemeJson (const Theme& t, const juce::File& destination)
+{
+    return destination.replaceWithText (juce::JSON::toString (themeToJson (t)) + "\n");
 }
 
 bool ThemeManager::exportTheme (const juce::String& id, const juce::File& destination)

@@ -540,6 +540,51 @@ void AppController::applyTheme (const juce::String& id)
     applyThemeNow (id);                                    // hot: every component follows at once (no restart)
 }
 
+void AppContext::chooseThemeToImport()
+{
+    auto chooser = std::make_shared<juce::FileChooser> ("Importer un thème NX Player"_t, juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Downloads"),
+                                                        "*.json;*.zip;*.nxtheme");
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::canSelectDirectories,
+                          [this, chooser] (const juce::FileChooser& fc)
+    {
+        const auto f = fc.getResult();
+        if (f == juce::File()) return;
+        juce::String err;
+        const auto id = importThemeFile (f, err);
+        if (id.isEmpty()) showMessage ("Thème non importé : "_t + err);
+        else showMessage ("Thème importé et appliqué : "_t + theme().name);
+    });
+}
+
+void AppContext::chooseThemeExport()
+{
+    const auto name = juce::File::createLegalFileName (theme().id.replaceCharacter ('-', '_')) + ".json";
+    auto chooser = std::make_shared<juce::FileChooser> ("Exporter le thème actuel"_t, juce::File::getSpecialLocation (juce::File::userDesktopDirectory).getChildFile (name), "*.json");
+    chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+                          [this, chooser] (const juce::FileChooser& fc)
+    {
+        auto f = fc.getResult();
+        if (f == juce::File()) return;
+        if (! f.hasFileExtension ("json")) f = f.withFileExtension ("json");
+        if (exportCurrentTheme (f)) showMessage ("Thème exporté : "_t + f.getFileName());
+        else showMessage ("Export impossible : "_t + f.getFullPathName());
+    });
+}
+
+juce::String AppController::importThemeFile (const juce::File& file, juce::String& error)
+{
+    const auto id = themeManager.importTheme (file, error);
+    if (id.isEmpty()) return {};
+    applyTheme (id);                         // NX Remote follows through its state (theme colours)
+    if (auto* m = getMainComponent()) m->pluginsChanged();     // the Extensions & Thèmes cards
+    return id;
+}
+
+bool AppController::exportCurrentTheme (const juce::File& destination)
+{
+    return ThemeManager::exportThemeJson (themeManager.current(), destination);
+}
+
 juce::String AppController::themeForAppearance()
 {
     const auto mode = getAppearance();

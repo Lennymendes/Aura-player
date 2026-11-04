@@ -1,0 +1,39 @@
+{
+  "nxtheme": 1,
+  "id": "vice-sunset",
+  "name": "Vice Sunset",
+  "author": "NX Audio Community",
+  "version": "1.0",
+  "description": "Coucher de soleil néon : violet profond, magenta, corail et jaune chaud.",
+  "background": {
+    "type": "artwork",
+    "fallback": "mesh",
+    "speed": 0.08
+  },
+  "variables": {
+    "--nx-bg": "#1A0933",
+    "--nx-bg-2": "#3B146B",
+    "--nx-surface": "#4A156B",
+    "--nx-glass-tint": "rgba(74, 21, 107, 0.55)",
+    "--nx-glass-strong": "rgba(26, 9, 51, 0.90)",
+    "--nx-border": "rgba(201, 52, 155, 0.38)",
+    "--nx-highlight": "rgba(248, 117, 114, 0.08)",
+    "--nx-shadow": "rgba(10, 3, 20, 0.60)",
+    "--nx-text": "#FFF5F7",
+    "--nx-text-dim": "#E2B8D8",
+    "--nx-accent": "#F36A78",
+    "--nx-accent-2": "#FFB456",
+    "--nx-on-accent": "#1A0933",
+    "--nx-quality-bitperfect": "#FFB456",
+    "--nx-quality-enhanced": "var(--nx-accent)",
+    "--nx-quality-high": "#FF9B55",
+    "--nx-quality-low": "#F87572",
+    "--nx-radius": "16px",
+    "--nx-radius-small": "8px",
+    "--nx-artwork-blur": "56",
+    "--nx-artwork-dim": "0.66",
+    "--nx-artwork-saturation": "0.9",
+    "--nx-lyrics-active": "var(--nx-text)",
+    "--nx-lyrics-inactive": "rgba(226, 184, 216, 0.32)"
+  }
+}

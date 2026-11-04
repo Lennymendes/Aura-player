@@ -100,6 +100,8 @@ public:
     juce::String selectedThemeId() override { return appSettings.get ("theme", themeManager.current().id).toString(); }
     /** Immediate re-skin (tests only: the UI never calls it). */
     void applyThemeNow (const juce::String& id);
+    juce::String importThemeFile (const juce::File& file, juce::String& error) override;
+    bool exportCurrentTheme (const juce::File& destination) override;
     void setAppearance (const juce::String& mode) override;
     juce::String getAppearance() override { return appSettings.get ("appearance", "dark").toString(); }
     void setAccent (juce::Colour accent) override;

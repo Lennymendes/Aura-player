@@ -1,0 +1,39 @@
+{
+  "nxtheme": 1,
+  "id": "cyber-2077-yellow",
+  "name": "Cyber 2077 Yellow",
+  "author": "NX Audio Community",
+  "version": "1.0",
+  "description": "Noir bitume, teal sombre et jaune électrique, bordures vert néon.",
+  "background": {
+    "type": "artwork",
+    "fallback": "mesh",
+    "speed": 0.06
+  },
+  "variables": {
+    "--nx-bg": "#121512",
+    "--nx-bg-2": "#083336",
+    "--nx-surface": "#0B4F54",
+    "--nx-glass-tint": "rgba(8, 51, 54, 0.62)",
+    "--nx-glass-strong": "rgba(18, 21, 18, 0.92)",
+    "--nx-border": "rgba(91, 154, 83, 0.40)",
+    "--nx-highlight": "rgba(220, 224, 38, 0.06)",
+    "--nx-shadow": "rgba(0, 0, 0, 0.65)",
+    "--nx-text": "#F4F7E6",
+    "--nx-text-dim": "#8AB8A8",
+    "--nx-accent": "#DCE026",
+    "--nx-accent-2": "#5B9A53",
+    "--nx-on-accent": "#121512",
+    "--nx-quality-bitperfect": "#D6DB28",
+    "--nx-quality-enhanced": "var(--nx-accent)",
+    "--nx-quality-high": "#8AB8A8",
+    "--nx-quality-low": "#FF6B3D",
+    "--nx-radius": "6px",
+    "--nx-radius-small": "8px",
+    "--nx-artwork-blur": "56",
+    "--nx-artwork-dim": "0.66",
+    "--nx-artwork-saturation": "0.9",
+    "--nx-lyrics-active": "var(--nx-text)",
+    "--nx-lyrics-inactive": "rgba(138, 184, 168, 0.32)"
+  }
+}

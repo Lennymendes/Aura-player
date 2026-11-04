@@ -119,3 +119,27 @@ et `pixelAlpha` sont fournis ; écrivez `gl_FragColor`. Uniforms passés par NX 
 
 Exemple complet : `Themes/aura-neon.nxtheme/background.frag`. Une erreur de compilation est écrite dans le
 journal et l'arrière-plan de repli est utilisé.
+
+## Thème en un seul fichier (.json) — partage communautaire
+
+Extensions & Thèmes › Thèmes (ou Réglages › Interface) : **Importer un thème (.json)** copie le fichier dans vos thèmes
+(dossier utilisateur) et l'applique ; **Exporter le thème actuel** écrit le thème actif, couleur d'accent comprise.
+
+```json
+{
+  "nxtheme": 1,
+  "id": "vice-sunset",
+  "name": "Vice Sunset",
+  "author": "Pseudo",
+  "version": "1.0",
+  "description": "Une ligne",
+  "background": { "type": "artwork", "fallback": "mesh", "speed": 0.08 },
+  "variables": { "--nx-bg": "#1A0933", "--nx-accent": "#F36A78", "...": "..." }
+}
+```
+
+- `variables` : les variables `--nx-*` de ce document ; `--nx-bg` et `--nx-accent` sont obligatoires.
+- `background.type` : `artwork`, `mesh`, `gradient` ou `solid` (pas de shader dans un fichier seul).
+- Un thème importé ne remplace jamais un thème intégré : un `id` déjà pris reçoit le suffixe `-perso`.
+- Contrôles à l'import : 256 Ko maximum, 80 variables, noms `--nx-[a-z0-9-]`, pas de `url(`, `{`, `}`, `;`.
+- Exemples : dossier `CommunityThemes/` du dépôt (non intégré à l'application).

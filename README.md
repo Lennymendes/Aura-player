@@ -259,6 +259,8 @@ DT 1990 Pro, Focal Clear MG, EarSonics EM32, et les courbes studio Chaleur, Clar
 molette, valeur saisie), poignées sur la courbe (glisser = fréquence / gain, molette = Q), réinitialiser, copier la
 courbe du casque actif, presets utilisateur dans `settings.json`. L'en-tête montre le témoin Bit-Perfect et le profil
 actif, contourné ou réactivé d'un clic.
+**Thèmes de la communauté** : un thème tient dans un seul fichier `.json` (format dans `docs/THEMES.md`, exemples dans
+`CommunityThemes/`) ; Importer / Exporter dans Extensions & Thèmes et Réglages › Interface ; NX Remote suit le thème actif.
 **Liens officiels** : boutique et Discord dans `Source/Core/Links.h` (ou `purchaseUrl` / `discordUrl` dans
 `settings.json`) ; les boutons Discord restent masqués tant que l'invitation n'est pas renseignée.
 **Thèmes livrés** : NX Emerald, Aura Neon, Glass Rose, Pure Light (clair, givré), Solar Amber, Cobalt Minimal,

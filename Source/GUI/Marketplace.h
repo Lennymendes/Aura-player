@@ -104,7 +104,7 @@ private:
     Header header { *this };
     juce::OwnedArray<juce::TextButton> tabButtons;
     juce::TextEditor filter;
-    juce::TextButton importButton, folderButton;
+    juce::TextButton importButton, folderButton, importThemeButton, exportThemeButton;
     juce::OwnedArray<MarketCard> cards;
     juce::String emptyText;
     juce::Label emptyLabel;

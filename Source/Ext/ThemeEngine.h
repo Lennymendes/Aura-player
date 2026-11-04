@@ -59,8 +59,19 @@ public:
     bool apply (const juce::String& id);
     const Theme& current() const noexcept { return active; }
 
-    /** Copies a .nxtheme folder or zip into the user folder and returns its id. */
+    /** Copies a theme into the user folder and returns its id: a single-file theme (.json), a .nxtheme folder or a
+        zip. A theme can never replace a built-in one (its id gets "-perso"). */
     juce::String importTheme (const juce::File& source, juce::String& error);
+
+    /** Single-file theme, the format shared on the community server:
+        { "nxtheme": 1, "id", "name", "author", "version", "description",
+          "background": { "type": "artwork" | "mesh" | "gradient" | "solid", "fallback", "speed" },
+          "variables": { "--nx-bg": "#1A0933", ... } }
+        Validated at the trust boundary: names, sizes, variable names (--nx-*) and values (no CSS injection). */
+    static bool themeFromJson (const juce::var& json, Theme& out, juce::String& error);
+    static juce::var themeToJson (const Theme& t);
+    /** Writes `t` (with the accent colour chosen in the settings, if any) as a single .json file. */
+    static bool exportThemeJson (const Theme& t, const juce::File& destination);
     /** Zips a theme for sharing. */
     bool exportTheme (const juce::String& id, const juce::File& destination);
 

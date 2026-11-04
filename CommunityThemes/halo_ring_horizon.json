@@ -1,0 +1,39 @@
+{
+  "nxtheme": 1,
+  "id": "halo-ring-horizon",
+  "name": "Halo Ring Horizon",
+  "author": "NX Audio Community",
+  "version": "1.0",
+  "description": "Bleu stratosphère, gris roche et bleu ciel glacé.",
+  "background": {
+    "type": "artwork",
+    "fallback": "mesh",
+    "speed": 0.06
+  },
+  "variables": {
+    "--nx-bg": "#152036",
+    "--nx-bg-2": "#253761",
+    "--nx-surface": "#2B384E",
+    "--nx-glass-tint": "rgba(43, 56, 78, 0.58)",
+    "--nx-glass-strong": "rgba(21, 32, 54, 0.90)",
+    "--nx-border": "rgba(114, 143, 160, 0.38)",
+    "--nx-highlight": "rgba(146, 202, 235, 0.07)",
+    "--nx-shadow": "rgba(5, 10, 22, 0.60)",
+    "--nx-text": "#EBF3FA",
+    "--nx-text-dim": "#B8C1D6",
+    "--nx-accent": "#92CAEB",
+    "--nx-accent-2": "#5680BB",
+    "--nx-on-accent": "#0D1626",
+    "--nx-quality-bitperfect": "#92CAEB",
+    "--nx-quality-enhanced": "var(--nx-accent)",
+    "--nx-quality-high": "#5680BB",
+    "--nx-quality-low": "#F2C14E",
+    "--nx-radius": "16px",
+    "--nx-radius-small": "8px",
+    "--nx-artwork-blur": "56",
+    "--nx-artwork-dim": "0.66",
+    "--nx-artwork-saturation": "0.9",
+    "--nx-lyrics-active": "var(--nx-text)",
+    "--nx-lyrics-inactive": "rgba(184, 193, 214, 0.32)"
+  }
+}
