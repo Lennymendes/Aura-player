@@ -10,4 +10,4 @@ Exceptions :
   que ces licences accordent sur ces composants.
 - Le kit de développement de plug-ins DSP (Source/Ext/nxplayer_dsp.h) et les plug-ins d'exemple
   (Plugins/DSP/crossfeed, Catalog/DSP/tone) sont fournis sous licence MIT, afin que des tiers puissent
-  écrire des plug-ins pour NX Player ; leur en-tête l'indique.
+  écrire des plug-ins pour Aura ; leur en-tête l'indique.

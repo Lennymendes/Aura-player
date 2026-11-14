@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Offline licence keys, shared by the player (verification) and Tools/nx_keygen (signing). Standard library +
 // Monocypher (Ed25519, RFC 8032) only.
 //

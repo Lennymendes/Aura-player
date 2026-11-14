@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "AuraDsp.h"
 #include "../DSP/StudioTools.h"
 
@@ -607,7 +607,7 @@ void AuraDspPanel::paint (juce::Graphics& g)
     head.removeFromLeft ((int) style::textWidth (style::font (26.0f, true), title) + 16);
     g.setColour (t.textDim());
     g.setFont (style::font (13.5f));
-    g.drawText ("NX Precision Audio Control · Moteur 64-bit"_t, head, juce::Justification::centredLeft);
+    g.drawText ("Aura Precision Audio Control · Moteur 64-bit"_t, head, juce::Justification::centredLeft);
 
     auto& s = ctx.studioTools();
     const auto path = ctx.engine().getSignalPath();

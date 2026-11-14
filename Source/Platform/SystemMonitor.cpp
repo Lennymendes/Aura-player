@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "SystemMonitor.h"
 
 #if JUCE_MAC
@@ -141,7 +141,7 @@ void SleepBlocker::setActive (bool shouldBlock)
     {
         IOPMAssertionID id = 0;
         if (IOPMAssertionCreateWithName (kIOPMAssertionTypePreventUserIdleSystemSleep, kIOPMAssertionLevelOn,
-                                         CFSTR ("NX Player : lecture audio en cours"), &id) == kIOReturnSuccess)
+                                         CFSTR ("Aura : lecture audio en cours"), &id) == kIOReturnSuccess)
             macAssertion = id;
         else return;
     }

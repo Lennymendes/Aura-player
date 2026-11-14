@@ -1,11 +1,10 @@
 # Thèmes de la communauté
 
-Ces fichiers ne sont pas intégrés au binaire de NX Player : on les importe comme n'importe quel utilisateur.
+Ces fichiers ne sont pas intégrés au binaire d'Aura : on les importe comme n'importe quel utilisateur.
 
 1. Téléchargez un fichier `.json` (salon #thèmes-et-skins du Discord NX Audio).
-2. Dans NX Player : **Extensions & Thèmes › Thèmes › Importer un thème (.json)**, ou **Réglages › Interface ›
-   Importer un thème (.json)**.
-3. Le thème est copié dans vos thèmes et appliqué tout de suite (NX Remote suit automatiquement).
+2. Dans Aura : **Réglages › Interface › Importer un thème (.json)**.
+3. Le thème est copié dans vos thèmes et appliqué tout de suite (Aura Remote suit automatiquement).
 
 Pour partager le vôtre : **Exporter le thème actuel** (votre couleur d'accent comprise).
 

@@ -1,7 +1,8 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Brique 3 & 4: themes (CSS, hot reload, import / export), JS UI plug-ins, C DSP plug-ins, and the
 // whole interface rendered off-screen (screenshots of every page).
 #include "TestFramework.h"
+#include "../Source/Core/Diagnostics.h"
 #include "FakeUpnp.h"
 #include <set>
 #include "TestAudioFiles.h"
@@ -98,7 +99,10 @@ NX_TEST_SECTION (401, "Thèmes .nxtheme : CSS, rechargement à chaud, import / e
     tm.setSearchFolders ({ resources().getChildFile ("Themes"), userDir });
     t.check (tm.getThemeIds().contains ("nx-emerald") && tm.getThemeIds().contains ("aura-neon") && tm.getThemeIds().contains ("glass-rose")
              && ! tm.getThemeIds().contains ("ocean-blue") && tm.getThemeIds().contains ("pure-light") && tm.getThemeIds().contains ("solar-amber")
-             && tm.getThemeIds().contains ("cobalt-minimal") && tm.getThemeIds().size() == 6, "6 thèmes livrés (Ocean Blue fusionné dans Cobalt Minimal) : "_t + tm.getThemeIds().joinIntoString (", "));
+             && tm.getThemeIds().contains ("cobalt-minimal") && tm.getThemeIds().contains ("aura") && tm.getThemeIds().size() == 7,
+             "7 thèmes livrés (Aura par défaut, NX Emerald secondaire) : "_t + tm.getThemeIds().joinIntoString (", "));
+    t.check (tm.apply ("aura") && tm.current().accent() == juce::Colour (0xff2563eb) && tm.current().bg() == juce::Colour (0xff07050a)
+             && tm.current().accent2() == juce::Colour (0xff29abe2), "Aura : fond #07050A, bleu du logo #2563EB, dégradé #29ABE2"_t);
     t.check (tm.apply ("nx-emerald") && tm.current().accent() == juce::Colour (0xff00f5a0) && tm.current().bg() == juce::Colour (0xff0a0c0e),
              "NX Emerald : fond #0A0C0E, accent #00F5A0");
     t.check (tm.findTheme ("aura-neon") != nullptr && tm.findTheme ("aura-neon")->shaderCode.contains ("gl_FragColor"),
@@ -425,7 +429,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     nx::AppController app (std::move (opts));
     t.check (app.theme().id == "cobalt-minimal" && app.settings().get ("theme").toString() == "cobalt-minimal",
              "thème Ocean Blue d'un ancien profil : basculé sur Cobalt Minimal"_t);
-    app.applyThemeNow ("nx-emerald");
+    app.applyThemeNow ("aura");
     {
         // the interface tests below use every Premium feature
         juce::String licenceError;
@@ -696,7 +700,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         }
         t.check (ok, "thèmes Pure Light, Solar Amber et Cobalt Minimal : appliqués à chaud, texte contrasté"_t);
         {
-            // hot theme: combo boxes follow at once; NX Remote receives the theme with its exact colours
+            // hot theme: combo boxes follow at once; Aura Remote receives the theme with its exact colours
             app.applyThemeNow ("pure-light");
             app.navigate ({ nx::PageId::Albums });
             settle (100);
@@ -720,11 +724,11 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
             const auto th2 = juce::JSON::parse (app.buildRemoteState()).getProperty ("theme", {});
             const bool follows = th2.getProperty ("accent", {}).toString() == "#F59E0B" && ! (bool) th2.getProperty ("isLight", true);
             t.check (combos > 0 && wrong == 0 && remote && follows,
-                     "thème à chaud (listes déroulantes comprises) et thème transmis à NX Remote (couleurs hexadécimales, clair / sombre)"_t
+                     "thème à chaud (listes déroulantes comprises) et thème transmis à Aura Remote (couleurs hexadécimales, clair / sombre)"_t
                      + " [" + juce::String (combos) + "/" + juce::String (wrong) + juce::String ((int) remote) + juce::String ((int) follows) + "]");
         }
     }
-    app.applyThemeNow ("nx-emerald");
+    app.applyThemeNow ("aura");
 
     app.navigate ({ nx::PageId::Search, "lum" });
     t.check (shoot ("06_recherche") > 40, "Recherche unifiée"_t);
@@ -775,15 +779,17 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     app.navigate ({ nx::PageId::NowPlaying });
     t.check (shoot ("10_vu_metres") > 60, "plug-in VU-mètres dans « En cours »"_t);
 
-    // Extensions & Thèmes gallery, then the user plug-ins catalogue
+    // Extensions gallery (plug-ins only: themes live in Réglages › Interface), then the user plug-ins catalogue
     auto& market = main->getMarketplace();
     app.navigate ({ nx::PageId::Marketplace });
     const int galleryCards = market.getNumCards();
-    t.check (galleryCards >= 7, "Extensions & Thèmes : "_t + juce::String (galleryCards) + " cartes (6 thèmes, plug-ins d'interface et DSP)"_t);
-    t.check (shoot ("12_extensions_themes") > 60, "galerie avec aperçus en direct"_t);
-    app.navigate ({ nx::PageId::Marketplace, "themes" });
-    const int themeCards = market.getNumCards();
-    t.check (themeCards == 6, "onglet Thèmes : "_t + juce::String (themeCards) + " cartes");
+    bool noThemeCard = true;
+    for (int i = 0; i < galleryCards; ++i) noThemeCard = noThemeCard && market.getCard (i)->getData().kind != nx::MarketCard::Kind::Theme;
+    t.check (galleryCards >= 1 && noThemeCard, "Extensions : "_t + juce::String (galleryCards) + " cartes, plug-ins d'interface et DSP seulement (aucun thème)"_t);
+    t.check (shoot ("12_extensions") > 60, "galerie avec aperçus en direct"_t);
+    const int themeCount = (int) app.themes().getThemes().size();
+    t.check (themeCount == 7 && app.themes().findTheme ("aura") != nullptr && app.themes().findTheme ("nx-emerald") != nullptr,
+             "thèmes livrés : "_t + juce::String (themeCount) + " (Aura par défaut, NX Emerald en thème secondaire)"_t);
     {
         // community themes: the 6 .json files of CommunityThemes/ (not in the binary) imported as a user would
         const auto dir = juce::File (__FILE__).getParentDirectory().getParentDirectory().getChildFile ("CommunityThemes");
@@ -806,22 +812,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
             if (i == 0) { settle (100); shoot ("50_theme_vice_sunset"); }
             if (i == 5) { settle (100); shoot ("51_theme_baron_flame"); }
         }
-        app.navigate ({ nx::PageId::Marketplace, "themes" });
-        const bool listed = market.getNumCards() == 12;
-        shoot ("52_themes_importes");
-        {
-            // crash regression: switching a theme on from its card used to rebuild the cards inside the switch's own
-            // callback (use after free). The card must outlive its callback; the gallery is rebuilt afterwards.
-            nx::MarketCard* card = nullptr;
-            for (int i = 0; i < market.getNumCards(); ++i)
-                if (auto* c = market.getCard (i); c->getData().id == "cobalt-minimal") card = c;
-            juce::Component::SafePointer<nx::MarketCard> alive (card);
-            if (card != nullptr) card->onToggle (true);
-            const bool survived = alive != nullptr && app.theme().id == "cobalt-minimal";
-            settle (150);
-            t.check (card != nullptr && survived && alive == nullptr && market.getNumCards() == 12,
-                     "thème activé depuis sa carte : pas de plantage (cartes reconstruites après le clic, pas pendant)"_t);
-        }
+        const bool listed = (int) app.themes().getThemes().size() == themeCount + 6;
         // a shared file can never replace a built-in theme; unsafe content is refused
         const auto fake = t.tempDir.getChildFile ("fake_emerald.json");
         fake.replaceWithText (R"({ "nxtheme": 1, "id": "nx-emerald", "name": "Faux", "variables": { "--nx-bg": "#FF0000", "--nx-accent": "#00FF00" } })");
@@ -846,11 +837,10 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         for (auto* f : files) app.themes().findTheme (juce::String (f).replaceCharacter ('_', '-'))->folder.deleteRecursively();
         app.themes().findTheme ("nx-emerald-perso")->folder.deleteRecursively();
         app.themes().rescan();
-        app.applyThemeNow ("nx-emerald");
+        app.applyThemeNow ("aura");
         t.check (imported && listed && builtInSafe && refused && roundTrip,
-                 "thèmes communautaires : 6 fichiers .json importés et appliqués (NX Remote suit), thème intégré jamais remplacé, contenu dangereux refusé, export / réimport"_t
+                 "thèmes communautaires : 6 fichiers .json importés et appliqués (Aura Remote suit), thème intégré jamais remplacé, contenu dangereux refusé, export / réimport"_t
                  + " [" + why + juce::String ((int) listed) + juce::String ((int) builtInSafe) + juce::String ((int) refused) + juce::String ((int) roundTrip) + "]");
-        app.navigate ({ nx::PageId::Marketplace, "themes" });
     }
     app.navigate ({ nx::PageId::UserPlugins, "catalogue" });
     const int catalogueCards = market.getNumCards();
@@ -1042,9 +1032,9 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         shoot ("48_apparence_clair_violet");
         app.setAppearance ("dark");
         app.setAccent (juce::Colours::transparentBlack);
-        const bool signature = app.theme().accent() == juce::Colour (0xff00f5a0) && app.settings().get ("accent").toString().isEmpty();
+        const bool signature = app.theme().accent() == juce::Colour (0xff2563eb) && app.settings().get ("accent").toString().isEmpty();
         t.check (light && dark && violet && readable && signature,
-                 "apparence : Sombre / Clair, couleur d'accent (assombrie sur thème clair), retour à l'émeraude NX #00F5A0"_t);
+                 "apparence : Sombre / Clair, couleur d'accent (assombrie sur thème clair), retour au bleu Aura #2563EB"_t);
         app.setLayoutOption ("density", "integrated");
         const bool flush = main->player.getX() == 0 && main->player.getRight() == main->getWidth() && main->player.getBottom() == main->getHeight();
         settle (100);
@@ -1155,7 +1145,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         for (auto& p : app.plugins().getUiPlugins()) uiBefore = uiBefore || (p.id == "nx.spectrum" && p.enabled);
         app.setStreamerMode (true);
         {
-            // visual extensions off for the session, greyed in Extensions & Thèmes; the transport is never throttled
+            // visual extensions off for the session, greyed in Extensions; the transport is never throttled
             bool anyUiOn = false;
             for (auto& p : app.plugins().getUiPlugins()) anyUiOn = anyUiOn || p.enabled;
             app.navigate ({ nx::PageId::Marketplace, "interface" });
@@ -1242,14 +1232,36 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     //==========================================================================================
     // v1.0 interface: sidebar pillars, quality pills, favourites / playlists (drag & drop), artist pages,
     // NAS badges and clean-up, settings window + dashboard, profile chip, studio tools, immersive view,
-    // onboarding, NX Remote, English.
+    // onboarding, Aura Remote, English.
     app.artistInfo().setEnabled (false);      // no network in the tests: artist data are stored by hand below
     auto& sb = main->sidebar;
     sb.refresh();
     const int iLocal = sb.findItem (nx::PageId::Library, "albums"), iFav = sb.findItem (nx::PageId::Favourites);
     const int iPl = sb.findItem (nx::PageId::Playlists), iNas = sb.findItem (nx::PageId::Source, "upnp"), iExt = sb.findItem (nx::PageId::Marketplace);
     t.check (iLocal >= 0 && iFav > iLocal && iPl > iFav && iNas > iPl && iExt > iNas && sb.findItem (nx::PageId::UserPlugins) < 0,
-             "barre latérale épurée : Local, Favoris, Playlists, NAS / Jellyfin, Extensions & Thèmes"_t);
+             "barre latérale épurée : Local, Favoris, Playlists, NAS / Jellyfin, Extensions"_t);
+    {
+        // rebranding: the player is "Aura" everywhere the user can read (English strings and the phone page included)
+        const auto en = juce::String::fromUTF8 (NXData::en_json, NXData::en_jsonSize);
+        const auto web = juce::String::fromUTF8 (NXData::index_html, NXData::index_htmlSize);
+        const juce::String oldName = juce::String ("NX") + " Player";
+        t.check (! en.contains (oldName) && ! web.contains (oldName) && ! en.contains ("NX Remote") && juce::JUCEApplication::getInstance()->getApplicationName() == "Aura"
+                 && nx::ThemeManager().current().accent() == juce::Colour (0xff2563eb),
+                 "nouveau nom « Aura » partout (application, anglais, Aura Remote) ; bleu du logo par défaut"_t);
+    }
+    {
+        // bug reports: one zip with the summary and the logs, nothing private
+        nx::audioLog ("test: ligne de journal");
+        const auto zipFile = nx::diagnostics::exportZip (app.diagnosticsSummary(), t.tempDir.getChildFile ("logs"));
+        juce::ZipFile zip (zipFile);
+        juce::String summary;
+        if (auto* e = zip.getEntry ("diagnostic.txt"))
+            if (std::unique_ptr<juce::InputStream> in (zip.createStreamForEntry (*e)); in != nullptr) summary = in->readEntireStreamAsString();
+        const auto key = app.settings().get ("licenseKey").toString();
+        t.check (zipFile.existsAsFile() && zip.getEntry ("audio.log") != nullptr && summary.startsWith ("Aura ") && summary.contains ("Sortie")
+                 && (key.isEmpty() || ! summary.contains (key)) && zip.getEntry ("settings.json") == nullptr,
+                 "Réglages › À propos › Exporter les journaux : zip (résumé système, audio.log, rapports de plantage), sans clé ni réglages"_t);
+    }
 
     auto& listing = main->getListing();
     auto albumTitles = [&] { juce::StringArray a; for (auto& x : listing.grid.getAlbums()) a.add (x.title); a.sort (true); return a.joinIntoString (", "); };
@@ -1454,6 +1466,22 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         nx::ThemeManager fresh;
         fresh.setZeynUnlocked ((bool) app.settings().get ("zeynUnlocked", false));
         t.check (listed && fresh.findTheme ("zeyn") != nullptr, "Réglages › Apparence : ZEYN proposé parmi les thèmes, aussi après redémarrage"_t);
+        {
+            // crash regression (1.0.0, EXC_BAD_ACCESS in applyThemeNow): the "Thème" combo passed a string owned by its
+            // own callback, and the settings page was rebuilt during the apply. The combo must outlive the change.
+            juce::ComboBox* combo = nullptr;
+            for (auto* c : sw.getPage().content().getChildren())
+                if (auto* cb = dynamic_cast<juce::ComboBox*> (c))
+                    for (int i = 0; i < cb->getNumItems(); ++i) if (cb->getItemText (i) == "Cobalt Minimal") combo = cb;
+            juce::Component::SafePointer<juce::ComboBox> alive (combo);
+            if (combo != nullptr) { combo->setText ("Cobalt Minimal", juce::dontSendNotification); combo->onChange(); }
+            const bool survived = alive != nullptr && app.theme().id == "cobalt-minimal";
+            settle (150);
+            t.check (combo != nullptr && survived && alive == nullptr && app.theme().id == "cobalt-minimal",
+                     "Réglages › Thème : changement de thème sans plantage (page reconstruite après le choix, pas pendant)"_t);
+            app.applyTheme (themeBefore);      // also restores the remembered dark theme
+            settle (50);
+        }
         sw.close();
         app.applyThemeNow ("zeyn");
         app.navigate ({ nx::PageId::Albums });
@@ -1466,11 +1494,11 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     }
     app.setRemoteEnabled (true);
     sw.getPage().setTab ("remote");
-    t.check (app.remote().isRunning() && shoot ("27_nx_remote") > 30, "NX Remote activé : QR code et lien"_t);
+    t.check (app.remote().isRunning() && shoot ("27_nx_remote") > 30, "Aura Remote activé : QR code et lien"_t);
     {
         const auto state = juce::JSON::parse (app.buildRemoteState());
         t.check (state.getProperty ("family", {}).toString() == "merging" && state.getProperty ("profiles", {}).size() == 3,
-                 "état NX Remote : morceau, volume, profils Anubis ("_t + state.getProperty ("device", {}).toString() + ")");
+                 "état Aura Remote : morceau, volume, profils Anubis ("_t + state.getProperty ("device", {}).toString() + ")");
         {
             // A / B from the phone: point A is reported as soon as it is set (the page shows "Point A posé à…")
             juce::StringPairArray none;
@@ -1478,7 +1506,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
             const double pending = (double) juce::JSON::parse (app.buildRemoteState()).getProperty ("loopPendingA", -1.0);
             app.handleRemoteCommand ("loopClear", none);
             const double cleared = (double) juce::JSON::parse (app.buildRemoteState()).getProperty ("loopPendingA", 0.0);
-            t.check (pending >= 0.0 && cleared < 0.0, "NX Remote A-B : point A transmis au téléphone dès qu'il est posé, effacé par Arrêt"_t);
+            t.check (pending >= 0.0 && cleared < 0.0, "Aura Remote A-B : point A transmis au téléphone dès qu'il est posé, effacé par Arrêt"_t);
         }
         juce::StringPairArray p;
         p.set ("v", "0.5");
@@ -1500,15 +1528,15 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         p.set ("v", "1");
         app.handleRemoteCommand ("volume", p);
         for (int i = 0; i < 60 && ! app.engine().isFixedVolume(); ++i) settle (100);
-        t.check (std::abs (v - 0.5) < 0.01 && pureDop && app.engine().isFixedVolume(), "NX Remote : volume à 50 %, profil Pure DoP depuis le téléphone, retour à 100 % bit-perfect"_t
+        t.check (std::abs (v - 0.5) < 0.01 && pureDop && app.engine().isFixedVolume(), "Aura Remote : volume à 50 %, profil Pure DoP depuis le téléphone, retour à 100 % bit-perfect"_t
                  + " [v=" + juce::String (v) + " dop=" + juce::String ((int) pureDop) + " fixed=" + juce::String ((int) app.engine().isFixedVolume()) + " state=" + juce::String ((int) app.engine().getState()) + " vol=" + juce::String (app.getUserVolume()) + "]");
         {
             const auto st = juce::JSON::parse (app.buildRemoteState());
             const bool dopNow = app.engine().getCurrentPlan().wire == nx::WireFormat::DoP;
             // 100 % bit-perfect is not a lock: in PCM / DXD the phone keeps its slider (it used to stay stuck at 100 %)
             t.check ((bool) st.getProperty ("volumeFixed", false) == (dopNow || app.engine().isVolumeLockedByProfile()),
-                     "état NX Remote : volume fixe seulement en DoP ou profil RME DSD Direct (pas à 100 % en PCM / DXD)"_t);
-            t.check (! dopNow || (bool) st.getProperty ("dop", false), "état NX Remote : DoP signalé quand la piste passe en DoP"_t);
+                     "état Aura Remote : volume fixe seulement en DoP ou profil RME DSD Direct (pas à 100 % en PCM / DXD)"_t);
+            t.check (! dopNow || (bool) st.getProperty ("dop", false), "état Aura Remote : DoP signalé quand la piste passe en DoP"_t);
         }
     }
     {
@@ -1529,7 +1557,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
             const auto img = nx::imagedec::decode (jpg.getData(), jpg.getSize());
             allJpeg = allJpeg && asJpeg (jpg) && baseline && img.isValid() && img.getWidth() == 32;
         }
-        t.check (allJpeg, "NX Remote : WebP, JPEG progressif / CMYK et PNG 16 bits servis en JPEG RGB standard"_t);
+        t.check (allJpeg, "Aura Remote : WebP, JPEG progressif / CMYK et PNG 16 bits servis en JPEG RGB standard"_t);
         juce::Image big (juce::Image::ARGB, 1400, 900, true);
         { juce::Graphics g (big); g.fillAll (juce::Colours::orange); }
         juce::MemoryOutputStream png;
@@ -1542,9 +1570,9 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
             { juce::Graphics g (im); nx::logo::draw (g, im.getBounds().toFloat()); }
             t.check (im.getPixelAt (64, 20).getAlpha() > 200 && im.getPixelAt (0, 0).getAlpha() < 20 && im.getPixelAt (40, 64).getBrightness() > 0.0f
                      && NXData::icon_pngSize > 1000 && ((const unsigned char*) NXData::icon_png)[1] == 'P',
-                     "logo NX Player : SVG vectoriel dessiné, icône NX Remote embarquée"_t);
+                     "logo Aura : SVG vectoriel dessiné, icône Aura Remote embarquée"_t);
         }
-        t.check (small.isValid() && small.getWidth() == 600 && small.getHeight() == 386, "NX Remote : pochette réduite à 600 px max, proportions gardées"_t);
+        t.check (small.isValid() && small.getWidth() == 600 && small.getHeight() == 386, "Aura Remote : pochette réduite à 600 px max, proportions gardées"_t);
         // no key at all: the cover next to the file (cover / folder / front) is found through the track id
         const auto dir = t.tempDir.getChildFile ("remote-cover");
         dir.createDirectory();
@@ -1555,28 +1583,28 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         ti.source = "local"; ti.externalId = ti.uri = dir.getChildFile ("t.wav").getFullPathName(); ti.title = "Sans pochette"_t; ti.artist = "X"; ti.album = "Remote";
         const auto tid = app.library().upsert (ti);
         t.check (asJpeg (app.remoteArtwork ("track:" + juce::String (tid), 600)) && app.remoteArtwork ("inconnue.jpg", 600).getSize() == 0,
-                 "NX Remote : repli dossier (front.webp) via l'identifiant du morceau ; clé inconnue = aucune image"_t);
+                 "Aura Remote : repli dossier (front.webp) via l'identifiant du morceau ; clé inconnue = aucune image"_t);
         // permanent link: the token and the port are saved, a new run reuses them
         const auto token = app.remote().getToken();
-        t.check (app.settings().get ("remoteToken").toString() == token && token.length() >= 32, "NX Remote : jeton enregistré dans les préférences"_t);
+        t.check (app.settings().get ("remoteToken").toString() == token && token.length() >= 32, "Aura Remote : jeton enregistré dans les préférences"_t);
         const auto portBefore = app.remote().getPort();
         const auto urlBefore = app.remote().getUrl();
         app.setRemoteEnabled (false);
         app.setRemoteEnabled (true);
         t.check (app.remote().getPort() == portBefore && app.remote().getUrl() == urlBefore && (int) app.settings().get ("remotePort", 0) == portBefore,
-                 "NX Remote : arrêt puis redémarrage, même port, même lien, même QR code"_t);
+                 "Aura Remote : arrêt puis redémarrage, même port, même lien, même QR code"_t);
         const auto oldUrl = app.remote().getUrl();
         app.remote().regenerateToken();
-        t.check (app.settings().get ("remoteToken").toString() == app.remote().getToken() && app.remote().getUrl() != oldUrl, "NX Remote : « Nouveau code » régénère le lien et l'enregistre"_t);
+        t.check (app.settings().get ("remoteToken").toString() == app.remote().getToken() && app.remote().getUrl() != oldUrl, "Aura Remote : « Nouveau code » régénère le lien et l'enregistre"_t);
         {
             juce::String why;
             nx::RemoteServer fresh;
             fresh.setToken (app.remote().getToken());
             t.check (fresh.getToken() == app.remote().getToken() && fresh.start (portBefore, why) && fresh.getPort() > 0,
-                     "NX Remote : un serveur neuf reprend le jeton enregistré"_t);
+                     "Aura Remote : un serveur neuf reprend le jeton enregistré"_t);
         }
         const auto state2 = juce::JSON::parse (app.buildRemoteState());
-        t.check (state2.hasProperty ("family") && state2.hasProperty ("position"), "état NX Remote : famille de matériel (merging / rme / fiio)"_t);
+        t.check (state2.hasProperty ("family") && state2.hasProperty ("position"), "état Aura Remote : famille de matériel (merging / rme / fiio)"_t);
     }
     app.setRemoteEnabled (false);
     sw.close();
@@ -1641,7 +1669,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         t.check (fromTheme && fromSettings && fromPlugin, "disposition modulable : thème (CSS + immersive.json), puis réglages, puis plug-ins"_t);
         app.layout.getDynamicObject()->removeProperty ("immersive");
         app.settings().set ("immersive", juce::var (new juce::DynamicObject()));
-        app.applyThemeNow ("nx-emerald");
+        app.applyThemeNow ("aura");
     }
     app.setImmersive (false);
     t.check (! main->isImmersive(), "Échap / bouton : sortie de la vue immersive"_t);
@@ -1667,7 +1695,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         ob.clickTile ("mode", "dark");
         ob.clickTile ("accent", "0");
         t.check (modeTiles && accentTiles && light && blue && app.theme().id == before && app.getAccent().isTransparent(),
-                 "étape 1 : apparence Sombre / Clair / Système et couleur d'accent (Personnalisez NX Player)"_t);
+                 "étape 1 : apparence Sombre / Clair / Système et couleur d'accent (Personnalisez Aura)"_t);
     }
     ob.setStep (1);
     ob.clickTile ("layout", "compact");
@@ -1710,7 +1738,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     savePng (miniImg, shots.getChildFile ("11_mini_lecteur.png"));
     t.check (colourVariety (miniImg) > 20, "mini-lecteur");
 
-    // NX Player Free: Studio Master formats and Pro features ask for Premium (the same binary, the key removed)
+    // Aura Free: Studio Master formats and Pro features ask for Premium (the same binary, the key removed)
     {
         auto dismiss = [&]
         {
@@ -1744,16 +1772,16 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         for (auto& q : app.engine().getQueue()) onlyPcm = onlyPcm && ! q.uri.endsWithIgnoreCase (".dsf") && ! q.uri.endsWithIgnoreCase (".dff");
         t.check (dsdBlocked && dxdBlocked && onlyPcm && ! dsd.empty() && ! hiRes.empty(),
                  "Free : DSD et DXD (> 192 kHz) bloqués avec la fenêtre Premium, PCM ≤ 192 kHz lu, file sans les Studio Master"_t);
-        t.check (nx::AppController::upsellMessage (nx::UpsellReason::StudioMaster) == "Passez à NX Player Premium pour débloquer la lecture haute résolution au-delà de 192 kHz."_t
+        t.check (nx::AppController::upsellMessage (nx::UpsellReason::StudioMaster) == "Passez à Aura Premium pour débloquer la lecture haute résolution au-delà de 192 kHz."_t
                  && nx::AppController::upsellTitle (nx::UpsellReason::StudioMaster) == "Format Studio Master (DXD / DSD / SACD)"_t,
-                 "fenêtre Premium : « Format Studio Master (DXD / DSD / SACD) — Passez à NX Player Premium… »"_t);
+                 "fenêtre Premium : « Format Studio Master (DXD / DSD / SACD) — Passez à Aura Premium… »"_t);
         {
             app.playTracks (dsd, 0);
             settle (50);
             auto* w = dynamic_cast<juce::AlertWindow*> (juce::ModalComponentManager::getInstance()->getModalComponent (0));
             t.check (w != nullptr && w->getNumButtons() == 3 && w->getButton (0)->getButtonText() == "Entrer une clé de licence"_t
-                     && w->getButton (1)->getButtonText() == "Acheter NX Player Premium"_t,
-                     "fenêtre Premium : boutons « Entrer une clé de licence » et « Acheter NX Player Premium »"_t);
+                     && w->getButton (1)->getButtonText() == "Acheter Aura Premium"_t,
+                     "fenêtre Premium : boutons « Entrer une clé de licence » et « Acheter Aura Premium »"_t);
             shoot ("40_free_fenetre_premium");
             if (w != nullptr) w->exitModalState (1);                  // "enter a key" -> Réglages › À propos
             settle (100);
@@ -1766,7 +1794,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         nx::actions::editAlbum (app, app.library().getAlbums ("title", 1).front());
         const bool editorRefused = app.getLastUpsell() == nx::UpsellReason::MetadataEditor && juce::ModalComponentManager::getInstance()->getNumModalComponents() == 1;
         dismiss();
-        t.check (remoteRefused && editorRefused && app.getUpsellCount() == b2 + 2, "Free : NX Remote et éditeur de métadonnées réservés à Premium (fenêtre d'offre)"_t);
+        t.check (remoteRefused && editorRefused && app.getUpsellCount() == b2 + 2, "Free : Aura Remote et éditeur de métadonnées réservés à Premium (fenêtre d'offre)"_t);
 
         // Réglages › À propos: the licence card, Free state, key typed in the field
         auto& sw2 = main->getSettingsWindow();
@@ -1791,7 +1819,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         }
         app.navigate ({ nx::PageId::Settings, "apropos" });
         settle (100);
-        t.check (shoot ("42_licence_premium") > 30, "Réglages : « NX Player Premium — Activé pour … », badge ÉDITION PREMIUM"_t);
+        t.check (shoot ("42_licence_premium") > 30, "Réglages : « Aura Premium — Activé pour … », badge ÉDITION PREMIUM"_t);
         {
             // Licences & mentions légales: credits, button for the full Licences.txt (embedded), trademark notice
             juce::TextButton* licences = nullptr;

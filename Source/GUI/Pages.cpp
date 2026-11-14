@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Pages.h"
 #include <random>
 #include <algorithm>
@@ -579,7 +579,7 @@ void SourcePage::buildUpnp()
 {
     heading = "NAS (UPnP / DLNA)";
     description = "Serveurs de musique du réseau local (MinimServer, Asset, Synology, QNAP, JRiver, Jellyfin…). Les morceaux sont lus en flux HTTP "_t
-                  "par le moteur de NX Player, donc en bit-perfect. Pour un partage SMB, ajoutez simplement le dossier monté dans Fichiers locaux."_t;
+                  "par le moteur d'Aura, donc en bit-perfect. Pour un partage SMB, ajoutez simplement le dossier monté dans Fichiers locaux."_t;
     auto* upnp = dynamic_cast<UpnpProvider*> (ctx.providers().getProvider ("upnp"));
     if (upnp == nullptr) return;
     juce::Component::SafePointer<SourcePage> safe (this);
@@ -790,7 +790,7 @@ void SourcePage::buildProvider (MediaProvider& p)
     const auto id = p.getId();
     if (id == "qobuz")
     {
-        description = "FLAC jusqu'à 24 bits / 192 kHz, lu par le moteur bit-perfect de NX Player (changement automatique de fréquence du DAC). "_t
+        description = "FLAC jusqu'à 24 bits / 192 kHz, lu par le moteur bit-perfect d'Aura (changement automatique de fréquence du DAC). "_t
                       "L'API Qobuz demande des identifiants d'application partenaire (app_id / app_secret) délivrés par Qobuz."_t;
         if (CredentialStore::builtIn ("qobuz", "app_id").isEmpty())
         {
@@ -1358,7 +1358,7 @@ namespace
                 else activate();
             };
             addAndMakeVisible (action);
-            buy.setButtonText ("Acheter NX Player Premium"_t);
+            buy.setButtonText ("Acheter Aura Premium"_t);
             buy.onClick = [this] { ctx.openShop(); };
             addChildComponent (buy);
             buy.setVisible (! premium);
@@ -1423,12 +1423,12 @@ namespace
             }
             g.setColour (t.textCol());
             g.setFont (style::font (15.0f, true));
-            g.drawText (premium ? "NX Player Premium — Activé pour "_t + ctx.license().getLicensee() : juce::String ("NX Player Free (PCM jusqu'à 192 kHz)"_t),
+            g.drawText (premium ? "Aura Premium — Activé pour "_t + ctx.license().getLicensee() : juce::String ("Aura Free (PCM jusqu'à 192 kHz)"_t),
                         head, juce::Justification::centredLeft, true);
             g.setColour (t.textDim());
             g.setFont (style::font (12.0f));
-            g.drawText (premium ? juce::String ("Tout est débloqué : DSD, DXD, SACD, mode exclusif, profils matériels, NX Remote, éditeur de métadonnées."_t)
-                                : juce::String ("Premium débloque le DSD, le DXD (> 192 kHz), les images SACD, le mode exclusif, les profils matériels, NX Remote et l'éditeur de métadonnées."_t),
+            g.drawText (premium ? juce::String ("Tout est débloqué : DSD, DXD, SACD, mode exclusif, profils matériels, Aura Remote, éditeur de métadonnées."_t)
+                                : juce::String ("Premium débloque le DSD, le DXD (> 192 kHz), les images SACD, le mode exclusif, les profils matériels, Aura Remote et l'éditeur de métadonnées."_t),
                         r.removeFromTop (22), juce::Justification::centredLeft, true);
             r.removeFromTop (8 + 34 + 10);
             g.setColour (t.border());
@@ -1457,7 +1457,7 @@ namespace
             {
                 case UpdateChecker::State::Idle:      return "Mises à jour : pas encore vérifiées"_t;
                 case UpdateChecker::State::Checking:  return "Recherche de mises à jour…"_t;
-                case UpdateChecker::State::UpToDate:  return "NX Player est à jour"_t + when;
+                case UpdateChecker::State::UpToDate:  return "Aura est à jour"_t + when;
                 case UpdateChecker::State::Available: return "Nouvelle version disponible : v"_t + st.info.latestVersion + (st.info.mandatory ? " · mise à jour requise"_t : juce::String()) + when;
                 case UpdateChecker::State::Failed:    return "Vérification impossible : "_t + st.error + when;
             }
@@ -1527,7 +1527,7 @@ void SettingsPage::row (const juce::String& label, juce::Component* control, int
 juce::StringArray SettingsPage::tabIds() { return { "audio", "bibliotheque", "interface", "remote", "outils", "apropos" }; }
 juce::StringArray SettingsPage::tabLabels()
 {
-    return { "Audio & Système"_t, "Bibliothèque & NAS"_t, "Interface"_t, "NX Remote", "Outils Studio"_t, "À propos"_t };
+    return { "Audio & Système"_t, "Bibliothèque & NAS"_t, "Interface"_t, "Aura Remote", "Outils Studio"_t, "À propos"_t };
 }
 
 namespace
@@ -1559,15 +1559,15 @@ namespace
                "FiiO et KA17 sont des marques de FiiO Electronics Technology Co., Ltd. ASIO est une marque de Steinberg Media Technologies GmbH. "
                "Super Audio CD et Direct Stream Digital sont des marques de Sony Group Corporation et de Koninklijke Philips N.V. "
                "Les autres noms de produits ou de sociétés cités appartiennent à leurs propriétaires respectifs. Ces noms sont utilisés "
-               "uniquement pour indiquer la compatibilité des profils audio de NX Player. NX Player n'est ni affilié à ces sociétés, ni approuvé, "
+               "uniquement pour indiquer la compatibilité des profils audio d'Aura. Aura n'est ni affilié à ces sociétés, ni approuvé, "
                "sponsorisé ou certifié par elles. Les profils matériels sont fournis « en l'état », sans garantie de résultat sur un appareil donné."_t;
     }
 
     juce::String creditsText()
     {
         juce::StringArray l;
-        l.add ("NX Player © 2026 NX Audio (ZEYN). Tous droits réservés."_t);
-        l.add ("NX Player utilise les composants suivants ; nous remercions leurs auteurs."_t);
+        l.add ("Aura © 2026 NX Audio (ZEYN). Tous droits réservés."_t);
+        l.add ("Aura utilise les composants suivants ; nous remercions leurs auteurs."_t);
         l.add ({});
         l.add ("JUCE — © Raw Material Software Limited. Utilisé sous licence JUCE (licence commerciale)."_t);
         l.add ("JUCE intègre :"_t);
@@ -1732,7 +1732,7 @@ void SettingsPage::buildAudio()
                     st.rmeLockVolume = v;
                     ctx.engine().setSettings (st);
                     ctx.applyEngineSettings();
-                }), 36, "Attention : en « DSD Direct », l'ADI-2 désactive son volume matériel sur les sorties ligne. Le volume de NX Player reste "_t
+                }), 36, "Attention : en « DSD Direct », l'ADI-2 désactive son volume matériel sur les sorties ligne. Le volume d'Aura reste "_t
                         "à 100 % (bit-perfect) : réglez le niveau avec un contrôle analogique externe."_t);
             }
         }
@@ -1776,7 +1776,7 @@ void SettingsPage::buildAudio()
         }), 36, "Un fichier plus gros (DSD512, DXD de plusieurs heures) est lu depuis le disque."_t);
     }
     row ("Mode Streamer / Gaming"_t, makeToggle (ctx.isStreamerMode(), [this] (bool v) { ctx.setStreamerMode (v); }), 36,
-         "Fond, spectre, paroles et transitions au repos ; 1 image / s quand NX Player est en arrière-plan. L'audio n'est pas modifié."_t);
+         "Fond, spectre, paroles et transitions au repos ; 1 image / s quand Aura est en arrière-plan. L'audio n'est pas modifié."_t);
     row ("Overlay « Now Playing » pour OBS"_t, makeToggle (ctx.isNowPlayingOverlayVisible(), [this] (bool v) { ctx.setNowPlayingOverlay (v); }), 36,
          "Petite fenêtre en verre givré (pochette, titre, artiste, badge Hi-Res / DSD) à capturer dans OBS. Double-clic : masquer."_t);
     row ("Mode Streamer : now_playing.txt et now_playing_cover.jpg mis à jour en temps réel"_t, makeButton ("Ouvrir le dossier"_t, [this]
@@ -1878,7 +1878,7 @@ void SettingsPage::buildLibrary()
 
 void SettingsPage::buildInterface()
 {
-    section ("Personnalisez NX Player"_t);
+    section ("Personnalisez Aura"_t);
     const juce::StringArray langs { juce::String::fromUTF8 ("Fran\xc3\xa7" "ais"), "English" };
     row ("Langue / Language"_t, makeCombo (langs, i18n::isEnglish() ? juce::String ("English") : langs[0], [this] (const juce::String& v)
     {
@@ -1893,7 +1893,7 @@ void SettingsPage::buildInterface()
         {
             const int i = names.indexOf (v);
             if (i >= 0) ctx.applyTheme (ids[i]);
-        }), 36, "Plus de thèmes et plug-ins : barre latérale › Extensions & Thèmes."_t);
+        }), 36, "Thèmes : ici ; plug-ins : barre latérale › Extensions."_t);
     }
     row ("Thèmes de la communauté : un fichier .json se partage et s'importe en un clic"_t,
          makeButton ("Importer un thème (.json)"_t, [this] { ctx.chooseThemeToImport(); }), 36);
@@ -1911,7 +1911,7 @@ void SettingsPage::buildInterface()
         refresh();
     }));
 
-    section ("Disposition NX"_t);
+    section ("Disposition Aura"_t);
     row ("Densité de la barre d'écoute"_t, nullptr, 24);
     fullRow (new appearance::Picker (ctx, appearance::Picker::Kind::Density), appearance::Picker::idealHeight (appearance::Picker::Kind::Density));
     const auto layout = ctx.settings().get ("layout");
@@ -1960,8 +1960,8 @@ void SettingsPage::buildInterface()
 
 void SettingsPage::buildRemote()
 {
-    section ("NX Remote");
-    row ("Activer NX Remote (Wi-Fi, à la demande)"_t, makeToggle (ctx.remote().isRunning(), [this] (bool v) { ctx.setRemoteEnabled (v); refresh(); }), 36,
+    section ("Aura Remote");
+    row ("Activer Aura Remote (Wi-Fi, à la demande)"_t, makeToggle (ctx.remote().isRunning(), [this] (bool v) { ctx.setRemoteEnabled (v); refresh(); }), 36,
          "Un serveur web local démarre sur cet ordinateur : scannez le QR code une seule fois avec votre téléphone (même réseau Wi-Fi). Le lien reste identique d'une session à l'autre : gardez l'onglet ou ajoutez-le aux favoris. Réactivé automatiquement au lancement si vous l'avez laissé allumé."_t);
     if (ctx.remote().isRunning())
     {
@@ -2015,18 +2015,20 @@ void SettingsPage::buildAbout()
             logo::draw (g, getLocalBounds().removeFromLeft (getHeight()).toFloat());
             g.setColour (text);
             g.setFont (style::font (28.0f, true));
-            g.drawText ("NX Player", getLocalBounds().withTrimmedLeft (getHeight() + 16), juce::Justification::centredLeft);
+            g.drawText ("Aura", getLocalBounds().withTrimmedLeft (getHeight() + 16), juce::Justification::centredLeft);
         }
     };
     auto* header = new LogoHeader();
     header->text = ctx.theme().textCol();
     fullRow (header, 104);
-    row ("NX Player " NX_VERSION " · NX Audio Suite · logiciel propriétaire"_t, nullptr, 26);
+    row ("Aura " NX_VERSION " · NX Audio Suite · logiciel propriétaire"_t, nullptr, 26);
     if (ctx.discordUrl().isNotEmpty())
         row ("Questions, idées, presets d'égaliseur : rejoignez les autres auditeurs"_t,
              makeButton ("Rejoindre la communauté NX Audio"_t, [this] { ctx.openDiscord(); }), 36);
+    row ("Un bug ? Exportez les journaux (aucune donnée personnelle ni clé de licence) et envoyez le fichier au support"_t,
+         makeButton ("Exporter les journaux (.zip)"_t, [this] { ctx.exportDiagnostics(); }), 36);
     if (! ctx.isPremium())
-        row ("DSD, DXD, SACD, mode exclusif, profils matériels, NX Remote"_t, makeButton ("Passer à NX Player Premium"_t, [this] { ctx.openShop(); }), 36);
+        row ("DSD, DXD, SACD, mode exclusif, profils matériels, Aura Remote"_t, makeButton ("Passer à Aura Premium"_t, [this] { ctx.openShop(); }), 36);
 
     section ("Licences & mentions légales"_t);
     struct Title : juce::Component
@@ -2036,7 +2038,7 @@ void SettingsPage::buildAbout()
         {
             g.setColour (c);
             g.setFont (style::font (16.0f, true));
-            g.drawText ("NX Player — Licences et crédits"_t, getLocalBounds(), juce::Justification::centredLeft);
+            g.drawText ("Aura — Licences et crédits"_t, getLocalBounds(), juce::Justification::centredLeft);
         }
     };
     auto* title = new Title();

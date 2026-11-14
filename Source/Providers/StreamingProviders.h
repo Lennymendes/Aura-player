@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Streaming services, through their official APIs and with credentials the user (or the
 // distributor of the build) obtains from each service. Nothing is extracted from the services'
 // own apps, and no protection is bypassed:

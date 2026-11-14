@@ -1,5 +1,5 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Sidebar: three pillars (Local, Favoris, Playlists), the NAS / Jellyfin servers, Extensions & Thèmes and
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Sidebar: three pillars (Local, Favoris, Playlists), the NAS / Jellyfin servers, Extensions and
 // the user's playlists. Wide (labels) or compact (icons only, tooltips). Tracks and albums dropped on a
 // playlist are appended to it; dropped on "Playlists" they start a new one; on "Favoris" they become favourites.
 #pragma once
@@ -40,7 +40,7 @@ public:
 
     juce::String getTooltip() override;
 
-    /** The NX Player logo, top left. Three clicks within 800 ms unlock the hidden ZEYN theme. */
+    /** The Aura logo, top left. Three clicks within 800 ms unlock the hidden ZEYN theme. */
     juce::Rectangle<int> logoBounds() const;
     void logoClicked (juce::uint32 nowMs);
 

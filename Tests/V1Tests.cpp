@@ -1,6 +1,6 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // v1.0: Memory Play, studio tools, library filters / favourites / playlists / NAS clean-up, artist pages,
-// NX Remote (HTTP API, token, QR code), AuraEngine X bridge, English dictionary.
+// Aura Remote (HTTP API, token, QR code), AuraEngine X bridge, English dictionary.
 #include "TestFramework.h"
 #include "TestAudioFiles.h"
 #include "../Source/Audio/MemoryPlayStream.h"
@@ -176,7 +176,7 @@ NX_TEST_SECTION (111, "Moteur v1 : Memory Play (fichier en RAM) et Outils Studio
         }
         t.check (exact && plan.inMemory == memory && path.overall == nx::PathQuality::BitPerfect,
                  (memory ? "Memory Play actif"_t : juce::String ("Memory Play désactivé"_t)) + " : 60 000 trames 24/96 bit-perfect");
-        t.check (engineNode && dacNode, "Signal Path : nœuds « Moteur NX 64 bits"_t + (memory ? " · Memory Play" : "") + " » et « DAC »");
+        t.check (engineNode && dacNode, "Signal Path : nœuds « Moteur Aura 64 bits"_t + (memory ? " · Memory Play" : "") + " » et « DAC »");
     }
 
     // ---- Studio tools: numeric checks -----------------------------------------------------------------
@@ -533,7 +533,7 @@ NX_TEST_SECTION (211, "Pages artistes : photo, bannière et biographie (TheAudio
 }
 
 //==============================================================================
-NX_TEST_SECTION (501, "NX Remote (HTTP, jeton, QR code), pont AuraEngine X, système, dictionnaire anglais")
+NX_TEST_SECTION (501, "Aura Remote (HTTP, jeton, QR code), pont AuraEngine X, système, dictionnaire anglais")
 {
     nx::RemoteServer server;
     juce::String err;
@@ -548,7 +548,7 @@ NX_TEST_SECTION (501, "NX Remote (HTTP, jeton, QR code), pont AuraEngine X, syst
     const auto token = server.getToken();
 
     const auto page = nx::httpRequest ("GET", juce::URL (base + "/"));
-    t.check (page.ok() && page.body.contains ("NX Remote") && page.body.contains ("/api/state"), "web app servie (HTML embarqué)"_t);
+    t.check (page.ok() && page.body.contains ("Aura Remote") && page.body.contains ("/api/state"), "web app servie (HTML embarqué)"_t);
     t.check (page.body.contains ("classList.add('ok')") && page.body.contains (".ph img { display:block") && page.body.contains ("visibility:hidden"),
              "pochette web : image cachée tant qu'elle n'est pas chargée (jamais d'icône cassée)"_t);
     t.check (page.body.contains ("state.volumeFixed") && page.body.contains ("Volume Fixe / DoP"), "volume web : grisé et « Volume Fixe / DoP » en DoP"_t);

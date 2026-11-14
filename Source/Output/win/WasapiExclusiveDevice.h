@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // WASAPI exclusive mode, event driven, integer formats only: the samples are written to the
 // endpoint buffer as integers, nothing converts them (no float, no Windows mixer, no resampler).
 // Plain Win32 / C++ (no JUCE) so it can be compiled and checked on its own.

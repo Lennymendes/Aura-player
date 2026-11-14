@@ -1,4 +1,4 @@
-/* NX Player plug-in SDK — MIT License (exception: this file may be used freely to write NX Player plug-ins)
+/* Aura plug-in SDK — MIT License (exception: this file may be used freely to write Aura plug-ins)
  * Catalogue DSP plug-in: bass / treble shelving filters (RBJ cookbook, 64-bit) and left / right balance.
  * Same C ABI as Plugins/DSP/crossfeed (see nxplayer_dsp.h). Built by CMake (target nx_tone).
  */

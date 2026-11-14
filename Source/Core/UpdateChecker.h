@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Update check, the same for Free and Premium (one binary; the licence stays in the settings across updates).
 // Reads a small JSON file (default: version.json of the public repository Lennymendes/nx-audio-releases):
 //   { "latestVersion": "1.1.0", "releaseNotes": ["line", "line"] or "text", "releaseNotesEn": [...] (optional),

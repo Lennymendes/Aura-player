@@ -1,0 +1,9 @@
+{
+  "id": "aura",
+  "name": "Aura",
+  "author": "NX Audio Suite",
+  "version": "1.0",
+  "description": "Thème par défaut : nuit profonde, verre dépoli, bleu Aura du logo (dégradé ciel → indigo). L'arrière-plan suit la pochette en cours.",
+  "stylesheet": "theme.css",
+  "background": { "type": "artwork", "fallback": "mesh", "speed": 0.15 }
+}

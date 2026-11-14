@@ -8,7 +8,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/icon.png">
 <link rel="apple-touch-icon" href="/icon.png">
-<title>NX Remote</title>
+<title>Aura Remote</title>
 <style>
   :root { --bg:#0A0C0E; --surface:#12161A; --card:rgba(255,255,255,.06); --line:rgba(255,255,255,.09); --text:#EEF3F1; --dim:#8A9792; --accent:#00F5A0; --accent2:#00D9F5; --dsd:#B07CFF; --on-accent:#06120d;
           --glow1:rgba(0,245,160,.18); --glow2:rgba(0,217,245,.14); color-scheme:dark; }
@@ -64,7 +64,7 @@
   @media (orientation:landscape) and (min-width:1100px) { .right #ctlgrid { display:grid; grid-template-columns:1fr 1fr; gap:14px; } .right #ctlgrid .card { margin-bottom:0; } }
 </style>
 <script>
-// NX Player's theme, applied before the first paint from the last state seen on this phone (no flash on reload).
+// Aura's theme, applied before the first paint from the last state seen on this phone (no flash on reload).
 function nxApplyTheme(t) {
   if (!t || !t.bg) return;
   const r = document.documentElement.style, glow = (c, a) => /^#[0-9a-f]{6}/i.test(c) ? c.slice(0, 7) + Math.round(a * 255).toString(16).padStart(2, '0') : c;
@@ -83,11 +83,11 @@ try { nxApplyTheme(JSON.parse(localStorage.getItem('nxTheme') || 'null')); } cat
 <div id="glow"></div>
 <main>
   <div class="left">
-    <header><img class="logo" src="/icon.png" alt=""><b>NX Remote</b><span id="dot"></span></header>
-    <p id="err" class="card">Accès refusé : scannez à nouveau le QR code affiché dans NX Player.</p>
+    <header><img class="logo" src="/icon.png" alt=""><b>Aura Remote</b><span id="dot"></span></header>
+    <p id="err" class="card">Accès refusé : scannez à nouveau le QR code affiché dans Aura.</p>
     <section class="card" id="info">
       <div id="artbox" class="ph"><img id="art" alt=""></div>
-      <h1 id="title">NX Player</h1>
+      <h1 id="title">Aura</h1>
       <p class="sub" id="artist">—</p>
       <span class="pill" id="path" style="display:none"><i></i><span></span></span>
     </section>
@@ -191,7 +191,7 @@ async function poll() {
       const sig = JSON.stringify(state.theme);
       if (sig !== lastTheme) { lastTheme = sig; nxApplyTheme(state.theme); try { localStorage.setItem('nxTheme', sig); } catch (e) {} }
     }
-    $('title').textContent = state.title || 'NX Player';
+    $('title').textContent = state.title || 'Aura';
     $('artist').textContent = state.artist ? state.artist + (state.album ? ' — ' + state.album : '') : 'Rien en lecture';
     const artSig = (state.artV || '') + '|' + (state.art || '');
     if (artSig !== lastArt) { lastArt = artSig; setArt($('art'), state.art || (state.id ? 'track:' + state.id : ''), 600, state.artV, state.id ? 'track:' + state.id : ''); }

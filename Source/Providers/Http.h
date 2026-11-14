@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // HTTP helpers for the providers, and progressive streams that let the decoders start reading a
 // remote file (NAS / UPnP, Qobuz, Tidal) while it is still downloading.
 #pragma once

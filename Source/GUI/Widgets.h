@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #pragma once
 
 #include "Style.h"
@@ -21,7 +21,7 @@ public:
     void setIcon (style::Icon i) { icon = i; repaint(); }
     bool active = false;          // accent colour (shuffle on, lyrics shown...)
     bool one = false;             // small "1" on the icon (repeat one)
-    bool pro = false;             // "PRO" pill: a Premium feature in NX Player Free
+    bool pro = false;             // "PRO" pill: a Premium feature in Aura Free
     bool primary = false;         // big round play button
     void paintButton (juce::Graphics& g, bool hi, bool down) override;
 private:

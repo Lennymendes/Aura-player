@@ -1,5 +1,5 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// The official NX Player logo (Resources/NXPlayerLogo.svg, embedded), drawn as a vector at any size.
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// The official Aura logo (Resources/AuraLogo.svg, embedded), drawn as a vector at any size.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>

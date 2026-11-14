@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #import <Foundation/Foundation.h>
 #include "SystemMonitor.h"
 
@@ -11,7 +11,7 @@ void PlaybackActivity::setPlaying (bool playing)
     if (playing)
     {
         id<NSObject> activity = [[NSProcessInfo processInfo] beginActivityWithOptions: NSActivityUserInitiatedAllowingIdleSystemSleep | NSActivityLatencyCritical
-                                                                               reason: @"NX Player : lecture audio"];
+                                                                               reason: @"Aura : lecture audio"];
         token = (__bridge_retained void*) activity;
     }
     else

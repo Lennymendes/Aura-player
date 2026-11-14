@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Sidebar.h"
 #include "LibraryActions.h"
 #include "Logo.h"
@@ -61,7 +61,7 @@ void Sidebar::refresh()
               p->isSignedIn() ? ok : off);
     }
     header ("Personnaliser"_t);
-    item ("Extensions & Thèmes"_t, style::Icon::Grid, { PageId::Marketplace });
+    item ("Extensions"_t, style::Icon::Grid, { PageId::Marketplace });
     const auto playlists = ctx.library().getPlaylists();
     if (! playlists.empty())
     {
@@ -293,11 +293,11 @@ void Sidebar::paint (juce::Graphics& g)
         logo.removeFromLeft (8);
         g.setColour (t.textCol());
         g.setFont (style::font (19.0f, true));
-        g.drawText ("NX Player", logo, juce::Justification::centredLeft);
+        g.drawText ("Aura", logo, juce::Justification::centredLeft);
         if (ctx.isPremium())
         {
             // discreet edition badge after the name
-            const float x = (float) logo.getX() + juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), "NX Player") + 8.0f;
+            const float x = (float) logo.getX() + juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), "Aura") + 8.0f;
             const auto pill = juce::Rectangle<float> (58.0f, 15.0f).withPosition (x, (float) logo.getCentreY() - 7.5f);
             g.setColour (t.accent().withAlpha (0.16f));
             g.fillRoundedRectangle (pill, 7.5f);
@@ -309,7 +309,7 @@ void Sidebar::paint (juce::Graphics& g)
         else
         {
             // Free: "PASSER À PREMIUM" opens the shop
-            const float x = (float) logo.getX() + juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), "NX Player") + 8.0f;
+            const float x = (float) logo.getX() + juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), "Aura") + 8.0f;
             const auto pill = juce::Rectangle<float> (juce::jmin (96.0f, (float) logo.getRight() - x), 17.0f).withPosition (x, (float) logo.getCentreY() - 8.5f);
             premiumPill = pill.toNearestInt();
             const bool hot = premiumPill.contains (getMouseXYRelative());

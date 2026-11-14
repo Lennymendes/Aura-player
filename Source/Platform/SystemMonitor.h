@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Computer card of the hardware dashboard: OS, CPU load, memory in use, and the "no idle sleep while
 // playing" assertion (macOS IOKit power assertion, Windows SetThreadExecutionState).
 #pragma once
@@ -16,7 +16,7 @@ struct SystemSnapshot
     double cpuLoad = -1.0;          // 0..1 for the whole machine, −1 = unknown
     juce::int64 memTotal = 0;       // bytes
     juce::int64 memoryUsed = -1;       // bytes, −1 = unknown
-    juce::int64 appMemory = -1;     // resident size of NX Player, bytes (−1 = unknown)
+    juce::int64 appMemory = -1;     // resident size of Aura, bytes (−1 = unknown)
 };
 
 class SystemMonitor
@@ -32,7 +32,7 @@ private:
 };
 
 /** macOS: while music plays, an NSProcessInfo "latency critical" activity keeps App Nap and timer coalescing away
-    from the decoder thread and the interface (a game in front, NX Player hidden). Other systems: nothing to do. */
+    from the decoder thread and the interface (a game in front, Aura hidden). Other systems: nothing to do. */
 class PlaybackActivity
 {
 public:
@@ -51,7 +51,7 @@ public:
     ~SleepBlocker();
     void setActive (bool shouldBlock);
     bool isActive() const noexcept { return active; }
-    /** False on systems where NX Player cannot hold such an assertion (Linux without a session API). */
+    /** False on systems where Aura cannot hold such an assertion (Linux without a session API). */
     static bool isSupported();
 private:
     bool active = false;

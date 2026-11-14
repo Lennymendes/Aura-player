@@ -1,6 +1,6 @@
-/* NX Emerald — thème par défaut de NX Player.
+/* NX Emerald — l'ancien thème NX (émeraude / cyan), thème secondaire d'Aura.
    Toutes les variables sont listées dans docs/THEMES.md. Modifiez ce fichier pendant que
-   NX Player tourne : il est rechargé à chaud. */
+   Aura tourne : il est rechargé à chaud. */
 :root {
   /* Fond et surfaces */
   --nx-bg: #0A0C0E;

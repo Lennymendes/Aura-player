@@ -1,4 +1,4 @@
-// NX Player — plug-in d'interface « Spectre » (MIT).
+// Aura — plug-in d'interface « Spectre » (MIT).
 // API : render(g, w, h, nx, slot) appelé à chaque image. Voir docs/PLUGINS.md.
 
 const peaks = [];

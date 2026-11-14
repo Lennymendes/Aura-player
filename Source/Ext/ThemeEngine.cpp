@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "ThemeEngine.h"
 #include "../Core/Text.h"
 
@@ -130,7 +130,7 @@ ThemeManager::ThemeManager()
     // Built-in fallback so the UI always has values, even without theme files.
     active.id = "builtin";
     active.name = "NX Emerald (intégré)"_t;
-    active.vars = parseCssVariables (":root { --nx-bg: #0A0C0E; --nx-accent: #00F5A0; --nx-accent-2: #00D9F5; }");
+    active.vars = parseCssVariables (":root { --nx-bg: #07050A; --nx-accent: #2563EB; --nx-accent-2: #29ABE2; }");
     startTimer (500);
 }
 
@@ -367,7 +367,7 @@ juce::String ThemeManager::importTheme (const juce::File& source, juce::String& 
 
 bool ThemeManager::themeFromJson (const juce::var& json, Theme& t, juce::String& error)
 {
-    if (! json.isObject()) { error = "ce fichier n'est pas un thème NX Player"_t; return false; }
+    if (! json.isObject()) { error = "ce fichier n'est pas un thème Aura"_t; return false; }
     const auto vars = json.getProperty ("variables", {});
     auto* vo = vars.getDynamicObject();
     if (vo == nullptr || vo->getProperties().isEmpty()) { error = "le thème n'a pas de « variables »"_t; return false; }

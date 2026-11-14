@@ -1,4 +1,4 @@
-# NX Player 1.0 — lecteur bit-perfect PCM · DXD · DSD
+# Aura 1.0 — lecteur bit-perfect PCM · DXD · DSD
 
 Lecteur audiophile de la **NX Audio Suite** (AuraEngine DSD, AuraDAW). C++20 · JUCE 8.0.15 · macOS (CoreAudio) ·
 Windows (ASIO, WASAPI exclusif) · Linux (ALSA). Logiciel **propriétaire** (voir « Licences »).
@@ -17,9 +17,9 @@ Windows (ASIO, WASAPI exclusif) · Linux (ALSA). Logiciel **propriétaire** (voi
 - **Matériel** : profils dédiés Merging Anubis et RME ADI-2 (sélecteur dans la barre de lecture), Memory Play
   (morceau entier en RAM), veille empêchée pendant la lecture, Outils Studio (mono, Mid / Side, phase, crossfeed),
   pont vers AuraEngine X.
-- **NX Remote** : QR code à scanner, le téléphone pilote la lecture, le volume, la boucle A-B et les profils
+- **Aura Remote** : QR code à scanner, le téléphone pilote la lecture, le volume, la boucle A-B et les profils
   depuis son navigateur (serveur local démarré à la demande).
-- **Extensible** : page « Extensions & Thèmes » (galerie à la Spicetify, aperçus en direct, activation en un clic),
+- **Extensible** : page « Extensions » (galerie à la Spicetify, aperçus en direct, activation en un clic),
   catalogue de plug-ins en plus, thèmes `.nxtheme` rechargés à chaud (CSS + shader GLSL, disposition de la vue
   immersive), plug-ins d'interface en JavaScript, plug-ins DSP en C.
 
@@ -48,8 +48,8 @@ les archives sur une étiquette `v*`.
 ## Banc d'essai
 
 ```bash
-"build/NXPlayer_artefacts/Release/NX Player" --selftest [filtre]        # Linux / Windows
-"build/NXPlayer_artefacts/Release/NX Player.app/Contents/MacOS/NX Player" --selftest
+"build/NXPlayer_artefacts/Release/Aura" --selftest [filtre]        # Linux / Windows
+"build/NXPlayer_artefacts/Release/Aura.app/Contents/MacOS/Aura" --selftest
 ```
 
 27 sections, 288 vérifications, code de sortie 0 si tout passe. Elles écrivent les fichiers de test et les
@@ -76,9 +76,9 @@ captures d'écran dans le dossier temporaire `NXPlayer_selftest`.
 | 209 | Hors-ligne | téléchargement depuis un faux NAS : fichier original copié octet pour octet (Artiste / Album / NN Titre), pochette, ajout à la bibliothèque, badge hors-ligne relié à l'original |
 | 210 | Bibliothèque v1 | filtres DXD / DSD / Hi-Res / CD (le MP3 exclu), genres, favoris (morceaux et albums), playlists (ajout d'un morceau puis d'un album, retrait, renommage, suppression), badge NAS, retrait d'un album NAS, des serveurs indisponibles, purge du NAS |
 | 211 | Pages artistes | faux TheAudioDB + Wikipédia : bon artiste parmi plusieurs résultats, bio française nettoyée, photo, bannière, repli Wikipédia, cache 30 jours sans nouvelle requête, file d'attente en arrière-plan |
-| 301 | Interface | chaque page rendue hors écran (NAS, galerie, plug-ins), thème à chaud, installation / retrait d'un plug-in du catalogue, historique ‹ ›, barre latérale masquée ; v1 : barre latérale en piliers, pastilles de qualité, glisser-déposer vers Favoris et une playlist, page artiste, badge NAS + retrait + purge, fenêtre Réglages et tableau de bord (matrice des fréquences), NX Remote (volume et profil depuis le téléphone), sélecteur de profils, Outils Studio, vue immersive (palette, forme d'onde, disposition du thème puis des réglages puis d'un plug-in), assistant en 4 étapes, interface anglaise compacte |
+| 301 | Interface | chaque page rendue hors écran (NAS, galerie, plug-ins), thème à chaud, installation / retrait d'un plug-in du catalogue, historique ‹ ›, barre latérale masquée ; v1 : barre latérale en piliers, pastilles de qualité, glisser-déposer vers Favoris et une playlist, page artiste, badge NAS + retrait + purge, fenêtre Réglages et tableau de bord (matrice des fréquences), Aura Remote (volume et profil depuis le téléphone), sélecteur de profils, Outils Studio, vue immersive (palette, forme d'onde, disposition du thème puis des réglages puis d'un plug-in), assistant en 4 étapes, interface anglaise compacte |
 | 401–403 | Extensions | CSS / var(), rechargement à chaud, export / import ; plug-ins JS (rendu, erreurs, setLayout, rechargement) ; plug-in DSP C dans la chaîne |
-| 501 | NX Remote, système | serveur HTTP : page web, 403 sans jeton, état JSON, commandes GET / POST sur le fil de l'interface, bibliothèque et pochettes, révocation par nouveau code, arrêt ; QR code (motifs de repérage) ; commande AuraEngine X ; RAM / CPU mesurés ; dictionnaire anglais (≥ 300 entrées) appliqué à chaud |
+| 501 | Aura Remote, système | serveur HTTP : page web, 403 sans jeton, état JSON, commandes GET / POST sur le fil de l'interface, bibliothèque et pochettes, révocation par nouveau code, arrêt ; QR code (motifs de repérage) ; commande AuraEngine X ; RAM / CPU mesurés ; dictionnaire anglais (≥ 300 entrées) appliqué à chaud |
 
 Le DAC du banc est virtuel (`CaptureBackend`) : il enregistre ce que le moteur envoie. Les pilotes réels
 (CoreAudio, ASIO, WASAPI) ne sont pas testés par ce banc ; voir « Limites ».
@@ -95,7 +95,7 @@ Le DAC du banc est virtuel (`CaptureBackend`) : il enregistre ce que le moteur e
 | `Source/Library` | SQLite, tags, scanner + veille, paroles locales (LRC / TXT, tags) |
 | `Source/Providers` | flux HTTP progressifs, UPnP / DLNA, Qobuz, Tidal (DASH fMP4), Spotify, YouTube Music, fusion |
 | `Source/GUI` | interface (fond, verre, barre latérale, pages, En cours, paroles, Signal Path, mini-lecteur, fenêtre Réglages + tableau de bord, assistant, vue immersive, dessins des DAC) |
-| `Source/Remote` | NX Remote : serveur HTTP local, jeton, API JSON (la web app est `Resources/remote/index.html`) |
+| `Source/Remote` | Aura Remote : serveur HTTP local, jeton, API JSON (la web app est `Resources/remote/index.html`) |
 | `Source/Platform` | touches multimédia, mesures système (CPU, RAM), anti-veille, pont AuraEngine X |
 | `Resources/i18n` | dictionnaire anglais `en.json` (clé = texte français) ; `tools/i18n_check.py` liste les textes sans traduction |
 | `Source/Ext` | thèmes, plug-ins JS et DSP, analyseur (spectre, VU, oscilloscope) |
@@ -143,7 +143,7 @@ démarrage) : acceptez-la, sinon aucun serveur n'apparaît. L'app est signée ad
 (`com.nxaudio.nxplayer`) pour que macOS retienne la réponse ; une nouvelle version téléchargée peut la redemander une fois.
 
 Les connecteurs de streaming restent dans le code (`Source/Providers/StreamingProviders.*`, tests 205 et 207) ;
-avec `-DNX_ENABLE_STREAMING=ON` ils reviennent dans la barre latérale. NX Player n'extrait aucun identifiant des
+avec `-DNX_ENABLE_STREAMING=ON` ils reviennent dans la barre latérale. Aura n'extrait aucun identifiant des
 applications des services et ne contourne aucune protection.
 
 Paroles : fichier `.lrc` ou `.txt` à côté du morceau, puis tags (ID3 SYLT / USLT, Vorbis LYRICS, MP4 ©lyr). Aucun service en ligne.
@@ -162,7 +162,7 @@ Identifiants des services (si le streaming est réactivé) : options CMake ou se
 | Paroles | Cmd/Ctrl + L |
 | Mini-lecteur | Cmd/Ctrl + M |
 | Page précédente / suivante (‹ ›) | Cmd/Ctrl + [ / ], ou Alt + ← / → |
-| Touches multimédia du clavier (lecture, suivant, précédent) | aussi quand NX Player est en arrière-plan |
+| Touches multimédia du clavier (lecture, suivant, précédent) | aussi quand Aura est en arrière-plan |
 | Masquer / afficher la barre latérale | Cmd/Ctrl + B |
 | Boucle A-B : début / fin / arrêt | I / O / L |
 | Vue immersive (plein écran) | F, Échap pour sortir |
@@ -193,7 +193,7 @@ liaison (intégré, USB, réseau) et le cadenas d'accès exclusif.
 
 **Barre de lecture** : à droite, la miniature du DAC et son profil (menu : les profils Anubis / RME, ou bit-perfect /
 DSD -> DXD / suréchantillonnage pour un autre DAC) ; le badge de qualité ouvre le Signal Path (diodes colorées :
-Source → Décodage → Moteur NX 64 bits / Memory Play → Sortie exclusive → DAC + profil) ; le bouton Outils Studio
+Source → Décodage → Moteur Aura 64 bits / Memory Play → Sortie exclusive → DAC + profil) ; le bouton Outils Studio
 (mono L+R, solo Mid ou Side, inversion de phase Ø, Smart Crossfeed, « Analyser / Convertir dans AuraEngine X ») ; le
 bouton Vue immersive.
 
@@ -211,7 +211,7 @@ cliquable (calculée en arrière-plan), infos DSD / DXD, VU-mètres et spectre e
 disposition et les widgets ; les thèmes (`immersive.json`, variables `--nx-immersive-*`) et les plug-ins
 (`nx.ui.setLayout({ immersive: … })`, emplacement `immersive.overlay`) peuvent la modifier (voir `docs/THEMES.md`).
 
-**NX Remote** (icône téléphone en haut à droite, ou Réglages › NX Remote) : activez, puis scannez le QR code avec un
+**Aura Remote** (icône téléphone en haut à droite, ou Réglages › Aura Remote) : activez, puis scannez le QR code avec un
 téléphone du même réseau Wi-Fi. La page web pilote lecture, position, volume (verrouillé à 100 % avec la sécurité RME),
 boucle A-B, profils Anubis / RME, et lance un album ou un morceau de la bibliothèque. Le lien contient un jeton
 aléatoire ; « Nouveau code » révoque les appareils déjà connectés. Le serveur ne tourne qu'à la demande (HTTP en
@@ -241,16 +241,16 @@ volume, écran de verrouillage) reçoivent le titre, l'artiste, l'album, la dur�
 
 **Hors-ligne** : sur un morceau d'un NAS / Jellyfin, l'icône ↓ (ou clic droit › Télécharger pour l'écoute hors-ligne,
 ou « Télécharger » sur un album / un dossier du NAS) copie le fichier original en arrière-plan dans le dossier choisi
-dans Réglages › Téléchargements (par défaut `Musique/NX Player`, rangé Artiste / Album). La progression s'affiche dans
+dans Réglages › Téléchargements (par défaut `Musique/Aura`, rangé Artiste / Album). La progression s'affiche dans
 la liste et en bas de la barre latérale ; le morceau rejoint ensuite la bibliothèque avec la mention « Hors-ligne ».
 
 **Paroles** : fichier `.lrc` / `.txt` à côté du morceau, puis tags (SYLT synchronisé, USLT, LYRICS, ©lyr). Aucune
 requête en ligne.
 
-**Apparence (Personnalisez NX Player)** : Sombre / Clair / Système (suit le système), couleur d'accent en pastilles (émeraude NX
+**Apparence (Personnalisez Aura)** : Sombre / Clair / Système (suit le système), couleur d'accent en pastilles (émeraude NX
 #00F5A0 par défaut, assombrie automatiquement sur thème clair) ; dispositions Net, Minimal, Lecteur en haut et densité
 de la barre d'écoute (Confortable, Compact, Compact intégré au bord de la fenêtre), dans l'assistant et les réglages.
-**AURA DSP** (NX Precision Audio Control, bouton Studio de la barre de lecture ou en-tête) : source, gestion du headroom
+**AURA DSP** (Aura Precision Audio Control, bouton Studio de la barre de lecture ou en-tête) : source, gestion du headroom
 (automatique sur le pic de la courbe combinée, jamais d'écrêtage), conversion vers DXD, crossfeed, égaliseur casque et
 égaliseur paramétrique (cumulables, en série en 64 bits), polarité, monitoring Mono / Mid / Side.
 *Égaliseur casque* : liste avec recherche (Sennheiser Momentum M2 / M2 CL, HD 650, HD 600, HD 800 S, Beyerdynamic
@@ -260,22 +260,22 @@ molette, valeur saisie), poignées sur la courbe (glisser = fréquence / gain, m
 courbe du casque actif, presets utilisateur dans `settings.json`. L'en-tête montre le témoin Bit-Perfect et le profil
 actif, contourné ou réactivé d'un clic.
 **Thèmes de la communauté** : un thème tient dans un seul fichier `.json` (format dans `docs/THEMES.md`, exemples dans
-`CommunityThemes/`) ; Importer / Exporter dans Extensions & Thèmes et Réglages › Interface ; NX Remote suit le thème actif.
+`CommunityThemes/`) ; Importer / Exporter dans Réglages › Interface ; Aura Remote suit le thème actif.
 **Liens officiels** : boutique et Discord dans `Source/Core/Links.h` (ou `purchaseUrl` / `discordUrl` dans
 `settings.json`) ; les boutons Discord restent masqués tant que l'invitation n'est pas renseignée.
 **Thèmes livrés** : NX Emerald, Aura Neon, Glass Rose, Pure Light (clair, givré), Solar Amber, Cobalt Minimal,
 et le thème caché ZEYN (verre givré noir & blanc, triple clic sur le logo).
 **Navigation** : ‹ › en haut à gauche, Cmd/Ctrl + [ / ], Alt + ← / →, Retour arrière (hors champ de texte), boutons
 latéraux de la souris ; Cmd/Ctrl + B masque la barre latérale.
-**Mode Streamer / Gaming** : extensions visuelles coupées (grisées dans Extensions & Thèmes, rétablies à la sortie du
+**Mode Streamer / Gaming** : extensions visuelles coupées (grisées dans Extensions, rétablies à la sortie du
 mode), fond et visualiseurs au repos (1 image / s en arrière-plan) ; horloge, barre de progression et contrôles restent
 fluides, le moteur audio n'est jamais touché. Overlay « Now Playing » à capturer dans OBS, et `now_playing.txt` /
 `now_playing_cover.jpg` écrits par un fil de travail dans le dossier de données à chaque changement de morceau.
-**NX Remote** reprend le thème de NX Player (couleurs exactes, clair ou sombre) et garde thème et recherche après un
+**Aura Remote** reprend le thème d'Aura (couleurs exactes, clair ou sombre) et garde thème et recherche après un
 rechargement de la page.
-**Extensions & Thèmes** (barre latérale › Personnaliser ; l'onglet « Plugins utilisateur › » mène au catalogue) : chaque thème et chaque plug-in est une carte avec un
+**Extensions** (barre latérale › Personnaliser ; l'onglet « Plugins utilisateur › » mène au catalogue) : chaque thème et chaque plug-in est une carte avec un
 aperçu en direct ; un clic sur l'interrupteur l'active ou le désactive, un clic sur un thème l'applique.
-**Plugins utilisateur** : le *Catalogue* propose des plug-ins en plus livrés avec NX Player (Oscilloscope,
+**Plugins utilisateur** : le *Catalogue* propose des plug-ins en plus livrés avec Aura (Oscilloscope,
 Spectrogramme, Crêtes-mètre numérique, Horloge & session d'écoute, DSP Tonalité & balance) ;
 « Installer » les copie dans votre dossier et les active. *Installés* liste vos plug-ins, avec « Importer un plugin… »
 (dossier ou .zip) et l'ouverture du dossier.
@@ -297,7 +297,7 @@ Thèmes : `docs/THEMES.md`. Plug-ins : `docs/PLUGINS.md`.
   testable en CI (le test utilise le M-SEARCH unicast) ; essai réel avec un NAS à faire.
 - **Shaders GLSL** : rendu OpenGL non testé sur ce banc (pas de GPU) ; le dégradé de repli l'est.
 - **Interface** : rendue hors écran et lancée sous X virtuel ; une séance d'utilisation réelle reste à faire.
-- **v1.0** : NX Remote et les mesures du tableau de bord passent le banc d'essai sur les trois systèmes (CI) ;
+- **v1.0** : Aura Remote et les mesures du tableau de bord passent le banc d'essai sur les trois systèmes (CI) ;
   l'anti-veille (macOS, Windows) n'est pas testée automatiquement et n'existe pas sous Linux. Les infos d'artistes demandent un accès à
   TheAudioDB / Wikipédia (testées sur un faux serveur). L'anglais couvre l'interface ; quelques messages d'erreur
   internes restent en français. Le pont AuraEngine X ouvre les fichiers dans l'application (pas d'options de
@@ -309,7 +309,7 @@ Thèmes : `docs/THEMES.md`. Plug-ins : `docs/PLUGINS.md`.
 1. Changer la version dans `CMakeLists.txt` (`project(NXPlayer VERSION 1.0.1 ...)`), committer, puis créer le tag
    `v1.0.1` : la CI compile macOS / Windows / Linux et publie les archives dans une Release GitHub.
 2. Une fois les archives en ligne, modifier `version.json` dans le dépôt public `Lennymendes/nx-audio-releases`
-   (NX Player le lit sur https://raw.githubusercontent.com/Lennymendes/nx-audio-releases/main/version.json) :
+   (Aura le lit sur https://raw.githubusercontent.com/Lennymendes/nx-audio-releases/main/version.json) :
    ```json
    {
      "latestVersion": "1.0.1",
@@ -321,14 +321,14 @@ Thèmes : `docs/THEMES.md`. Plug-ins : `docs/PLUGINS.md`.
      "mandatory": false
    }
    ```
-3. Au lancement suivant (3 s après), chaque NX Player lit ce fichier et, si la version est plus récente, ouvre une
+3. Au lancement suivant (3 s après), chaque Aura lit ce fichier et, si la version est plus récente, ouvre une
    fenêtre « Mise à jour disponible » avec les nouveautés : **Mettre à jour** (ouvre le téléchargement pour son
    système), **Pas maintenant**, **Ignorer cette version**. `"mandatory": true` retire « Ignorer ». La licence et les
    réglages sont conservés. L'adresse du fichier se change avec le réglage `updateUrl` (par ex. sur votre site).
 
 ## Licences
 
-NX Player est un logiciel propriétaire : © 2026 NX Audio (ZEYN), tous droits réservés (`LICENSE`).
+Aura est un logiciel propriétaire : © 2026 NX Audio (ZEYN), tous droits réservés (`LICENSE`).
 Le kit de plug-ins DSP (`Source/Ext/nxplayer_dsp.h`) et les plug-ins d'exemple restent sous MIT. Il s'appuie sur :
 - **JUCE 8** : licence commerciale JUCE (obligatoire pour vendre un binaire propriétaire).
 - **SDK ASIO** (optionnel, non fourni) : licence Steinberg ou GPLv3. Un binaire compilé avec ASIO suit l'une d'elles.

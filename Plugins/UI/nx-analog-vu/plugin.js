@@ -1,4 +1,4 @@
-// NX Player — plug-in d'interface « VU-mètres analogiques » (MIT).
+// Aura — plug-in d'interface « VU-mètres analogiques » (MIT).
 // Aiguilles avec inertie mécanique simulée (ressort amorti), 0 VU calé sur −18 dBFS.
 
 const needles = [{ pos: 0, vel: 0 }, { pos: 0, vel: 0 }];

@@ -1,6 +1,6 @@
 # Composants tiers
 
-NX Player est un logiciel propriétaire (voir `LICENSE`). Les composants ci-dessous gardent leur propre licence ;
+Aura est un logiciel propriétaire (voir `LICENSE`). Les composants ci-dessous gardent leur propre licence ;
 leurs textes complets sont réunis dans `Licences.txt`, embarqué dans l'application et affiché dans
 Réglages › À propos › Licences & mentions légales.
 
@@ -21,12 +21,12 @@ Réglages › À propos › Licences & mentions légales.
 | stb_image | 2.30 | domaine public ou MIT (au choix) | pochettes JPEG progressives / CMYK, PNG 16 bits | oui, `ThirdParty/stb` |
 | Apple Lossless Audio Codec | macosforge/alac | Apache 2.0 | décodage ALAC (encodeur utilisé par le banc d'essai) | oui, `ThirdParty/alac` (ordre des octets corrigé pour arm64 / MSVC) |
 | SQLite | système, ou amalgamation 3.38 | domaine public | bibliothèque | non (système, ou téléchargé sous Windows) |
-| QR Code generator (Project Nayuki) | C++ | MIT | QR code de NX Remote | oui, `ThirdParty/qrcodegen` |
+| QR Code generator (Project Nayuki) | C++ | MIT | QR code d'Aura Remote | oui, `ThirdParty/qrcodegen` |
 | SDK ASIO de Steinberg | 2.3.x | licence Steinberg ASIO ou GPLv3 | sortie ASIO (PCM + DSD natif), Windows | non : à fournir via `NX_ASIO_SDK_DIR` |
 
 ## Conséquences pour une distribution
 
-- **JUCE** : un binaire vendu de NX Player suppose une licence commerciale JUCE active (Starter, Indie ou Pro,
+- **JUCE** : un binaire vendu d'Aura suppose une licence commerciale JUCE active (Starter, Indie ou Pro,
   selon le chiffre d'affaires) au nom de l'éditeur. Sans elle, JUCE n'est utilisable que sous AGPLv3, incompatible
   avec une licence propriétaire.
 - **ASIO** : un binaire Windows compilé avec le SDK ASIO suppose l'accord de licence Steinberg signé.
@@ -36,7 +36,7 @@ Réglages › À propos › Licences & mentions légales.
 - **Marques** : RME, ADI-2 et SteadyClock (RME Audio AG), Merging, Anubis et RAVENNA (Merging Technologies SA),
   FiiO et KA17 (FiiO Electronics Technology Co., Ltd.), ASIO (Steinberg Media Technologies GmbH), Super Audio CD et
   Direct Stream Digital (Sony Group Corporation et Koninklijke Philips N.V.) appartiennent à leurs propriétaires.
-  NX Player les cite seulement pour indiquer la compatibilité de ses profils audio ; il n'est ni affilié à ces
+  Aura les cite seulement pour indiquer la compatibilité de ses profils audio ; il n'est ni affilié à ces
   sociétés, ni approuvé par elles. Les profils de l'application ne reprennent pas le nom SteadyClock (« Horloge DoP
   Haute Précision »).
 - **Services** : Qobuz, Tidal, Spotify et YouTube sont des marques de leurs propriétaires. Le streaming n'est

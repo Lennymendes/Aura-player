@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Owns every service and the windows; implements AppContext for the interface.
 #pragma once
 
@@ -98,10 +98,10 @@ public:
     juce::String getCurrentBackendName() override;
     void selectBackend (const juce::String& name) override;
     void selectDevice (const juce::String& name) override;
-    void applyTheme (const juce::String& id) override;
+    void applyTheme (juce::String id) override;
     juce::String selectedThemeId() override { return appSettings.get ("theme", themeManager.current().id).toString(); }
     /** Immediate re-skin (tests only: the UI never calls it). */
-    void applyThemeNow (const juce::String& id);
+    void applyThemeNow (juce::String id);
     juce::String importThemeFile (const juce::File& file, juce::String& error) override;
     bool exportCurrentTheme (const juce::File& destination) override;
     void setAppearance (const juce::String& mode) override;
@@ -162,7 +162,7 @@ public:
     /** Remote commands (also used by the tests). Message thread. */
     void handleRemoteCommand (const juce::String& command, const juce::StringPairArray& params);
     juce::String buildRemoteState();
-    /** The active theme for NX Remote: id, name and exact colours (hex), isLight. */
+    /** The active theme for Aura Remote: id, name and exact colours (hex), isLight. */
     static juce::var remoteTheme (const Theme& theme);
     juce::String buildRemoteLibrary (const juce::StringPairArray& params);
     /** Cover for the phone: baseline RGB JPEG, at most maxSize x maxSize; key = artwork key or "track:<id>". Empty = none. */
@@ -228,7 +228,7 @@ private:
     bool upsellOpen = false, updateOpen = false;
     void showUpdateAvailable (const UpdateInfo& info, bool userAsked);
     void applyEdition();
-    /** NX Player Free: the Studio Master tracks are left out of a list (the start index follows). */
+    /** Aura Free: the Studio Master tracks are left out of a list (the start index follows). */
     std::vector<TrackInfo> withoutStudioMasters (const std::vector<TrackInfo>& tracks, int& startIndex);
 
     std::vector<TrackInfo> queueTracks;            // parallel to the engine queue

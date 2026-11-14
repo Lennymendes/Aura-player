@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Time-synced lyrics: LRC parser (multiple time tags per line, [offset:], enhanced <mm:ss.xx> word tags
 // stripped), local sources only (sidecar .lrc / .txt, embedded tags): no online lyrics service.
 #pragma once

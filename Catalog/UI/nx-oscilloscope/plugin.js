@@ -1,4 +1,4 @@
-// NX Player — plug-in « Oscilloscope » (MIT). Voir docs/PLUGINS.md.
+// Aura — plug-in « Oscilloscope » (MIT). Voir docs/PLUGINS.md.
 const trails = [];
 
 function render(g, w, h, nx, slot) {

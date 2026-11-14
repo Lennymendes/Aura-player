@@ -1,5 +1,5 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Appearance (« Personnalisez NX Player »), shared by the first-run assistant and Réglages › Interface:
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Appearance (« Personnalisez Aura »), shared by the first-run assistant and Réglages › Interface:
 //   theme mode  Sombre / Clair / Système (follows the OS)
 //   accent      a row of colour dots; NX Emerald #00F5A0 is the signature accent of NX Audio
 // plus the listening-bar density tiles (Confortable / Compact / Compact intégré).

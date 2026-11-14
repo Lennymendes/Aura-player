@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Library actions shared by the lists, grids, sidebar and drag & drop: playlists, favourites, NAS clean-up,
 // AuraEngine X. Menus are asynchronous; the functions that change the library return what they did (tests).
 #pragma once

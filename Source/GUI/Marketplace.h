@@ -1,7 +1,7 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// "Extensions & Thèmes" (a Spicetify-style gallery: every theme and plug-in as a card, switched on or off
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// "Extensions" (a Spicetify-style gallery: every interface and DSP plug-in as a card, switched on or off
 // in one click, with live previews) and "Plugins utilisateur" (the catalogue of extra plug-ins shipped with
-// NX Player, installed into the user's folder in one click, plus the user's own imported plug-ins).
+// Aura, installed into the user's folder in one click, plus the user's own imported plug-ins).
 #pragma once
 
 #include "Widgets.h"
@@ -72,7 +72,7 @@ public:
     explicit MarketplacePage (AppContext& c);
     ~MarketplacePage() override;
 
-    /** tab: Gallery "tout" | "themes" | "interface" | "dsp"; UserPlugins "catalogue" | "installes". */
+    /** tab: Gallery "tout" | "interface" | "dsp"; UserPlugins "catalogue" | "installes". */
     void setMode (Mode m, const juce::String& tab);
     void refresh() override;
     void layoutContent (int width) override;
@@ -105,7 +105,7 @@ private:
     Header header { *this };
     juce::OwnedArray<juce::TextButton> tabButtons;
     juce::TextEditor filter;
-    juce::TextButton importButton, folderButton, importThemeButton, exportThemeButton;
+    juce::TextButton importButton, folderButton;
     juce::OwnedArray<MarketCard> cards;
     juce::String emptyText;
     juce::Label emptyLabel;

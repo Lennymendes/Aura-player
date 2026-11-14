@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Brique 2: tags, SQLite library, folder watching, lyrics, providers (parsers + a real HTTP stream).
 #include "TestFramework.h"
 #include "TestAudioFiles.h"

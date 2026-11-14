@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Appearance.h"
 
 namespace nx::appearance
@@ -7,7 +7,7 @@ namespace nx::appearance
 const std::array<Accent, 8>& accents()
 {
     static const std::array<Accent, 8> list {{
-        { "Thème", 0 }, { "Émeraude NX", signature }, { "Cyan", 0xff00d2ff }, { "Bleu", 0xff3b82f6 },
+        { "Thème", 0 }, { "Émeraude NX", signature }, { "Cyan", 0xff00d2ff }, { "Bleu Aura", 0xff2563eb },
         { "Violet", 0xff8b5cf6 }, { "Rose", 0xfffa2d55 }, { "Ambre", 0xfff59e0b }, { "Argent", 0xffe2e8f0 },
     }};
     return list;

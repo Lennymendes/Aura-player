@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Downloads.h"
 #include "../Core/Text.h"
 
@@ -7,7 +7,7 @@ namespace nx
 
 DownloadManager::DownloadManager (Library& l) : juce::Thread ("NX downloads"), library (l)
 {
-    folder = juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("NX Player");
+    folder = juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("Aura");
     startThread (juce::Thread::Priority::low);
 }
 

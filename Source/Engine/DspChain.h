@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Real-time processing inserted between the decoder and the DAC (DSP plug-ins). Any active
 // processor takes the stream out of bit-perfect mode, and the Signal Path says so.
 #pragma once

@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Dashboard.h"
 #include "DeviceArt.h"
 #include "../Audio/MemoryPlayStream.h"
@@ -160,7 +160,7 @@ void HardwareDashboard::paint (juce::Graphics& g)
     statusLine (g, c.removeFromTop (20), t, memoryPlayOn, memoryLine);
     statusLine (g, c.removeFromTop (20), t, sleepBlocked, sleepLine);
     if (snapshot.appMemory > 0)
-        statusLine (g, c.removeFromTop (20), t, true, "NX Player : "_t + mb (snapshot.appMemory) + " · moteur 64 bits"_t);
+        statusLine (g, c.removeFromTop (20), t, true, "Aura : "_t + mb (snapshot.appMemory) + " · moteur 64 bits"_t);
 
     // ---- AUDIO DEVICE ------------------------------------------------------------------------
     card (g, right, t, "PÉRIPHÉRIQUE AUDIO"_t);
@@ -320,7 +320,7 @@ RemotePanel::RemotePanel (AppContext& c) : ctx (c), openButton ("Ouvrir dans le 
     addAndMakeVisible (openButton);
     addAndMakeVisible (copyButton);
     openButton.onClick = [this] { juce::URL (ctx.remote().getUrl()).launchInDefaultBrowser(); };
-    copyButton.onClick = [this] { juce::SystemClipboard::copyTextToClipboard (ctx.remote().getUrl()); ctx.showMessage ("Lien NX Remote copié"_t); };
+    copyButton.onClick = [this] { juce::SystemClipboard::copyTextToClipboard (ctx.remote().getUrl()); ctx.showMessage ("Lien Aura Remote copié"_t); };
     qr.setText (ctx.remote().getUrl());
     startTimerHz (2);
 }

@@ -1,0 +1,52 @@
+/* Aura — thème par défaut d'Aura, couleurs du logo (Resources/AuraLogo.svg).
+   Toutes les variables sont listées dans docs/THEMES.md. Modifiez ce fichier pendant que
+   Aura tourne : il est rechargé à chaud. */
+:root {
+  /* Fond et surfaces (le noir violacé du logo) */
+  --nx-bg: #07050A;
+  --nx-bg-2: #0D0911;
+  --nx-surface: #130F1A;
+  --nx-glass-tint: rgba(10, 8, 16, 0.58);
+  --nx-glass-strong: rgba(7, 5, 10, 0.84);
+  --nx-border: rgba(37, 99, 235, 0.14);
+  --nx-highlight: rgba(255, 255, 255, 0.06);
+  --nx-shadow: rgba(0, 0, 0, 0.60);
+
+  /* Texte */
+  --nx-text: #EEF1F8;
+  --nx-text-dim: #8B90A6;
+
+  /* Accents : bleu Aura, puis le ciel du dégradé de l'anneau */
+  --nx-accent: #2563EB;
+  --nx-accent-2: #29ABE2;
+  --nx-on-accent: #FFFFFF;
+
+  /* Qualité du signal (Signal Path) */
+  --nx-quality-bitperfect: #A78BFA;
+  --nx-quality-enhanced: var(--nx-accent);
+  --nx-quality-high: #29ABE2;
+  --nx-quality-low: #FFB547;
+
+  /* Formes et dimensions */
+  --nx-radius: 14px;
+  --nx-radius-small: 8px;
+  --nx-sidebar-width: 236px;
+  --nx-player-height: 84px;
+  --nx-player-position: bottom;
+  --nx-card-size: 176px;
+
+  /* Arrière-plan pochette */
+  --nx-artwork-blur: 48;
+  --nx-artwork-dim: 0.60;
+  --nx-artwork-saturation: 1.15;
+
+  /* Paroles */
+  --nx-lyrics-active: var(--nx-text);
+  --nx-lyrics-inactive: rgba(238, 241, 248, 0.30);
+  --nx-lyrics-size: 30px;
+
+  /* Typographie et animations */
+  --nx-font: "";
+  --nx-font-size: 14px;
+  --nx-animation-speed: 1.0;
+}

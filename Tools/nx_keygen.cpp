@@ -1,5 +1,5 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Licence key generator for the author of NX Player (keep the private key out of the repository).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Licence key generator for the author of Aura (keep the private key out of the repository).
 //
 //   nx_keygen new-keypair <private.key>                         creates a key pair, prints the public key
 //   nx_keygen sign <private.key> "<name>" "<email>" [date]      prints an NXP1-... Premium key (date: YYYY-MM-DD)

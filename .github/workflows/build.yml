@@ -33,7 +33,7 @@ jobs:
       - name: Banc d'essai
         env:
           NX_SELFTEST_LOG: ${{ runner.temp }}/selftest.log
-        run: xvfb-run -a -s "-screen 0 1600x1000x24" "build/NXPlayer_artefacts/Release/NX Player" --selftest
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" "build/NXPlayer_artefacts/Release/Aura" --selftest
       - name: Rapport du banc d'essai
         if: always()
         shell: bash
@@ -46,7 +46,7 @@ jobs:
       - name: Archive
         run: |
           cd build/NXPlayer_artefacts/Release
-          tar czf ../../../NXPlayer-Linux.tar.gz "NX Player" Themes Plugins Catalog
+          tar czf ../../../NXPlayer-Linux.tar.gz "Aura" Themes Plugins Catalog
       - uses: actions/upload-artifact@v4
         with:
           name: NXPlayer-Linux
@@ -63,7 +63,7 @@ jobs:
       - name: Banc d'essai
         env:
           NX_SELFTEST_LOG: ${{ runner.temp }}/selftest.log
-        run: '"build/NXPlayer_artefacts/Release/NX Player.app/Contents/MacOS/NX Player" --selftest'
+        run: '"build/NXPlayer_artefacts/Release/Aura.app/Contents/MacOS/Aura" --selftest'
       - name: Rapport du banc d'essai
         if: always()
         shell: bash
@@ -74,7 +74,7 @@ jobs:
           body=$(tail -n 80 "$f" | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"} {print}')
           echo "::notice title=Fin du journal du banc d'essai::$body"
       - name: Archive
-        run: ditto -c -k --sequesterRsrc --keepParent "build/NXPlayer_artefacts/Release/NX Player.app" NXPlayer-macOS.zip
+        run: ditto -c -k --sequesterRsrc --keepParent "build/NXPlayer_artefacts/Release/Aura.app" NXPlayer-macOS.zip
       - uses: actions/upload-artifact@v4
         with:
           name: NXPlayer-macOS
@@ -101,7 +101,7 @@ jobs:
         env:
           NX_SELFTEST_LOG: ${{ runner.temp }}/selftest.log
         run: |
-          $p = Start-Process -FilePath "build\NXPlayer_artefacts\Release\NX Player.exe" -ArgumentList "--selftest" -Wait -PassThru -NoNewWindow
+          $p = Start-Process -FilePath "build\NXPlayer_artefacts\Release\Aura.exe" -ArgumentList "--selftest" -Wait -PassThru -NoNewWindow
           exit $p.ExitCode
       - name: Rapport du banc d'essai
         if: always()
@@ -114,7 +114,7 @@ jobs:
           echo "::notice title=Fin du journal du banc d'essai::$body"
       - name: Archive
         shell: pwsh
-        run: Compress-Archive -Path "build\NXPlayer_artefacts\Release\NX Player.exe","build\NXPlayer_artefacts\Release\Themes","build\NXPlayer_artefacts\Release\Plugins","build\NXPlayer_artefacts\Release\Catalog" -DestinationPath NXPlayer-Windows.zip
+        run: Compress-Archive -Path "build\NXPlayer_artefacts\Release\Aura.exe","build\NXPlayer_artefacts\Release\Themes","build\NXPlayer_artefacts\Release\Plugins","build\NXPlayer_artefacts\Release\Catalog" -DestinationPath NXPlayer-Windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: NXPlayer-Windows

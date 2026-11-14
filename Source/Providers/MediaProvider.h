@@ -1,10 +1,10 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Sources of music other than the local library, and the UnifiedMediaProvider that merges them.
 //
-//  Engine route   : the provider hands an InputStream to NX Player's own decoders (UPnP / DLNA,
+//  Engine route   : the provider hands an InputStream to Aura's own decoders (UPnP / DLNA,
 //                   Qobuz, Tidal) -> bit-perfect path, automatic DAC rate switching.
 //  External route : the service's licence only allows its own player (Spotify, YouTube Music):
-//                   NX Player browses / searches with the official API and starts playback in the
+//                   Aura browses / searches with the official API and starts playback in the
 //                   service's player (Spotify Connect, music.youtube.com). The Signal Path says so.
 #pragma once
 

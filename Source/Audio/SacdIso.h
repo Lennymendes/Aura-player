@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // SACD disc images (.iso, Scarlet Book): Master TOC (sector 510), master text (511), Area TOCs (2-channel
 // "TWOCHTOC" and multichannel "MULCHTOC") with their track lists (SACDTRL1 / SACDTRL2) and track texts
 // (SACDTTxt). Each track is exposed as a virtual path "<file>.iso#area=<0|1>&track=<n>" (area 0 = 2ch,

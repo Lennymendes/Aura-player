@@ -1,5 +1,5 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Launch animation: drawn over the main component, the logo and "NX PLAYER" fade in, then the whole splash fades
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Launch animation: drawn over the main component, the logo and "AURA" fade in, then the whole splash fades
 // out and removes itself after 1.5 s (juce::Timer). Clicks pass through once it starts fading out.
 #pragma once
 

@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "PlaybackEngine.h"
 #include <algorithm>
 #include "../Audio/SacdIso.h"
@@ -531,7 +531,7 @@ bool PlaybackEngine::openItem (int index, double startSeconds, bool flush)
         const auto f = dec->getFormat();
         if (f.isDsd() || f.sampleRate > 192000.5 || sacd::isVirtualUri (item.uri))
         {
-            // NX Player Free plays PCM up to 24 bits / 192 kHz: this track is skipped, the app offers Premium
+            // Aura Free plays PCM up to 24 bits / 192 kHz: this track is skipped, the app offers Premium
             std::lock_guard<std::mutex> l (controlLock);
             lastError = juce::String (studioMasterError) + (item.title.isNotEmpty() ? item.title : item.uri);
             errorFlag = true;
@@ -1421,7 +1421,7 @@ SignalPath PlaybackEngine::getSignalPath() const
 
     {
         // NX engine: 64-bit pipeline, Memory Play (whole file in RAM) or disk reads through the 8 MB ring
-        path.add ("Moteur", "Moteur NX 64 bits"_t + (plan.inMemory ? " · Memory Play"_t : juce::String()),
+        path.add ("Moteur", "Moteur Aura 64 bits"_t + (plan.inMemory ? " · Memory Play"_t : juce::String()),
                   plan.inMemory ? "Fichier entier en RAM ("_t + juce::String ((double) plan.fileBytes / 1048576.0, 1) + " Mo) : le disque reste au repos"_t
                                 : juce::String ("Lecture disque / réseau, tampon circulaire sans verrou de 8 Mo"_t),
                   PathQuality::BitPerfect);

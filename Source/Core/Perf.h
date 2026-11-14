@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Streamer / Gaming mode: one global flag read by the timers of the *visualisers* (animated background, spectrum,
 // lyrics, previews). The transport (clock, seek bar, buttons), the engine timer and the audio thread never look at it.
 #pragma once

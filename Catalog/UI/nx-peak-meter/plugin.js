@@ -1,4 +1,4 @@
-// NX Player — plug-in « Crêtes-mètre numérique » (MIT).
+// Aura — plug-in « Crêtes-mètre numérique » (MIT).
 const hold = [0, 0], holdT = [0, 0];
 const floorDb = -60;
 

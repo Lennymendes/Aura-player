@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // CoreAudio extras for bit-perfect output on macOS:
 //  - Hog Mode (kAudioDevicePropertyHogMode): no other process can play to the DAC, no mixing
 //  - integer physical format (kAudioStreamPropertyPhysicalFormat): the HAL turns our floats back into

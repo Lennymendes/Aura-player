@@ -1,5 +1,5 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Minimal self-test framework: sections register themselves, `NX Player --selftest [filtre]` runs them.
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Minimal self-test framework: sections register themselves, `Aura --selftest [filtre]` runs them.
 #pragma once
 
 #include <juce_core/juce_core.h>

@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Drawing helpers shared by the interface: glass panels, quality colours, vector icons.
 #pragma once
 
@@ -207,7 +207,7 @@ inline bool iconIsFilled (Icon i)
     }
 }
 
-/** Small "PRO" pill (NX Player Free: a Premium feature), its top-right corner at `corner`. */
+/** Small "PRO" pill (Aura Free: a Premium feature), its top-right corner at `corner`. */
 inline void drawProBadge (juce::Graphics& g, juce::Point<float> corner, juce::Colour fill, juce::Colour text)
 {
     const auto r = juce::Rectangle<float> (25.0f, 12.0f).withPosition (corner.x - 25.0f, corner.y);

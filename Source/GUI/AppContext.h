@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // What every UI component can reach: the services and the navigation / playback actions.
 #pragma once
 
@@ -26,7 +26,7 @@ struct TrackAnalysis;
 class LicenseManager;
 class UpdateChecker;
 
-/** Why the "Premium" window is shown (NX Player Free). */
+/** Why the "Premium" window is shown (Aura Free). */
 enum class UpsellReason { StudioMaster, ExclusiveMode, DeviceProfiles, Remote, MetadataEditor };
 
 enum class PageId { Home, Search, RecentlyAdded, Albums, AlbumDetail, Artists, ArtistDetail, Songs, Playlists, PlaylistDetail,
@@ -99,15 +99,18 @@ public:
     virtual juce::String getCurrentBackendName() = 0;
     virtual void selectBackend (const juce::String& name) = 0;
     virtual void selectDevice (const juce::String& name) = 0;
-    /** Saves the chosen theme and offers a restart (no hot re-skin: it would invalidate LookAndFeel pointers). */
-    virtual void applyTheme (const juce::String& id) = 0;
+    /** Applies a theme at once (hot) and remembers it. id by value: callers often pass a string owned by the control that a theme change rebuilds (the 1.0.0 crash). */
+    virtual void applyTheme (juce::String id) = 0;
     /** Community themes: imports a theme file (.json, .nxtheme folder or .zip) into the user's themes and applies it
         (returns its id, or "" with `error`); exports the current theme, accent included, as one .json file. */
     virtual juce::String importThemeFile (const juce::File& file, juce::String& error) = 0;
     virtual bool exportCurrentTheme (const juce::File& destination) = 0;
-    /** The file choosers of the two buttons (Extensions & Thèmes, Réglages › Interface). */
+    /** The file choosers of the two theme buttons (Réglages › Interface). */
     void chooseThemeToImport();
     void chooseThemeExport();
+    /** Bug reports: system summary, and the zip of logs written to the desktop (Réglages › À propos). */
+    juce::String diagnosticsSummary();
+    void exportDiagnostics();
     /** Appearance: "dark", "light" or "system" (follows the OS), and the accent colour
         (transparent = the theme's own). Both are applied at once and remembered. */
     virtual void setAppearance (const juce::String& mode) = 0;
@@ -133,7 +136,7 @@ public:
     virtual juce::StringArray getParametricPresetNames() = 0;
     virtual void saveParametricPreset (const juce::String& name) = 0;
     virtual bool loadParametricPreset (const juce::String& name) = 0;
-    /** AURA DSP: the "NX Precision Audio Control" panel (source, headroom, sample rate conversion, filters). */
+    /** AURA DSP: the "Aura Precision Audio Control" panel (source, headroom, sample rate conversion, filters). */
     virtual void showAuraDsp() = 0;
     /** Official links (shop, Discord community); an empty Discord address hides its buttons. */
     virtual juce::String shopUrl() = 0;
@@ -143,7 +146,7 @@ public:
     /** Volume of the player bar, 0..1 (1 = 100 % = bit-perfect). */
     virtual void setUserVolume (double v) = 0;
     virtual double getUserVolume() = 0;
-    /** NX Remote on / off (QR code in the settings and the top bar). */
+    /** Aura Remote on / off (QR code in the settings and the top bar). */
     virtual bool setRemoteEnabled (bool on) = 0;
     /** Interface language ("fr" / "en"): rebuilds the visible texts. */
     virtual void setLanguage (const juce::String& code) = 0;
@@ -162,7 +165,7 @@ public:
     /** Checks and saves a licence key (NXP1-...); false with the reason. */
     virtual bool activateLicense (const juce::String& key, juce::String& error) = 0;
     virtual void deactivateLicense() = 0;
-    /** The "Passez à NX Player Premium" window (enter a key / buy). */
+    /** The "Passez à Aura Premium" window (enter a key / buy). */
     virtual void showUpsell (UpsellReason why) = 0;
     virtual UpdateChecker& updates() = 0;
     /** userAsked: also says "à jour" / the error; otherwise only an available update is announced. */

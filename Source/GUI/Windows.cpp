@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Windows.h"
 
 namespace nx
@@ -65,7 +65,7 @@ void MiniPlayer::paint (juce::Graphics& g)
     const auto* tr = ctx.currentTrack();
     g.setColour (t.textCol());
     g.setFont (style::font (14.0f, true));
-    g.drawText (tr ? tr->title : juce::String ("NX Player"), text.removeFromTop (text.getHeight() / 2), juce::Justification::bottomLeft, true);
+    g.drawText (tr ? tr->title : juce::String ("Aura"), text.removeFromTop (text.getHeight() / 2), juce::Justification::bottomLeft, true);
     g.setColour (t.textDim());
     g.setFont (style::font (12.5f));
     g.drawText (tr ? tr->displayArtist() : juce::String(), text, juce::Justification::topLeft, true);
@@ -162,14 +162,14 @@ void NowPlayingOverlay::paint (juce::Graphics& g)
     }
     g.setColour (th.textCol());
     g.setFont (style::font (17.0f, true));
-    g.drawText (t != nullptr ? t->title : juce::String ("NX Player"), top, juce::Justification::bottomLeft, true);
+    g.drawText (t != nullptr ? t->title : juce::String ("Aura"), top, juce::Justification::bottomLeft, true);
     g.setColour (th.textDim());
     g.setFont (style::font (13.5f));
     g.drawText (t != nullptr ? t->displayArtist() : juce::String ("En attente de lecture"_t), inner.withTrimmedTop (3.0f), juce::Justification::topLeft, true);
 }
 
 OverlayWindow::OverlayWindow (AppContext& ctx)
-    : juce::DocumentWindow ("NX Player — Now Playing", ctx.theme().bg(), 0)
+    : juce::DocumentWindow ("Aura — Now Playing", ctx.theme().bg(), 0)
 {
     setUsingNativeTitleBar (false);
     setTitleBarHeight (0);
@@ -181,7 +181,7 @@ OverlayWindow::OverlayWindow (AppContext& ctx)
 
 //==============================================================================
 MainWindow::MainWindow (AppContext& ctx, juce::LookAndFeel& lf)
-    : juce::DocumentWindow ("NX Player", ctx.theme().bg(), juce::DocumentWindow::allButtons)
+    : juce::DocumentWindow ("Aura", ctx.theme().bg(), juce::DocumentWindow::allButtons)
 {
     setLookAndFeel (&lf);
     setUsingNativeTitleBar (true);
@@ -197,7 +197,7 @@ MainWindow::MainWindow (AppContext& ctx, juce::LookAndFeel& lf)
 }
 
 MiniWindow::MiniWindow (AppContext& ctx)
-    : juce::DocumentWindow ("NX Player — mini"_t, ctx.theme().bg(), 0)
+    : juce::DocumentWindow ("Aura — mini"_t, ctx.theme().bg(), 0)
 {
     setUsingNativeTitleBar (false);
     setTitleBarHeight (0);

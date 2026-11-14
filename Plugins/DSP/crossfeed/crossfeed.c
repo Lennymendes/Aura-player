@@ -1,7 +1,7 @@
-/* NX Player plug-in SDK — MIT License (exception: this file may be used freely to write NX Player plug-ins)
+/* Aura plug-in SDK — MIT License (exception: this file may be used freely to write Aura plug-ins)
  * Example DSP plug-in: headphone crossfeed (a low-passed, slightly delayed share of each channel is
  * fed to the other one, as with loudspeakers). Shows the whole C ABI in ~120 lines.
- * Build: CMake target nx_crossfeed (built with NX Player), or by hand:
+ * Build: CMake target nx_crossfeed (built with Aura), or by hand:
  *   cc -O2 -shared -fPIC -I../../../Source/Ext crossfeed.c -o crossfeed.so -lm
  */
 #include "nxplayer_dsp.h"

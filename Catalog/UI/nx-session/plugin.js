@@ -1,4 +1,4 @@
-// NX Player — plug-in « Horloge & session d'écoute » (MIT).
+// Aura — plug-in « Horloge & session d'écoute » (MIT).
 let listened = 0, last = 0, tracks = 0, lastTitle = "";
 
 function two(n) { return (n < 10 ? "0" : "") + n; }

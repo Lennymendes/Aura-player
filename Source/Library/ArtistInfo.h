@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Artist pages: photo, banner and an up-to-date biography from open services, cached in the library.
 //   1. TheAudioDB (only with the user's own API key) : photo, banner / fanart, biography (French when available)
 //   2. Wikipedia (REST summary, CC BY-SA 4.0)        : biography and photo when TheAudioDB has nothing

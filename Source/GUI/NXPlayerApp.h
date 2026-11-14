@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -16,7 +16,7 @@ class NXPlayerApplication final : public juce::JUCEApplication
 public:
     NXPlayerApplication();
     ~NXPlayerApplication() override;
-    const juce::String getApplicationName() override    { return "NX Player"; }
+    const juce::String getApplicationName() override    { return "Aura"; }
     const juce::String getApplicationVersion() override { return NX_VERSION; }
     bool moreThanOneInstanceAllowed() override          { return getCommandLineParameters().contains ("--selftest"); }
 

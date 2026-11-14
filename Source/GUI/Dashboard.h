@@ -1,7 +1,7 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Settings › Audio & Système: the hardware dashboard (Audirvana style) — COMPUTER card (OS, CPU, RAM, Memory
 // Play, sleep prevention) linked to the AUDIO DEVICE card (drawing, supported rates) by the connection
-// (built-in / network / USB, exclusive access). And the NX Remote panel (QR code).
+// (built-in / network / USB, exclusive access). And the Aura Remote panel (QR code).
 #pragma once
 
 #include "Widgets.h"

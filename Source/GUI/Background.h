@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // The living background: the current artwork, blurred, saturated and dimmed, cross-faded
 // on track change; or a slowly drifting mesh gradient built from the theme / artwork colours; or a
 // theme GLSL shader on OpenGL builds. Also produces the extra-blurred image glass panels show.
@@ -39,7 +39,7 @@ private:
     AppContext& ctx;
     juce::String mode = "artwork";                      // artwork | mesh | gradient | shader
     juce::Image current, previous, glass, mesh;
-    juce::Colour dominant { 0xff00f5a0 };
+    juce::Colour dominant { 0xff2563eb };
     float fade = 1.0f;
     juce::String artworkKey;
     double time0 = juce::Time::getMillisecondCounterHiRes() / 1000.0;

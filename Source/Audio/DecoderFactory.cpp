@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Decoder selection + a wrapper around JUCE readers (FLAC, MP3, Ogg Vorbis, and on macOS the
 // CoreAudio formats such as AAC). FLAC goes through JUCE's integer path, which keeps the samples exact.
 #include <algorithm>

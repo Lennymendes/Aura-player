@@ -1,5 +1,5 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// AURA DSP — NX Precision Audio Control: the audio chain in one panel. Left, one row per stage (source, headroom,
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// AURA DSP — Aura Precision Audio Control: the audio chain in one panel. Left, one row per stage (source, headroom,
 // sample rate conversion, crossfeed, headphone EQ, parametric EQ, polarity) with its switch and its LED; right, the
 // view of the selected equaliser:
 //   Égaliseur casque       searchable, scrolling list of headphone profiles and studio curves

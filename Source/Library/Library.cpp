@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Library.h"
 #include "../Audio/AudioDecoder.h"
 #include "../Audio/SacdIso.h"
@@ -770,7 +770,7 @@ juce::String Library::storeArtwork (const juce::MemoryBlock& image, const juce::
         if (standard) f.replaceWithData (image.getData(), image.getSize());
         else
         {
-            // progressive / CMYK JPEG, WebP, 16-bit PNG...: stored as a plain 8-bit RGB JPEG (player, NX Remote)
+            // progressive / CMYK JPEG, WebP, 16-bit PNG...: stored as a plain 8-bit RGB JPEG (player, Aura Remote)
             const auto jpg = imagedec::toStandardJpeg (imagedec::decode (image.getData(), image.getSize()));
             if (jpg.getSize() > 0) f.replaceWithData (jpg.getData(), jpg.getSize());
             else f.replaceWithData (image.getData(), image.getSize());      // undecodable: kept as is

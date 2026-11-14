@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Logo.h"
 #include "NXPlayerData.h"
 
@@ -6,14 +6,14 @@ namespace nx::logo
 {
 namespace
 {
-    // the artwork inside the SVG is the 848 x 848 square at (86, 86); the rest of the 1024 canvas is margin
-    constexpr float artX = 86.0f, artSize = 848.0f;
+    // the artwork inside the SVG is the 848 x 848 squircle at (88, 88); the rest of the 1024 canvas is margin
+    constexpr float artX = 88.0f, artSize = 848.0f;
 
     juce::Drawable* get()
     {
         static std::unique_ptr<juce::Drawable> d = []() -> std::unique_ptr<juce::Drawable>
         {
-            if (auto xml = juce::XmlDocument::parse (juce::String::fromUTF8 (NXData::NXPlayerLogo_svg, NXData::NXPlayerLogo_svgSize)))
+            if (auto xml = juce::XmlDocument::parse (juce::String::fromUTF8 (NXData::AuraLogo_svg, NXData::AuraLogo_svgSize)))
                 return juce::Drawable::createFromSVG (*xml);
             return {};
         }();

@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "MainComponent.h"
 #include "../DSP/StudioTools.h"
 #include "../Ext/PluginManager.h"
@@ -193,7 +193,7 @@ MainComponent::MainComponent (AppContext& c)
       sidebarButton (style::Icon::SidebarToggle, "Afficher / masquer la barre latérale"_t, c),
       backButton (style::Icon::ChevronLeft, "Précédent"_t, c),
       forwardButton (style::Icon::ChevronRight, "Suivant"_t, c),
-      remoteButton (style::Icon::Phone, "NX Remote : piloter depuis le téléphone (QR code)"_t, c),
+      remoteButton (style::Icon::Phone, "Aura Remote : piloter depuis le téléphone (QR code)"_t, c),
       settingsButton (style::Icon::Settings, "Réglages (Cmd/Ctrl + ,)"_t, c),
       streamerButton (style::Icon::Bolt, "Mode Streamer / Gaming : interface au repos (OBS, jeu), audio inchangé"_t, c),
       audioStatus (c), auraDsp (c),
@@ -291,7 +291,7 @@ void MainComponent::showRemote()
         AppContext& ctx;
         juce::ToggleButton enable;
         std::unique_ptr<RemotePanel> panel;
-        explicit RemotePopup (AppContext& c) : ctx (c), enable ("Activer NX Remote (Wi-Fi)"_t)
+        explicit RemotePopup (AppContext& c) : ctx (c), enable ("Activer Aura Remote (Wi-Fi)"_t)
         {
             enable.setToggleState (ctx.remote().isRunning(), juce::dontSendNotification);
             enable.onClick = [this] { ctx.setRemoteEnabled (enable.getToggleState()); enable.setToggleState (ctx.remote().isRunning(), juce::dontSendNotification); update(); };
@@ -317,7 +317,7 @@ void MainComponent::showRemote()
             if (panel != nullptr) return;
             g.setColour (ctx.theme().textDim());
             g.setFont (style::font (13.0f));
-            g.drawFittedText ("Contrôlez NX Player depuis votre téléphone, sur le même réseau Wi-Fi : activez NX Remote puis scannez le QR code. "_t
+            g.drawFittedText ("Contrôlez Aura depuis votre téléphone, sur le même réseau Wi-Fi : activez Aura Remote puis scannez le QR code. "_t
                               "Le serveur ne démarre qu'à la demande."_t, getLocalBounds().reduced (10).withTrimmedTop (40), juce::Justification::topLeft, 3);
         }
     };
@@ -399,7 +399,7 @@ void MainComponent::resized()
     sidebar.setBounds (r.getX() - (sideW + margin) + shown, r.getY(), sideW, r.getHeight());
     r.removeFromLeft (shown);
 
-    // Navigation row: sidebar toggle, back, forward ... NX Remote, settings (gear).
+    // Navigation row: sidebar toggle, back, forward ... Aura Remote, settings (gear).
     auto nav = r.removeFromTop (34);
     for (auto* b : { &sidebarButton, &backButton, &forwardButton })
     {

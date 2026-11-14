@@ -1,4 +1,4 @@
-# Thèmes NX Player (`.nxtheme`)
+# Thèmes Aura (`.nxtheme`)
 
 Un thème est un **dossier** dont le nom finit par `.nxtheme` (ou une archive zip renommée `.nxtheme`) :
 
@@ -9,14 +9,14 @@ mon-theme.nxtheme/
 └── background.frag    facultatif : shader GLSL d'arrière-plan
 ```
 
-NX Player cherche les thèmes dans `Themes/` à côté de l'application (thèmes livrés), puis dans le dossier
+Aura cherche les thèmes dans `Themes/` à côté de l'application (thèmes livrés), puis dans le dossier
 utilisateur, qui l'emporte à identifiant égal :
 
 | Système | Dossier utilisateur |
 |---|---|
-| macOS | `~/Library/Application Support/NX Player/Themes` |
-| Windows | `%APPDATA%\NX Player\Themes` |
-| Linux | `~/.config/NX Player/Themes` |
+| macOS | `~/Library/Application Support/Aura/Themes` |
+| Windows | `%APPDATA%\Aura\Themes` |
+| Linux | `~/.config/Aura/Themes` |
 
 **Rechargement à chaud** : le thème actif est surveillé (toutes les 0,5 s). Enregistrez `theme.css` ou
 `manifest.json` et l'interface se met à jour sans redémarrer.
@@ -108,7 +108,7 @@ ou Réglages › Interface), puis les plug-ins (`nx.ui.setLayout({ immersive: {.
 ## Shader d'arrière-plan (builds OpenGL : macOS, Windows, Linux avec OpenGL)
 
 Fragment shader GLSL inséré par JUCE (`OpenGLGraphicsContextCustomShader`) : `pixelPos` (coordonnées en pixels)
-et `pixelAlpha` sont fournis ; écrivez `gl_FragColor`. Uniforms passés par NX Player :
+et `pixelAlpha` sont fournis ; écrivez `gl_FragColor`. Uniforms passés par Aura :
 
 | Uniform | Type | Valeur |
 |---|---|---|
@@ -122,7 +122,7 @@ journal et l'arrière-plan de repli est utilisé.
 
 ## Thème en un seul fichier (.json) — partage communautaire
 
-Extensions & Thèmes › Thèmes (ou Réglages › Interface) : **Importer un thème (.json)** copie le fichier dans vos thèmes
+Réglages › Interface : **Importer un thème (.json)** copie le fichier dans vos thèmes
 (dossier utilisateur) et l'applique ; **Exporter le thème actuel** écrit le thème actif, couleur d'accent comprise.
 
 ```json

@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Community plug-ins.
 //
 //  UI plug-ins  (Plugins/UI/<name>/manifest.json + plugin.js): JavaScript (QuickJS through JUCE),

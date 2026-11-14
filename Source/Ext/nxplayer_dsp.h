@@ -1,4 +1,4 @@
-/* NX Player plug-in SDK — MIT License (exception: this file may be used freely to write NX Player plug-ins)
+/* Aura plug-in SDK — MIT License (exception: this file may be used freely to write Aura plug-ins)
  *
  * DSP plug-in ABI (plain C, stable across compilers). A DSP plug-in is a shared library
  * (.dll / .dylib / .so) placed in   Plugins/DSP/<name>/   next to a manifest.json, exporting:
@@ -9,7 +9,7 @@
  *  - create() / destroy() / set_param() are called on the message thread, never on the audio thread.
  *  - process() runs on the real-time audio thread: no allocation, no lock, no I/O, no syscalls.
  *    Buffers are planar 64-bit floats, processed in place, full scale = ±1.0.
- *  - Any active DSP takes the stream out of bit-perfect mode; NX Player shows it in the Signal Path.
+ *  - Any active DSP takes the stream out of bit-perfect mode; Aura shows it in the Signal Path.
  *  - DSP plug-ins only run on PCM. DSD (native or DoP) bypasses them.
  */
 #ifndef NXPLAYER_DSP_H

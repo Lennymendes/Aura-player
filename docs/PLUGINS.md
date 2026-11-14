@@ -1,4 +1,4 @@
-# Plug-ins NX Player
+# Plug-ins Aura
 
 Deux familles, chacune dans son dossier :
 
@@ -9,8 +9,8 @@ Plugins/
 ```
 
 Emplacements : `Plugins/` à côté de l'application (plug-ins livrés), puis le dossier utilisateur
-(`~/Library/Application Support/NX Player/Plugins`, `%APPDATA%\NX Player\Plugins`, `~/.config/NX Player/Plugins`).
-Activation : barre latérale › **Extensions & Thèmes** (interrupteur sur chaque carte) ou Réglages › Plug-ins.
+(`~/Library/Application Support/Aura/Plugins`, `%APPDATA%\Aura\Plugins`, `~/.config/Aura/Plugins`).
+Activation : barre latérale › **Extensions** (interrupteur sur chaque carte) ou Réglages › Plug-ins.
 
 `Catalog/` (à côté de l'application) contient des plug-ins en plus, non installés : la page **Plugins utilisateur ›
 Catalogue** les affiche avec un aperçu et les copie dans le dossier utilisateur en un clic. Pour proposer le vôtre,
@@ -105,7 +105,7 @@ Le descripteur donne l'identifiant, les paramètres (`id`, nom, unité, min, max
 Règles :
 - `process()` tourne sur le fil temps réel : pas d'allocation, pas de verrou, pas d'E/S. Tampons planaires
   `double`, traitement en place, pleine échelle ±1.
-- `create`, `destroy` et `set_param` sont appelés hors du fil audio. Quand un paramètre change, NX Player
+- `create`, `destroy` et `set_param` sont appelés hors du fil audio. Quand un paramètre change, Aura
   prépare une nouvelle instance et l'échange sans verrou.
 - Les plug-ins DSP ne s'appliquent qu'au PCM. Le DSD (natif ou DoP) les contourne.
 - Un DSP actif sort le flux du mode bit-perfect : le Signal Path l'affiche (« Amélioré »).
@@ -117,7 +117,7 @@ Règles :
   "author": "NX Audio Suite", "description": "…", "library": "crossfeed" }
 ```
 
-`library` est le nom sans extension : NX Player cherche `crossfeed.dll`, `crossfeed.dylib` ou `crossfeed.so`
+`library` est le nom sans extension : Aura cherche `crossfeed.dll`, `crossfeed.dylib` ou `crossfeed.so`
 (aussi préfixé `lib`, aussi dans `bin/`).
 
 ### Compiler l'exemple

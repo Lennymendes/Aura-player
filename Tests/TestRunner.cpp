@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "TestFramework.h"
 #include <algorithm>
 #include <atomic>
@@ -39,7 +39,7 @@ int runAll (const juce::String& filter)
     ctx.tempDir.deleteRecursively();
     ctx.tempDir.createDirectory();
 
-    nxtest::emit (std::string ("NX Player ") + NX_VERSION + " — banc d'essai");
+    nxtest::emit (std::string ("Aura ") + NX_VERSION + " — banc d'essai");
     int sections = 0;
     for (auto& s : r)
     {

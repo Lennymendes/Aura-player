@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // The player: a decoder thread fills a lock-free ring, the device's real-time thread empties it.
 //
 //   message thread : commands (play, seek, queue...), device (re)configuration, notifications
@@ -147,7 +147,7 @@ public:
     /** Message thread notifications. */
     std::function<void()> onTrackChanged, onStateChanged, onQueueFinished, onSignalPathChanged;
     std::function<void (const juce::String&)> onError;
-    /** Start of the error reported when NX Player Free meets a Studio Master track (DSD, DXD > 192 kHz, SACD). */
+    /** Start of the error reported when Aura Free meets a Studio Master track (DSD, DXD > 192 kHz, SACD). */
     static constexpr const char* studioMasterError = "[Premium] ";
 
     /** Opens network / provider streams (Brique 2). Called on the decoder thread. Files are opened directly. */

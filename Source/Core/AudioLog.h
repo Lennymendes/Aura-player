@@ -1,5 +1,5 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// Plain-text audio diagnostics (~/Library/NX Player/audio.log on macOS). Message / control thread only
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Plain-text audio diagnostics (~/Library/Aura/audio.log on macOS). Message / control thread only
 // (never from the real-time callback). Capped at 512 KB.
 #pragma once
 
@@ -10,7 +10,7 @@ namespace nx
 
 inline juce::File audioLogFile()
 {
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("NX Player").getChildFile ("audio.log");
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Aura").getChildFile ("audio.log");
 }
 
 inline void audioLog (const juce::String& line)

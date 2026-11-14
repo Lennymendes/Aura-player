@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #pragma once
 
 #include "Widgets.h"
@@ -49,7 +49,7 @@ public:
     void markLoopB();
     void clearLoop();
 
-    /** Volume slider position 0..1 (NX Remote, keyboard). */
+    /** Volume slider position 0..1 (Aura Remote, keyboard). */
     void setVolumeLevel (double v);
     /** Waveform instead of the progress line (button left of the elapsed time; saved in the settings). */
     void setWaveformShown (bool on);

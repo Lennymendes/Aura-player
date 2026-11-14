@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "RemoteServer.h"
 #include "../Core/Text.h"
 #include "NXPlayerData.h"
@@ -7,7 +7,7 @@
 namespace nx
 {
 
-RemoteServer::RemoteServer() : juce::Thread ("NX Remote")
+RemoteServer::RemoteServer() : juce::Thread ("Aura Remote")
 {
     webApp = juce::String::fromUTF8 (NXData::index_html, NXData::index_htmlSize);
     regenerateToken();
@@ -72,7 +72,7 @@ bool RemoteServer::start (int port, juce::String& error)
     }
     if (! ok)
     {
-        error = "NX Remote : impossible d'ouvrir un port réseau"_t;
+        error = "Aura Remote : impossible d'ouvrir un port réseau"_t;
         listener.reset();
         return false;
     }
@@ -184,7 +184,7 @@ void RemoteServer::handle (juce::StreamingSocket& s)
     }
     if (path == "/manifest.json")
     {
-        sendText (200, "application/manifest+json", R"({"name":"NX Remote","short_name":"NX Remote","display":"standalone","background_color":"#0A0C0E","theme_color":"#0A0C0E","start_url":"/","icons":[{"src":"/icon.png","sizes":"192x192","type":"image/png"}]})");
+        sendText (200, "application/manifest+json", R"({"name":"Aura Remote","short_name":"Aura Remote","display":"standalone","background_color":"#0A0C0E","theme_color":"#0A0C0E","start_url":"/","icons":[{"src":"/icon.png","sizes":"192x192","type":"image/png"}]})");
         return;
     }
     if (! path.startsWith ("/api/")) { sendText (404, "text/plain", "not found"); return; }

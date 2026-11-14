@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Onboarding.h"
 #include "DeviceArt.h"
 #include "Appearance.h"
@@ -233,7 +233,7 @@ void OnboardingWizard::paint (juce::Graphics& g)
     head.removeFromLeft (10);
     g.setColour (t.textCol());
     g.setFont (style::font (16.0f, true));
-    g.drawText ("Bienvenue dans NX Player"_t, head, juce::Justification::centredLeft);
+    g.drawText ("Bienvenue dans Aura"_t, head, juce::Justification::centredLeft);
     for (int i = 0; i < numSteps; ++i)
     {
         auto dot = juce::Rectangle<float> (i == step ? 26.0f : 8.0f, 8.0f).withPosition ((float) head.getRight() - 120.0f + (float) i * 22.0f + (i > step ? 18.0f : 0.0f), (float) head.getCentreY() - 4.0f);
@@ -241,10 +241,10 @@ void OnboardingWizard::paint (juce::Graphics& g)
         g.fillRoundedRectangle (dot, 4.0f);
     }
     r.removeFromTop (18);
-    const juce::String titles[] = { "Personnalisez NX Player"_t, "Disposition NX"_t, "Votre matériel audio"_t, "Vos sources musicales"_t };
+    const juce::String titles[] = { "Personnalisez Aura"_t, "Disposition Aura"_t, "Votre matériel audio"_t, "Vos sources musicales"_t };
     const juce::String subs[] = { "Choisissez la langue, le mode sombre ou clair et votre couleur d'accent. Tout se change ensuite dans les réglages."_t,
                                   "Comment voulez-vous organiser le lecteur, et quelle place pour la barre d'écoute ?"_t,
-                                  "NX Player a détecté votre interface : activez le profil optimal en un clic."_t,
+                                  "Aura a détecté votre interface : activez le profil optimal en un clic."_t,
                                   "Indiquez où se trouve votre musique : un dossier local et / ou un serveur NAS / Jellyfin du réseau."_t };
     g.setColour (t.textDim());
     g.setFont (style::font (12.5f, true));

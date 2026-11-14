@@ -1,5 +1,6 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "NXPlayerApp.h"
+#include "../Core/Diagnostics.h"
 #include "AppController.h"
 #include "MainComponent.h"
 #include "../UI/SplashScreen.h"
@@ -45,7 +46,14 @@ void NXPlayerApplication::initialise (const juce::String& commandLine)
         return;
     }
 
+    diagnostics::installCrashHandler();
     controller = std::make_unique<AppController>();
+    // a crash since the last launch: say where to get the logs (once per crash)
+    if (const auto crash = diagnostics::lastCrashTime(); crash.toMilliseconds() > (juce::int64) controller->settings().get ("lastCrashSeen", 0))
+    {
+        controller->settings().set ("lastCrashSeen", crash.toMilliseconds());
+        juce::Timer::callAfterDelay (2500, [] { if (auto* c = getController()) c->showMessage ("Aura s'est fermé de façon inattendue. Réglages › À propos › Exporter les journaux, puis envoyez le fichier au support."_t); });
+    }
     if (auto* content = controller->getMainComponent())       // launch animation over the main component (1.5 s)
         splash = std::make_unique<SplashScreen> (*content);   // hides itself at the end, freed at shutdown
     juce::StringArray files;

@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // DSD -> PCM (DXD 352,8 kHz by default) for DACs that accept PCM only.
 // One linear-phase FIR runs at the DSD rate and is evaluated only at the output instants. Since the
 // input is 1 bit, the FIR is computed with one 256-entry table per byte of history (no multiplications).

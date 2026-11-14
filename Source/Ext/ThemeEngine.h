@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Themes (.nxtheme): a folder (or a .zip renamed .nxtheme) with
 //   manifest.json   { "id", "name", "author", "version", "description", "stylesheet": "theme.css",
 //                     "background": { "type": "artwork" | "gradient" | "mesh" | "shader", "shader": "background.frag", ... } }
@@ -34,7 +34,7 @@ struct Theme
     juce::Colour border() const    { return colour ("--nx-border", juce::Colours::white.withAlpha (0.08f)); }
     juce::Colour textCol() const   { return colour ("--nx-text", juce::Colour (0xffeef3f1)); }
     juce::Colour textDim() const   { return colour ("--nx-text-dim", juce::Colour (0xff8a9792)); }
-    juce::Colour accent() const    { return colour ("--nx-accent", juce::Colour (0xff00f5a0)); }
+    juce::Colour accent() const    { return colour ("--nx-accent", juce::Colour (0xff2563eb)); }
     juce::Colour accent2() const   { return colour ("--nx-accent-2", juce::Colour (0xff00d9f5)); }
     float radius() const           { return number ("--nx-radius", 14.0f); }
 };

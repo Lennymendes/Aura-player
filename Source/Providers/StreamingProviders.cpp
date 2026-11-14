@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "StreamingProviders.h"
 #include "Http.h"
 #include "../Audio/AudioDecoder.h"
@@ -113,10 +113,10 @@ namespace
 
     void respond (juce::StreamingSocket& c, int status, const juce::String& title, const juce::String& message)
     {
-        const juce::String html = "<!doctype html><html><head><meta charset='utf-8'><title>NX Player</title></head>"
+        const juce::String html = "<!doctype html><html><head><meta charset='utf-8'><title>Aura</title></head>"
                                   "<body style='font-family:-apple-system,Segoe UI,sans-serif;background:#0A0C0E;color:#EEF3F1;"
                                   "display:flex;align-items:center;justify-content:center;height:100vh;margin:0'>"
-                                  "<div style='text-align:center'><h2 style='color:#00F5A0'>" + title + "</h2><p>" + message + "</p></div></body></html>";
+                                  "<div style='text-align:center'><h2 style='color:#2563EB'>" + title + "</h2><p>" + message + "</p></div></body></html>";
         const juce::String head = "HTTP/1.1 " + juce::String (status) + (status == 200 ? " OK" : " Not Found")
                                   + "\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\nContent-Length: "
                                   + juce::String ((int) html.getNumBytesAsUTF8()) + "\r\n\r\n";
@@ -154,7 +154,7 @@ juce::String OAuthLoopback::waitForCode (int timeoutMs, juce::String& error)
         if (! target.startsWith ("/callback"))
         {
             // Browser preconnects, /favicon.ico...: answer and keep listening.
-            if (target.isNotEmpty()) respond (*client, 404, "NX Player", "");
+            if (target.isNotEmpty()) respond (*client, 404, "Aura", "");
             continue;
         }
 
@@ -167,7 +167,7 @@ juce::String OAuthLoopback::waitForCode (int timeoutMs, juce::String& error)
         }
         if (code.isNotEmpty())
         {
-            respond (*client, 200, "NX Player est connect&eacute;", "Vous pouvez fermer cet onglet et revenir dans NX Player.");
+            respond (*client, 200, "Aura est connect&eacute;", "Vous pouvez fermer cet onglet et revenir dans Aura.");
             listener.close();
             return code;
         }
@@ -178,7 +178,7 @@ juce::String OAuthLoopback::waitForCode (int timeoutMs, juce::String& error)
             error = err == "access_denied" ? juce::String ("autorisation refusée"_t) : err;
             return {};
         }
-        respond (*client, 404, "NX Player", "Adresse de retour incompl&egrave;te.");
+        respond (*client, 404, "Aura", "Adresse de retour incompl&egrave;te.");
     }
     listener.close();
     if (error.isEmpty()) error = "délai dépassé : aucune réponse du navigateur"_t;
@@ -793,7 +793,7 @@ bool SpotifyProvider::playExternally (const TrackInfo& track, juce::String& erro
     const auto webUrl = "https://open.spotify.com/track/" + uri.fromLastOccurrenceOf (":", false, false);
     if (juce::URL (uri).launchInDefaultBrowser() || juce::URL (webUrl).launchInDefaultBrowser())
     {
-        lastError = r.status == 403 ? juce::String ("Spotify Premium est nécessaire pour lancer la lecture depuis NX Player : le morceau s'ouvre dans Spotify."_t)
+        lastError = r.status == 403 ? juce::String ("Spotify Premium est nécessaire pour lancer la lecture depuis Aura : le morceau s'ouvre dans Spotify."_t)
                                     : juce::String ("Aucun appareil Spotify actif : ouvrez l'application Spotify, puis relancez."_t);
         return true;
     }

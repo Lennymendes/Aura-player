@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Uncompressed PCM decoders: WAV / BWF / RF64 / BW64 and AIFF / AIFF-C.
 #pragma once
 

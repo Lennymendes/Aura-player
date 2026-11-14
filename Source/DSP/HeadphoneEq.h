@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Equalisers of the AURA DSP panel, RBJ biquads in 64 bits:
 //   headphone profiles (up to 8 bands; the two Momentum M2 profiles are NX Audio's own) and studio curves,
 //   and the 7-band parametric EQ edited by hand.

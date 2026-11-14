@@ -1,4 +1,4 @@
-// NX Player — plug-in « Spectrogramme » (MIT).
+// Aura — plug-in « Spectrogramme » (MIT).
 const rows = [];
 const maxRows = 48;
 

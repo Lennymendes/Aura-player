@@ -1,5 +1,6 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "AppController.h"
+#include "../Core/Diagnostics.h"
 #include "../Core/ImageDecode.h"
 #include "../Audio/SacdIso.h"
 #include <numeric>
@@ -16,10 +17,14 @@ namespace nx
 juce::File AppController::defaultDataDir()
 {
    #if JUCE_MAC
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Application Support/NX Player");
+    const auto base = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Application Support");
    #else
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("NX Player");
+    const auto base = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory);
    #endif
+    const auto dir = base.getChildFile ("Aura");
+    // renamed from NX Player: settings, library, licence and themes move with the user
+    if (const auto old = base.getChildFile ("NX Player"); ! dir.exists() && old.isDirectory()) old.moveFileTo (dir);
+    return dir;
 }
 
 juce::File AppController::defaultResourcesDir()
@@ -97,7 +102,7 @@ AppController::AppController (Options options)
         downloadManager->setFolder (juce::File (folder));
     downloadManager->onMessage = [this] (const juce::String& m) { showMessage (m); };
 
-    // Artist pages (photos, biographies) and NX Remote
+    // Artist pages (photos, biographies) and Aura Remote
     artistInfoService = std::make_unique<ArtistInfoService> (lib);
     artistInfoService->setEnabled ((bool) appSettings.get ("artistInfoOnline", true));
     artistInfoService->setAudioDbKey (appSettings.get ("audioDbKey").toString());   // no personal key: TheAudioDB is never called
@@ -105,7 +110,7 @@ AppController::AppController (Options options)
     remoteServer = std::make_unique<RemoteServer>();
     remoteServer->onCommand = [this] (const juce::String& c, const juce::StringPairArray& p) { handleRemoteCommand (c, p); };
     remoteServer->onLibraryQuery = [this] (const juce::StringPairArray& p) { return buildRemoteLibrary (p); };
-    // NX Remote identity (token + port): generated once and kept, so the QR code and the link never change by themselves.
+    // Aura Remote identity (token + port): generated once and kept, so the QR code and the link never change by themselves.
     {
         remoteServer->setToken (appSettings.get ("remoteToken", "").toString());
         if (appSettings.get ("remoteToken", "").toString() != remoteServer->getToken()) appSettings.set ("remoteToken", remoteServer->getToken());
@@ -135,8 +140,8 @@ AppController::AppController (Options options)
     if (const auto accent = appSettings.get ("accent").toString(); accent.startsWith ("#"))
         themeManager.setAccentOverride (juce::Colour::fromString ("ff" + accent.substring (1)));
     if (appSettings.get ("appearance").toString() == "system") appSettings.set ("theme", themeForAppearance());
-    if (! themeManager.apply (appSettings.get ("theme", "nx-emerald").toString()))
-        themeManager.apply ("nx-emerald");
+    if (! themeManager.apply (appSettings.get ("theme", "aura").toString()))
+        themeManager.apply ("aura");
     juce::Desktop::getInstance().addDarkModeSettingListener (this);
     lookAndFeel.applyTheme (themeManager.current());
     juce::LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
@@ -185,7 +190,7 @@ AppController::AppController (Options options)
     eng->setRepeat ((PlaybackEngine::Repeat) juce::jlimit (0, 2, (int) appSettings.get ("repeat", 0)));
     eng->onError = [this] (const juce::String& e)
     {
-        if (e.startsWith (PlaybackEngine::studioMasterError)) showUpsell (UpsellReason::StudioMaster);   // NX Player Free
+        if (e.startsWith (PlaybackEngine::studioMasterError)) showUpsell (UpsellReason::StudioMaster);   // Aura Free
         else showMessage (e);
     };
 
@@ -204,7 +209,7 @@ AppController::AppController (Options options)
         mainWindow = std::make_unique<MainWindow> (*this, lookAndFeel);
         libScanner->start (3000);
 
-        // Media keys and the system's "Now Playing" (works with NX Player in the background)
+        // Media keys and the system's "Now Playing" (works with Aura in the background)
         MediaControls::Callbacks cb;
         cb.play = [this] { eng->play(); };
         cb.pause = [this] { eng->pause(); };
@@ -279,7 +284,7 @@ bool AppController::activateLicense (const juce::String& key, juce::String& erro
     if (! licenseManager->activate (key, error)) return false;
     appSettings.set ("licenseKey", licenseManager->getKey());
     applyEdition();
-    showMessage ("NX Player Premium activé — merci !"_t);
+    showMessage ("Aura Premium activé — merci !"_t);
     return true;
 }
 
@@ -288,7 +293,7 @@ void AppController::deactivateLicense()
     licenseManager->deactivate();
     appSettings.set ("licenseKey", juce::String());
     applyEdition();
-    showMessage ("Licence retirée de cet appareil : NX Player Free"_t);
+    showMessage ("Licence retirée de cet appareil : Aura Free"_t);
 }
 
 juce::String AppController::upsellTitle (UpsellReason why)
@@ -296,10 +301,10 @@ juce::String AppController::upsellTitle (UpsellReason why)
     switch (why)
     {
         case UpsellReason::StudioMaster:   return "Format Studio Master (DXD / DSD / SACD)"_t;
-        case UpsellReason::ExclusiveMode:  return "Mode exclusif (Hog Mode) — NX Player Premium"_t;
-        case UpsellReason::DeviceProfiles: return "Profils matériels dédiés — NX Player Premium"_t;
-        case UpsellReason::Remote:         return "NX Remote — NX Player Premium"_t;
-        case UpsellReason::MetadataEditor: return "Éditeur de métadonnées — NX Player Premium"_t;
+        case UpsellReason::ExclusiveMode:  return "Mode exclusif (Hog Mode) — Aura Premium"_t;
+        case UpsellReason::DeviceProfiles: return "Profils matériels dédiés — Aura Premium"_t;
+        case UpsellReason::Remote:         return "Aura Remote — Aura Premium"_t;
+        case UpsellReason::MetadataEditor: return "Éditeur de métadonnées — Aura Premium"_t;
     }
     return {};
 }
@@ -307,8 +312,8 @@ juce::String AppController::upsellTitle (UpsellReason why)
 juce::String AppController::upsellMessage (UpsellReason why)
 {
     if (why == UpsellReason::StudioMaster)
-        return "Passez à NX Player Premium pour débloquer la lecture haute résolution au-delà de 192 kHz."_t;
-    return "Cette fonction fait partie de NX Player Premium. L'édition Free lit tout le PCM jusqu'à 24 bits / 192 kHz."_t;
+        return "Passez à Aura Premium pour débloquer la lecture haute résolution au-delà de 192 kHz."_t;
+    return "Cette fonction fait partie d'Aura Premium. L'édition Free lit tout le PCM jusqu'à 24 bits / 192 kHz."_t;
 }
 
 void AppController::showUpsell (UpsellReason why)
@@ -319,7 +324,7 @@ void AppController::showUpsell (UpsellReason why)
     upsellOpen = true;
     auto* w = new juce::AlertWindow (upsellTitle (why), upsellMessage (why), juce::MessageBoxIconType::NoIcon);
     w->addButton ("Entrer une clé de licence"_t, 1);
-    w->addButton ("Acheter NX Player Premium"_t, 2);
+    w->addButton ("Acheter Aura Premium"_t, 2);
     w->addButton ("Plus tard"_t, 0, juce::KeyPress (juce::KeyPress::escapeKey));
     std::weak_ptr<int> weak = alive;
     w->enterModalState (true, juce::ModalCallbackFunction::create ([this, weak] (int result)
@@ -340,7 +345,7 @@ void AppController::checkForUpdates (bool userAsked)
         if (s.state == UpdateChecker::State::Available)
             showUpdateAvailable (s.info, userAsked);
         else if (userAsked && s.state == UpdateChecker::State::UpToDate)
-            showMessage ("NX Player est à jour (v"_t + juce::String (NX_VERSION) + ")");
+            showMessage ("Aura est à jour (v"_t + juce::String (NX_VERSION) + ")");
         else if (userAsked)
             showMessage ("Vérification des mises à jour impossible : "_t + s.error);
         if (auto* m = getMainComponent()) m->refreshCurrentPage();
@@ -353,7 +358,7 @@ juce::String AppController::updateMessage (const UpdateInfo& info, const juce::S
     juce::String m;
     m << "Version installée : "_t << currentVersion << "\n" << "Nouvelle version : "_t << info.latestVersion << "\n";
     if (notes.isNotEmpty()) m << "\n" << "Nouveautés :"_t << "\n" << notes << "\n";
-    if (info.mandatory) m << "\n" << "Cette mise à jour est nécessaire pour continuer à utiliser NX Player."_t << "\n";
+    if (info.mandatory) m << "\n" << "Cette mise à jour est nécessaire pour continuer à utiliser Aura."_t << "\n";
     m << "\n" << "Votre licence et vos réglages sont conservés."_t;
     return m;
 }
@@ -364,7 +369,7 @@ void AppController::showUpdateAvailable (const UpdateInfo& info, bool userAsked)
     if (! userAsked && ! info.mandatory && appSettings.get ("skippedVersion").toString() == info.latestVersion) return;
     if (updateOpen) return;
     updateOpen = true;
-    auto* w = new juce::AlertWindow ("Mise à jour disponible — NX Player "_t + info.latestVersion,
+    auto* w = new juce::AlertWindow ("Mise à jour disponible — Aura "_t + info.latestVersion,
                                      updateMessage (info, NX_VERSION, i18n::getLanguage()), juce::MessageBoxIconType::NoIcon);
     w->addButton ("Mettre à jour"_t, 1, juce::KeyPress (juce::KeyPress::returnKey));
     w->addButton (info.mandatory ? "Plus tard"_t : "Pas maintenant"_t, 0, juce::KeyPress (juce::KeyPress::escapeKey));
@@ -524,12 +529,12 @@ void AppController::saveNasServers()
     }
 }
 
-void AppController::applyThemeNow (const juce::String& id)
+void AppController::applyThemeNow (juce::String id)
 {
     if (themeManager.apply (id)) appSettings.set ("theme", id);
 }
 
-void AppController::applyTheme (const juce::String& id)
+void AppController::applyTheme (juce::String id)
 {
     const auto* th = themeManager.findTheme (id);
     if (th == nullptr) return;
@@ -542,7 +547,7 @@ void AppController::applyTheme (const juce::String& id)
 
 void AppContext::chooseThemeToImport()
 {
-    auto chooser = std::make_shared<juce::FileChooser> ("Importer un thème NX Player"_t, juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Downloads"),
+    auto chooser = std::make_shared<juce::FileChooser> ("Importer un thème Aura"_t, juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Downloads"),
                                                         "*.json;*.zip;*.nxtheme");
     chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::canSelectDirectories,
                           [this, chooser] (const juce::FileChooser& fc)
@@ -554,6 +559,29 @@ void AppContext::chooseThemeToImport()
         if (id.isEmpty()) showMessage ("Thème non importé : "_t + err);
         else showMessage ("Thème importé et appliqué : "_t + theme().name);
     });
+}
+
+juce::String AppContext::diagnosticsSummary()
+{
+    auto& e = engine();
+    const auto path = e.getSignalPath();
+    juce::String s;
+    s << "Aura " NX_VERSION " (" << (isPremium() ? "Premium" : "Free") << ")\n"
+      << "Système : " << juce::SystemStats::getOperatingSystemName() << (juce::SystemStats::isOperatingSystem64Bit() ? " 64 bits" : "") << "\n"
+      << "Processeur : " << juce::SystemStats::getCpuModel().trim() << " · " << juce::SystemStats::getNumCpus() << " cœurs\n"
+      << "Mémoire : " << juce::SystemStats::getMemorySizeInMegabytes() << " Mo\n"
+      << "Langue : " << (i18n::isEnglish() ? "en" : "fr") << " · thème : " << theme().id << " · mode Streamer : " << (isStreamerMode() ? "oui" : "non") << "\n"
+      << "Sortie : " << e.getDeviceName() << " · chaîne : " << (path.nodes.empty() ? juce::String ("—") : toString (path.overall)) << "\n"
+      << "Généré le : " << juce::Time::getCurrentTime().toISO8601 (true) << "\n";
+    return s;
+}
+
+void AppContext::exportDiagnostics()
+{
+    const auto zip = diagnostics::exportZip (diagnosticsSummary(), juce::File::getSpecialLocation (juce::File::userDesktopDirectory));
+    if (zip == juce::File()) { showMessage ("Impossible d'écrire les journaux sur le bureau"_t); return; }
+    zip.revealToUser();
+    showMessage ("Journaux exportés sur le bureau : "_t + zip.getFileName() + " — envoyez ce fichier au support"_t);
 }
 
 void AppContext::chooseThemeExport()
@@ -575,8 +603,8 @@ juce::String AppController::importThemeFile (const juce::File& file, juce::Strin
 {
     const auto id = themeManager.importTheme (file, error);
     if (id.isEmpty()) return {};
-    applyTheme (id);                         // NX Remote follows through its state (theme colours)
-    if (auto* m = getMainComponent()) m->pluginsChanged();     // the Extensions & Thèmes cards
+    applyTheme (id);                         // Aura Remote follows through its state (theme colours)
+    if (auto* m = getMainComponent()) m->pluginsChanged();     // the Extensions cards
     return id;
 }
 
@@ -589,8 +617,8 @@ juce::String AppController::themeForAppearance()
 {
     const auto mode = getAppearance();
     const bool dark = mode == "dark" || (mode == "system" && juce::Desktop::getInstance().isDarkModeActive());
-    auto id = appSettings.get (dark ? "darkTheme" : "lightTheme", dark ? "nx-emerald" : lightThemeId).toString();
-    if (themeManager.findTheme (id) == nullptr) id = dark ? "nx-emerald" : lightThemeId;
+    auto id = appSettings.get (dark ? "darkTheme" : "lightTheme", dark ? "aura" : lightThemeId).toString();
+    if (themeManager.findTheme (id) == nullptr) id = dark ? "aura" : lightThemeId;
     return id;
 }
 
@@ -623,7 +651,7 @@ void AppController::restartApplication()
    #endif
     static juce::ChildProcess helper;
     if (helper.start (cmd)) juce::JUCEApplication::getInstance()->systemRequestedQuit();
-    else showMessage ("Redémarrage automatique impossible : relancez NX Player manuellement."_t);
+    else showMessage ("Redémarrage automatique impossible : relancez Aura manuellement."_t);
 }
 
 //==============================================================================
@@ -633,7 +661,7 @@ void AppController::playTracks (const std::vector<TrackInfo>& requested, int sta
     startIndex = juce::jlimit (0, (int) requested.size() - 1, startIndex);
     if (! isPremium())
     {
-        // NX Player Free: a Studio Master track asked for -> the Premium window; others in the list are skipped
+        // Aura Free: a Studio Master track asked for -> the Premium window; others in the list are skipped
         const auto& wanted = requested[(size_t) startIndex];
         if (LicenseManager::isStudioMaster (wanted.isDsd, wanted.sampleRate, wanted.uri)) { showUpsell (UpsellReason::StudioMaster); return; }
     }
@@ -953,7 +981,7 @@ void AppController::loadLyrics (const TrackInfo& t)
 
 void AppController::timerCallback()
 {
-    // A fixed rate: this timer serves the transport, NX Remote and the OS media keys (never 1 Hz).
+    // A fixed rate: this timer serves the transport, Aura Remote and the OS media keys (never 1 Hz).
     if (const int interval = perf::streamer() ? 1000 / 15 : 1000 / 30; getTimerInterval() != interval) startTimer (interval);
     const double now = juce::Time::getMillisecondCounterHiRes() / 1000.0;
     const double dt = juce::jlimit (0.001, 0.2, now - lastFrame);
@@ -1451,7 +1479,7 @@ void AppController::handleRemoteCommand (const juce::String& c, const juce::Stri
             familySetProfile (s, family, i);
             eng->setSettings (s);
             applyEngineSettings();
-            showMessage ("NX Remote : profil "_t + profileName (family, i));
+            showMessage ("Aura Remote : profil "_t + profileName (family, i));
         }
     }
     else if (c == "playAlbum")

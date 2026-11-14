@@ -1,4 +1,4 @@
-// Aura Neon — fond animé (GLSL, builds OpenGL). Uniforms fournis par NX Player :
+// Aura Neon — fond animé (GLSL, builds OpenGL). Uniforms fournis par Aura :
 //   u_time (s), u_resolution (px), u_accent, u_accent2 (vec4), u_level (0..1, niveau audio lissé)
 // JUCE fournit pixelPos (coordonnées écran) et pixelAlpha.
 uniform float u_time;

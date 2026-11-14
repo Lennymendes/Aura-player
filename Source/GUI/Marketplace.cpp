@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Marketplace.h"
 
 namespace nx
@@ -264,8 +264,7 @@ void MarketCard::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-MarketplacePage::MarketplacePage (AppContext& c) : ScrollPage (c), importButton ("Importer un plugin…"_t), folderButton ("Ouvrir le dossier des plugins"),
-      importThemeButton ("Importer un thème (.json)"_t), exportThemeButton ("Exporter le thème actuel"_t)
+MarketplacePage::MarketplacePage (AppContext& c) : ScrollPage (c), importButton ("Importer un plugin…"_t), folderButton ("Ouvrir le dossier des plugins")
 {
     contentComp.addAndMakeVisible (header);
     filter.setTextToShowWhenEmpty ("Filtrer…"_t, ctx.theme().textDim());
@@ -280,10 +279,6 @@ MarketplacePage::MarketplacePage (AppContext& c) : ScrollPage (c), importButton 
     contentComp.addChildComponent (emptyLabel);
     contentComp.addChildComponent (folderButton);
     importButton.onClick = [this] { importPlugin(); };
-    contentComp.addChildComponent (importThemeButton);
-    contentComp.addChildComponent (exportThemeButton);
-    importThemeButton.onClick = [this] { ctx.chooseThemeToImport(); };
-    exportThemeButton.onClick = [this] { ctx.chooseThemeExport(); };
     folderButton.onClick = [this]
     {
         auto root = userPluginsRoot();
@@ -301,14 +296,14 @@ MarketplacePage::~MarketplacePage() { stopTimer(); }
 
 juce::StringArray MarketplacePage::tabIds() const
 {
-    // the last tab switches to the other mode (the sidebar only has "Extensions & Thèmes")
-    return mode == Mode::Gallery ? juce::StringArray { "tout", "themes", "interface", "dsp", ">plugins" } : juce::StringArray { "catalogue", "installes", ">galerie" };
+    // the last tab switches to the other mode (the sidebar only has "Extensions"; themes live in Réglages › Interface)
+    return mode == Mode::Gallery ? juce::StringArray { "tout", "interface", "dsp", ">plugins" } : juce::StringArray { "catalogue", "installes", ">galerie" };
 }
 
 juce::StringArray MarketplacePage::tabLabels() const
 {
-    return mode == Mode::Gallery ? juce::StringArray { "Tout"_t, "Thèmes"_t, "Interface", "DSP", "Plugins utilisateur ›"_t }
-                                 : juce::StringArray { "Catalogue", "Installés"_t, "‹ Extensions & Thèmes"_t };
+    return mode == Mode::Gallery ? juce::StringArray { "Tout"_t, "Interface", "DSP", "Plugins utilisateur ›"_t }
+                                 : juce::StringArray { "Catalogue", "Installés"_t, "‹ Extensions"_t };
 }
 
 bool MarketplacePage::isUserFolder (const juce::File& f) const
@@ -343,9 +338,6 @@ void MarketplacePage::refresh()
         contentComp.addAndMakeVisible (b);
     }
     importButton.setVisible (mode == Mode::UserPlugins);
-    const bool themeTab = mode == Mode::Gallery && (tab == "tout" || tab == "themes");
-    importThemeButton.setVisible (themeTab);
-    exportThemeButton.setVisible (themeTab);
     folderButton.setVisible (mode == Mode::UserPlugins);
     build();
 }
@@ -388,17 +380,6 @@ void MarketplacePage::build()
 
     if (mode == Mode::Gallery)
     {
-        if (tab == "tout" || tab == "themes")
-            for (auto& th : ctx.themes().getThemes())
-            {
-                MarketCard::Data d;
-                d.kind = MarketCard::Kind::Theme;
-                d.id = th.id; d.name = th.name; d.author = th.author; d.version = th.version; d.description = th.description;
-                d.enabled = th.id == ctx.theme().id;
-                d.removable = isUserFolder (th.folder);
-                d.theme = th;
-                list.push_back (d);
-            }
         if (tab == "tout" || tab == "interface")
             for (auto& p : mgr.getUiPlugins()) list.push_back (uiData (p, &mgr));
         if (tab == "tout" || tab == "dsp")
@@ -454,7 +435,7 @@ void MarketplacePage::build()
             auto& m = ctx.plugins();
             if (data.kind == MarketCard::Kind::Theme)
             {
-                ctx.applyTheme (on ? data.id : juce::String ("nx-emerald"));
+                ctx.applyTheme (on ? data.id : juce::String ("aura"));
                 ctx.showMessage ((on ? "Thème appliqué : "_t + data.name : juce::String ("Thème par défaut rétabli"_t)));
             }
             else if (data.kind == MarketCard::Kind::UiPlugin) m.setUiPluginEnabled (data.id, on);
@@ -489,7 +470,7 @@ void MarketplacePage::build()
             {
                 if (auto* th = ctx.themes().findTheme (data.id))
                 {
-                    if (ctx.theme().id == data.id) ctx.applyTheme ("nx-emerald");
+                    if (ctx.theme().id == data.id) ctx.applyTheme ("aura");
                     th->folder.deleteRecursively();
                     ctx.themes().rescan();
                 }
@@ -529,7 +510,7 @@ bool MarketplacePage::removeUserPlugin (const juce::String& id, juce::String& er
 {
     auto& m = ctx.plugins();
     const auto folder = m.getPluginFolder (id);
-    if (! isUserFolder (folder)) { error = "ce plugin est livré avec NX Player et ne peut pas être retiré"_t; return false; }
+    if (! isUserFolder (folder)) { error = "ce plugin est livré avec Aura et ne peut pas être retiré"_t; return false; }
     m.setUiPluginEnabled (id, false);
     m.setDspPluginEnabled (id, false);
     if (! folder.deleteRecursively())
@@ -539,7 +520,7 @@ bool MarketplacePage::removeUserPlugin (const juce::String& id, juce::String& er
         folder.getChildFile ("manifest.json").deleteFile();
         if (folder.getChildFile ("manifest.json").exists())
         {
-            error = "fermez NX Player puis supprimez "_t + folder.getFullPathName();
+            error = "fermez Aura puis supprimez "_t + folder.getFullPathName();
             return false;
         }
         folder.getChildFile (".nx-uninstalled").create();
@@ -602,14 +583,6 @@ void MarketplacePage::layoutContent (int width)
     filter.setBounds (row.removeFromRight (juce::jmin (260, juce::jmax (140, row.getWidth()))));
     y += 34 + 14;
 
-    if (importThemeButton.isVisible())
-    {
-        auto actions = juce::Rectangle<int> (pad, y, inner, 34);
-        importThemeButton.setBounds (actions.removeFromLeft (230));
-        actions.removeFromLeft (10);
-        exportThemeButton.setBounds (actions.removeFromLeft (230));
-        y += 34 + 16;
-    }
     if (mode == Mode::UserPlugins)
     {
         auto actions = juce::Rectangle<int> (pad, y, inner, 34);
@@ -641,7 +614,7 @@ void MarketplacePage::Header::paint (juce::Graphics& g)
 {
     const auto& t = page.ctx.theme();
     const bool gallery = page.mode == Mode::Gallery;
-    drawPageTitle (g, t, getLocalBounds(), gallery ? juce::String ("Extensions & Thèmes"_t) : juce::String ("Plugins utilisateur"),
+    drawPageTitle (g, t, getLocalBounds(), gallery ? juce::String ("Extensions"_t) : juce::String ("Plugins utilisateur"),
                    gallery ? juce::String ("Activez ou désactivez en un clic. Les thèmes s'appliquent tout de suite, les plug-ins apparaissent dans leurs emplacements."_t)
                            : juce::String ("Des plug-ins en plus, installés dans votre dossier en un clic. Les vôtres (importés) apparaissent dans « Installés »."_t));
 }

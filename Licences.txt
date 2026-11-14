@@ -1,5 +1,5 @@
 ==============================================================================
-NX Player
+Aura
 ==============================================================================
 
 Copyright (c) 2026 NX Audio (ZEYN). Tous droits réservés.
@@ -7,7 +7,7 @@ Copyright (c) 2026 NX Audio (ZEYN). Tous droits réservés.
 Ce logiciel et son code source sont propriétaires. Toute redistribution, modification, décompilation ou
 ingénierie inverse sans autorisation écrite est strictement interdite.
 
-NX Player utilise les composants tiers ci-dessous. Chacun reste soumis à sa propre licence, reproduite
+Aura utilise les composants tiers ci-dessous. Chacun reste soumis à sa propre licence, reproduite
 intégralement dans ce fichier.
 
 
@@ -17,7 +17,7 @@ JUCE 8
 
 JUCE — Copyright (c) Raw Material Software Limited. https://juce.com
 Utilisé sous licence commerciale JUCE (JUCE 8 End User Licence Agreement). JUCE n'est pas redistribué
-sous forme de code source avec NX Player.
+sous forme de code source avec Aura.
 
 JUCE intègre les bibliothèques ci-dessous, dont les licences suivent : FLAC, Ogg / Vorbis, zlib, libpng,
 bibliothèque JPEG de l'Independent JPEG Group, HarfBuzz, SheenBidi, choc et QuickJS, interface ASIO.
@@ -1123,5 +1123,5 @@ La source est affichée sous chaque texte.
 
 Photos et informations d'artistes : TheAudioDB.com, uniquement avec la clé API personnelle de l'utilisateur.
 
-Paroles : NX Player n'interroge aucun service de paroles en ligne ; il lit les fichiers .lrc / .txt et les
+Paroles : Aura n'interroge aucun service de paroles en ligne ; il lit les fichiers .lrc / .txt et les
 tags de paroles présents à côté ou dans les fichiers audio de l'utilisateur.

@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "PlayerBar.h"
 #include "../Engine/DeviceProfiles.h"
 #include <juce_audio_basics/juce_audio_basics.h>
@@ -319,7 +319,7 @@ void PlayerBar::trackChanged()
     }
     else
     {
-        title = "NX Player";
+        title = "Aura";
         subtitle = "Choisissez un morceau"_t;
         artistText = albumText = {};
         artwork.setArtwork ({}, "NX");

@@ -1,5 +1,5 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
-// System media controls: the keyboard's media keys (play / pause, next, previous) even when NX Player is in
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// System media controls: the keyboard's media keys (play / pause, next, previous) even when Aura is in
 // the background, and the "Now Playing" metadata shown by the system.
 //   macOS   : MPRemoteCommandCenter + MPNowPlayingInfoCenter (MediaControls_mac.mm)
 //   Windows : SystemMediaTransportControls through ISystemMediaTransportControlsInterop (win/MediaControls_win.cpp)

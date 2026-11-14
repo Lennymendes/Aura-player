@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 project(NXPlayer VERSION 1.0.0 LANGUAGES C CXX)
 
-# NX Player — lecteur audiophile bit-perfect (PCM / DXD / DSD) de la NX Audio Suite. Licence MIT.
+# Aura — lecteur audiophile bit-perfect (PCM / DXD / DSD) de la NX Audio Suite. Licence MIT.
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -58,7 +58,7 @@ endif()
 file(GLOB NX_ALAC_SOURCES CONFIGURE_DEPENDS ThirdParty/alac/*.c ThirdParty/alac/*.cpp)
 add_library(nx_alac STATIC ${NX_ALAC_SOURCES})
 
-# QR Code generator (Project Nayuki, MIT) — NX Remote
+# QR Code generator (Project Nayuki, MIT) — Aura Remote
 # Cover-art fallback decoders: libwebp (decoder only) and stb_image
 file(GLOB NX_WEBP_SOURCES CONFIGURE_DEPENDS ThirdParty/libwebp/src/dec/*.c ThirdParty/libwebp/src/dsp/*.c ThirdParty/libwebp/src/utils/*.c)
 add_library(nx_imagedec STATIC ${NX_WEBP_SOURCES} ThirdParty/stb/stb_impl.c)
@@ -94,7 +94,7 @@ if(UNIX AND NOT APPLE)
 endif()
 
 juce_add_gui_app(NXPlayer
-    PRODUCT_NAME "NX Player"
+    PRODUCT_NAME "Aura"
     COMPANY_NAME "NX Audio Suite"
     BUNDLE_ID "com.nxaudio.nxplayer"
     ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/Resources/AppIcon_1024.png"
@@ -105,7 +105,7 @@ juce_add_gui_app(NXPlayer
     NEEDS_WEB_BROWSER FALSE
     PLIST_TO_MERGE [[<plist><dict>
         <key>NSLocalNetworkUsageDescription</key>
-        <string>NX Player recherche et lit les serveurs de musique UPnP / DLNA (NAS, Jellyfin) de votre réseau local.</string>
+        <string>Aura recherche et lit les serveurs de musique UPnP / DLNA (NAS, Jellyfin) de votre réseau local.</string>
         <key>NSBonjourServices</key>
         <array>
             <string>_http._tcp</string>
@@ -165,7 +165,7 @@ target_include_directories(NXPlayer PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generat
 juce_add_binary_data(NXPlayerData
     HEADER_NAME NXPlayerData.h
     NAMESPACE NXData
-    SOURCES Resources/AppIcon_256.png Resources/NXPlayerLogo.svg Resources/i18n/en.json Resources/remote/index.html Resources/remote/icon.png Licences.txt)
+    SOURCES Resources/AppIcon_256.png Resources/AuraLogo.svg Resources/i18n/en.json Resources/remote/index.html Resources/remote/icon.png Licences.txt)
 
 set(NX_GL_MODULE "")
 if(NX_ENABLE_OPENGL)
@@ -312,5 +312,5 @@ endif()
 if(APPLE)
     add_custom_command(TARGET NXPlayer POST_BUILD
         COMMAND codesign --force --deep --sign - --identifier "com.nxaudio.nxplayer" "$<TARGET_BUNDLE_DIR:NXPlayer>"
-        COMMENT "Signature ad hoc de NX Player.app (com.nxaudio.nxplayer)")
+        COMMENT "Signature ad hoc d'Aura.app (com.nxaudio.nxplayer)")
 endif()

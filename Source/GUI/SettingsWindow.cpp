@@ -1,4 +1,4 @@
-// NX Player — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
+// Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "SettingsWindow.h"
 
 namespace nx
@@ -111,7 +111,7 @@ void SettingsWindow::paint (juce::Graphics& g)
     }
     g.setColour (t.textDim());
     g.setFont (style::font (11.5f));
-    g.drawText ("NX Player " NX_VERSION, juce::Rectangle<float> (nav.getX() + 24.0f, p.getBottom() - 36.0f, 200.0f, 20.0f), juce::Justification::centredLeft);
+    g.drawText ("Aura " NX_VERSION, juce::Rectangle<float> (nav.getX() + 24.0f, p.getBottom() - 36.0f, 200.0f, 20.0f), juce::Justification::centredLeft);
 
     // current tab title
     g.setColour (t.textCol());
