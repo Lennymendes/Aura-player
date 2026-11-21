@@ -28,6 +28,9 @@
   .ph img.ok { visibility:visible; }
   #artbox { width:100%; aspect-ratio:1; border-radius:14px; }
   h1 { font-size:21px; margin:14px 0 2px; } .sub { color:var(--dim); margin:0; }
+  .titlerow { display:flex; align-items:flex-end; gap:10px; } .titlerow h1 { flex:1; min-width:0; }
+  #fav { flex:none; width:44px; height:44px; padding:0; border-radius:50%; display:grid; place-items:center; }
+  #fav svg { fill:none; stroke:var(--dim); stroke-width:2; } #fav.on svg { fill:var(--accent); stroke:var(--accent); }
   .pill { display:inline-flex; align-items:center; gap:6px; margin-top:10px; padding:5px 11px; border-radius:20px; font-size:12.5px; font-weight:600; border:1px solid currentColor; color:var(--accent); }
   .pill i { width:7px; height:7px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; }
   input[type=range] { width:100%; accent-color:var(--accent); }
@@ -87,7 +90,7 @@ try { nxApplyTheme(JSON.parse(localStorage.getItem('nxTheme') || 'null')); } cat
     <p id="err" class="card">Accès refusé : scannez à nouveau le QR code affiché dans Aura.</p>
     <section class="card" id="info">
       <div id="artbox" class="ph"><img id="art" alt=""></div>
-      <h1 id="title">Aura</h1>
+      <div class="titlerow"><h1 id="title">Aura</h1><button id="fav" data-c="fav" aria-label="Favori" aria-pressed="false" style="display:none"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 21s-7.5-4.6-9.5-9.2C1 8.3 3.2 5 6.6 5c2 0 3.4 1.1 4.4 2.5C12 6.1 13.4 5 15.4 5 18.8 5 21 8.3 19.5 11.8 17.5 16.4 12 21 12 21z"/></svg></button></div>
       <p class="sub" id="artist">—</p>
       <span class="pill" id="path" style="display:none"><i></i><span></span></span>
     </section>
@@ -192,6 +195,9 @@ async function poll() {
       if (sig !== lastTheme) { lastTheme = sig; nxApplyTheme(state.theme); try { localStorage.setItem('nxTheme', sig); } catch (e) {} }
     }
     $('title').textContent = state.title || 'Aura';
+    $('fav').style.display = state.canFav ? '' : 'none';      // only library tracks have a heart
+    $('fav').classList.toggle('on', !!state.fav);
+    $('fav').setAttribute('aria-pressed', state.fav ? 'true' : 'false');
     $('artist').textContent = state.artist ? state.artist + (state.album ? ' — ' + state.album : '') : 'Rien en lecture';
     const artSig = (state.artV || '') + '|' + (state.art || '');
     if (artSig !== lastArt) { lastArt = artSig; setArt($('art'), state.art || (state.id ? 'track:' + state.id : ''), 600, state.artV, state.id ? 'track:' + state.id : ''); }

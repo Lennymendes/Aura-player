@@ -91,6 +91,8 @@ public:
     virtual void setNowPlayingOverlay (bool show) = 0;
     virtual bool isNowPlayingOverlayVisible() = 0;
     virtual void setShuffle (bool on) = 0;
+    /** Heart of the track being played (player bar, Aura Remote). False when it is not in the library. */
+    virtual bool toggleCurrentFavourite() = 0;
     virtual void setRepeat (PlaybackEngine::Repeat mode) = 0;
     virtual bool isShuffle() const = 0;
     virtual PlaybackEngine::Repeat getRepeat() const = 0;

@@ -16,6 +16,7 @@ PlayerBar::PlayerBar (AppContext& c)
       immersiveButton (style::Icon::Fullscreen, "Vue immersive (F)"_t, c),
       deviceChip (c),
       ctx (c), artwork (c, 128),
+      favButton (style::Icon::Heart, "Ajouter aux favoris / retirer"_t, c),
       shuffleButton (style::Icon::Shuffle, "Aléatoire"_t, c),
       prevButton (style::Icon::Previous, "Précédent"_t, c),
       playButton (style::Icon::Play, "Lecture / pause"_t, c),
@@ -29,10 +30,11 @@ PlayerBar::PlayerBar (AppContext& c)
     artwork.cornerRadius = 8.0f;
     artwork.shadow = false;
     playButton.primary = true;
-    for (auto* b : { &shuffleButton, &prevButton, &playButton, &nextButton, &repeatButton, &lyricsButton, &queueButton, &miniButton, &volumeButton,
+    for (auto* b : { &favButton, &shuffleButton, &prevButton, &playButton, &nextButton, &repeatButton, &lyricsButton, &queueButton, &miniButton, &volumeButton,
                      &studioButton, &immersiveButton, &waveButton })
         addAndMakeVisible (b);
     waveButton.onClick = [this] { setWaveformShown (! waveButton.active); };
+    favButton.onClick = [this] { ctx.toggleCurrentFavourite(); syncTransportButtons(); };
     ctx.trackAnalyzer().addChangeListener (this);
     addAndMakeVisible (deviceChip);
     studioButton.onClick = [this] { ctx.showAuraDsp(); };
@@ -131,6 +133,10 @@ void PlayerBar::syncTransportButtons()
     const bool on = rep != PlaybackEngine::Repeat::Off, one = rep == PlaybackEngine::Repeat::One;
     if (shuffleButton.active != sh) { shuffleButton.active = sh; shuffleButton.repaint(); }
     if (repeatButton.active != on || repeatButton.one != one) { repeatButton.active = on; repeatButton.one = one; repeatButton.repaint(); }
+    const auto* t = ctx.currentTrack();
+    const bool fav = t != nullptr && t->favourite;
+    favButton.setVisible (t != nullptr);
+    if (favButton.active != fav) { favButton.active = fav; favButton.repaint(); }
 }
 
 void PlayerBar::setWaveformShown (bool on)
@@ -200,6 +206,8 @@ void PlayerBar::resized()
     r.removeFromLeft (12);
     const int third = getWidth() / 3;
     textArea = r.removeFromLeft (juce::jmax (120, third - r.getHeight() - 40));
+    favButton.setBounds (textArea.removeFromRight (30).withSizeKeepingCentre (26, 26));   // heart right of the title
+    textArea.removeFromRight (4);
 
     auto right = r.removeFromRight (juce::jmin (third + 40, 470));
     auto center = r.reduced (8, 0);

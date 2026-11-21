@@ -932,5 +932,7 @@
  "Aura s'est fermé de façon inattendue. Réglages › À propos › Exporter les journaux, puis envoyez le fichier au support.": "Aura quit unexpectedly. Settings › About › Export logs, then send the file to support.",
  "Le DAC « ": "The DAC “",
  " » ne répond plus (aucun buffer demandé). Débranchez-le puis rebranchez-le (ou éteignez-le / rallumez-le), puis relancez la lecture. Réglages › À propos › Exporter les journaux si ça persiste.": "” stopped responding (it requests no audio). Unplug it and plug it back in (or switch it off and on), then press play again. Settings › About › Export logs if it persists.",
- "Le DAC ne répondait pas en accès exclusif : sortie système partagée pour cette session (pas bit-perfect). Débranchez / rebranchez le DAC puis choisissez-le à nouveau pour revenir en exclusif.": "The DAC did not respond in exclusive mode: using the shared system output for this session (not bit-perfect). Unplug / replug the DAC, then select it again to return to exclusive mode."
+ "Le DAC ne répondait pas en accès exclusif : sortie système partagée pour cette session (pas bit-perfect). Débranchez / rebranchez le DAC puis choisissez-le à nouveau pour revenir en exclusif.": "The DAC did not respond in exclusive mode: using the shared system output for this session (not bit-perfect). Unplug / replug the DAC, then select it again to return to exclusive mode.",
+ "Ajouter aux favoris / retirer": "Add to / remove from favourites",
+ "Ce morceau n'est pas dans la bibliothèque": "This track is not in the library"
 }

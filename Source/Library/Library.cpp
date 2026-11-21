@@ -755,6 +755,7 @@ void Library::setFavourite (juce::int64 id, bool fav)
     std::lock_guard<std::recursive_mutex> l (db.getMutex());
     SqliteStatement s (db, "UPDATE tracks SET favorite = ?2 WHERE id = ?1");
     s.bind (1, id).bind (2, fav ? 1 : 0).execute();
+    if (onFavouriteChanged) onFavouriteChanged (id, fav);
 }
 
 juce::String Library::storeArtwork (const juce::MemoryBlock& image, const juce::String& mime)

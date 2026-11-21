@@ -90,6 +90,7 @@ public:
     void tickForTests() { timerCallback(); }
     OverlayWindow* getOverlayWindow() { return overlayWindow.get(); }
     void setShuffle (bool on) override;
+    bool toggleCurrentFavourite() override;
     void setRepeat (PlaybackEngine::Repeat mode) override;
     bool isShuffle() const override         { return eng->isShuffle(); }
     PlaybackEngine::Repeat getRepeat() const override { return eng->getRepeat(); }

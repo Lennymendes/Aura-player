@@ -59,6 +59,7 @@ public:
 
     IconButton lyricsButton, queueButton, studioButton, immersiveButton;
     DeviceChip deviceChip;
+    IconButton favButton;                     // heart of the track being played (follows the library: syncTransportButtons)
     IconButton shuffleButton, repeatButton;   // follow the engine's shuffle / repeat state (syncTransportButtons)
 
 private:

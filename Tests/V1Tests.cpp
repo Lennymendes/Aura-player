@@ -555,6 +555,8 @@ NX_TEST_SECTION (501, "Aura Remote (HTTP, jeton, QR code), pont AuraEngine X, sy
     t.check (page.body.contains ("Point A pos") && page.body.contains ("Boucle active") && page.body.contains ("loopPendingA"),
              "boucle A-B web : confirmation écrite (point A posé, boucle active avec les temps)"_t);
     t.check (page.body.contains ("dataset.retry"), "pochette web : un nouvel essai si le chargement échoue"_t);
+    t.check (page.body.contains ("data-c=\"fav\"") && page.body.contains ("state.canFav") && page.body.contains ("aria-pressed"),
+             "cœur web : favori du morceau en cours, état suivi à chaque mise à jour"_t);
     const auto denied = nx::httpRequest ("GET", juce::URL (base + "/api/state?k=wrong"));
     t.check (denied.status == 403, "sans le jeton du QR code : 403"_t);
     const auto st = nx::httpRequest ("GET", juce::URL (base + "/api/state?k=" + token));

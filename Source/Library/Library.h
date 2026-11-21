@@ -158,6 +158,8 @@ public:
     juce::StringArray getFolders();
     void markPlayed (juce::int64 trackId);
     void setFavourite (juce::int64 trackId, bool fav);
+    /** Message thread, after every setFavourite (lists, player heart, NX Remote): keeps the other copies in step. */
+    std::function<void (juce::int64 trackId, bool fav)> onFavouriteChanged;
 
     //== Offline copies (tracks downloaded from a NAS / Jellyfin server) ====
     void markOffline (const juce::String& localPath, const TrackInfo& origin);

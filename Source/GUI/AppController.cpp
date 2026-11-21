@@ -194,6 +194,11 @@ AppController::AppController (Options options)
         else showMessage (e);
     };
 
+    lib.onFavouriteChanged = [this] (juce::int64 id, bool fav)
+    {
+        for (auto& q : queueTracks) if (q.id == id) q.favourite = fav;
+        if (auto* m = getMainComponent()) m->player.syncTransportButtons();
+    };
     lib.onChanged = [this]
     {
         if (auto* m = getMainComponent())
@@ -781,6 +786,17 @@ const TrackInfo* AppController::currentTrack()
     if (externalPlaying) return &externalTrack;
     const int i = eng->getCurrentIndex();
     return i >= 0 && i < (int) queueTracks.size() ? &queueTracks[(size_t) i] : nullptr;
+}
+
+bool AppController::toggleCurrentFavourite()
+{
+    const auto* t = currentTrack();
+    if (t == nullptr || externalPlaying || t->id <= 0) { showMessage ("Ce morceau n'est pas dans la bibliothèque"_t); return false; }
+    const bool fav = ! t->favourite;
+    lib.setFavourite (t->id, fav);          // onFavouriteChanged updates the queue copy and the heart
+    lib.notifyChanged();                    // the visible lists (and the Favourites page) show the new heart
+    showMessage (fav ? "Ajouté aux favoris"_t : "Retiré des favoris"_t);
+    return true;
 }
 
 void AppController::setShuffle (bool on)
@@ -1386,6 +1402,8 @@ juce::String AppController::buildRemoteState()
         o->setProperty ("album", t->album);
         o->setProperty ("art", remoteArtKey (t->artworkKey));
         o->setProperty ("id", t->id);
+        o->setProperty ("fav", t->favourite);
+        o->setProperty ("canFav", ! externalPlaying && t->id > 0);
         o->setProperty ("artV", juce::String (t->id) + "-" + t->artworkKey.substring (0, 12));   // cache-buster: changes with the track / cover
         o->setProperty ("format", t->resolutionBadge());
         o->setProperty ("duration", t->duration > 0 ? t->duration : eng->getDurationSeconds());
@@ -1465,6 +1483,7 @@ void AppController::handleRemoteCommand (const juce::String& c, const juce::Stri
     else if (c == "pause") eng->pause();
     else if (c == "toggle") eng->togglePlayPause();
     else if (c == "next") eng->next();
+    else if (c == "fav") toggleCurrentFavourite();
     else if (c == "prev") eng->previous();
     else if (c == "seek") eng->seek (juce::jmax (0.0, p["t"].getDoubleValue()));
     else if (c == "volume") setUserVolume (juce::jlimit (0.0, 1.0, p["v"].getDoubleValue()));

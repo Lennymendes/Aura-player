@@ -1508,6 +1508,25 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
             const double cleared = (double) juce::JSON::parse (app.buildRemoteState()).getProperty ("loopPendingA", 0.0);
             t.check (pending >= 0.0 && cleared < 0.0, "Aura Remote A-B : point A transmis au téléphone dès qu'il est posé, effacé par Arrêt"_t);
         }
+        {
+            // Heart of the track being played: from the phone, from the player bar and from a list, always in step
+            juce::StringPairArray none;
+            auto stateFav = [&] { return (bool) juce::JSON::parse (app.buildRemoteState()).getProperty ("fav", false); };
+            const auto* cur = app.currentTrack();
+            const auto id = cur != nullptr ? cur->id : (juce::int64) 0;
+            auto libFav = [&] { auto tr = app.library().getTrack (id); return tr && tr->favourite; };
+            const bool before = libFav();
+            const bool canFav = (bool) juce::JSON::parse (app.buildRemoteState()).getProperty ("canFav", false);
+            app.handleRemoteCommand ("fav", none);                       // phone
+            const bool phone = stateFav() == ! before && libFav() == ! before && main->player.favButton.active == ! before;
+            main->player.favButton.onClick();                            // player bar
+            const bool bar = stateFav() == before && libFav() == before && ! main->player.favButton.active == ! before;
+            app.library().setFavourite (id, ! before);                   // a list (track heart, menu, drag to Favoris)
+            const bool list = stateFav() == ! before && main->player.favButton.active == ! before;
+            app.library().setFavourite (id, before);
+            t.check (id > 0 && canFav && phone && bar && list && main->player.favButton.isVisible(),
+                     "cœur du morceau en cours : téléphone, barre de lecture et listes synchronisés (bibliothèque, Aura Remote, icône)"_t);
+        }
         juce::StringPairArray p;
         p.set ("v", "0.5");
         // the volume slider is greyed (and the command ignored) while the previous track still holds a fixed volume:
