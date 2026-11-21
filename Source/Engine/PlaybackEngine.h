@@ -29,7 +29,7 @@
 namespace nx
 {
 
-namespace dsp { class DsdToPcm; class Resampler; }
+namespace dsp { class DsdToPcm; class Resampler; class PcmToDsd; }
 
 struct PlayableItem
 {
@@ -247,6 +247,8 @@ private:
     juce::int64 bytesWritten = 0;
     std::unique_ptr<dsp::DsdToPcm> dsdConverter;
     std::unique_ptr<dsp::Resampler> resampler;
+    std::unique_ptr<dsp::PcmToDsd> pcmToDsd;   // PCM -> DSD remodulation (decoder thread, prepared per plan)
+    int producePcmToDsd (int maxOutFrames);
     dsp::OutputShaper shaper;                 // warmth / limiter after a conversion (device profiles)
     std::vector<int32_t> tmpInt;
     std::vector<double> tmpDouble, tmpDouble2;

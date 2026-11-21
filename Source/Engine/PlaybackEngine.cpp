@@ -7,6 +7,7 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "../DSP/DsdToPcm.h"
 #include "../DSP/Resampler.h"
+#include "../DSP/PcmToDsd.h"
 #include "../Audio/LoopingDecoder.h"
 #include <cmath>
 #include <cstring>
@@ -634,6 +635,7 @@ void PlaybackEngine::preparePlanConverters (const PlaybackPlan& plan, bool keepS
     if (keepState) return;
     dsdConverter.reset();
     resampler.reset();
+    pcmToDsd.reset();
     const int ch = plan.source.numChannels;
     const auto eff = getEffectiveSettings();
     const bool minPhase = plan.filterShape == FilterShape::MinimumPhase;
@@ -655,6 +657,19 @@ void PlaybackEngine::preparePlanConverters (const PlaybackPlan& plan, bool keepS
     {
         resampler = std::make_unique<dsp::Resampler>();
         resampler->prepare (plan.source.sampleRate, plan.deviceRate, ch, 160.0, passFraction, minPhase);
+    }
+    else if (plan.conversion == PlaybackPlan::Conversion::PcmToDsd)
+    {
+        // source -> DXD 352,8 kHz (the DSD rates are multiples of 44,1 kHz; a 48 kHz family source is converted too),
+        // then the modulator (its own x8 / x16 / x32 interpolation)
+        constexpr double dxd = 352800.0;
+        if (plan.source.sampleRate != dxd)
+        {
+            resampler = std::make_unique<dsp::Resampler>();
+            resampler->prepare (plan.source.sampleRate, dxd, ch, 160.0, passFraction, minPhase);
+        }
+        pcmToDsd = std::make_unique<dsp::PcmToDsd>();
+        pcmToDsd->prepare (dxd, plan.conversionRate, plan.downmix ? 2 : ch, eff.sdmOrder, eff.pcmToDsdHeadroomDb);
     }
 
     // Only converted streams are shaped: a bit-perfect plan never goes through this stage.
@@ -751,6 +766,8 @@ int PlaybackEngine::produce (int writableBytes)
         writeAll (out, (size_t) frames * (size_t) outCh * 4);
     };
 
+    if (plan.conversion == PlaybackPlan::Conversion::PcmToDsd) return producePcmToDsd (maxOutFrames);
+
     if (plan.wire != WireFormat::Pcm)
     {
         const int n = decoder->readDsd (tmpBytes.data() + (size_t) kChunkFrames * 8, maxOutFrames);
@@ -767,6 +784,9 @@ int PlaybackEngine::produce (int writableBytes)
 
     switch (plan.conversion)
     {
+        case PlaybackPlan::Conversion::PcmToDsd:     // handled above (a DSD wire)
+            return producePcmToDsd (maxOutFrames);
+
         case PlaybackPlan::Conversion::None:
         {
             const int n = decoder->readInt (tmpInt.data(), maxOutFrames);
@@ -825,8 +845,73 @@ int PlaybackEngine::produce (int writableBytes)
     return 0;
 }
 
+/** PCM source -> (DXD) -> modulator -> DSD bytes in the ring (DoP framing / native DSD happen at the output, as for
+    a DSD file). Decoder thread; every buffer is preallocated. Returns the source frames consumed. */
+int PlaybackEngine::producePcmToDsd (int maxOutFrames)
+{
+    const auto& plan = decPlan;
+    const int srcCh = plan.source.numChannels;
+    const int modCh = plan.downmix ? 2 : srcCh;
+    const int bpf = pcmToDsd->getBytesPerInputFrame();
+    const double ratio = resampler != nullptr ? resampler->getRatio() : 1.0;
+    const int dxdBudget = juce::jmax (1, maxOutFrames / bpf - 4);
+    const int inFrames = juce::jlimit (1, kChunkFrames, (int) std::floor ((dxdBudget - 4) / ratio));
+    int n = 0;
+    if (plan.source.kind == SampleKind::PcmInt)
+    {
+        n = decoder->readInt (tmpInt.data(), inFrames);
+        for (int i = 0; i < n * srcCh; ++i) tmpDouble[(size_t) i] = tmpInt[(size_t) i] * (1.0 / 2147483648.0);
+    }
+    else n = decoder->readDouble (tmpDouble.data(), inFrames);
+    if (n <= 0) return 0;
+    double* dx = tmpDouble.data();
+    int nd = n;
+    if (resampler != nullptr)
+    {
+        nd = resampler->process (tmpDouble.data(), n, tmpDouble2.data(), resampler->maxOutputFor (n));
+        dx = tmpDouble2.data();
+    }
+    if (plan.downmix) foldToStereo (dx, nd, srcCh);
+    if (nd <= 0) return n;
+    uint8_t* mod = tmpBytes.data() + tmpBytes.size() / 2;                      // second half: modulator output
+    const int bytes = pcmToDsd->process (dx, nd, mod);
+    if (plan.channels == modCh && plan.identityRoute()) writeAll (mod, (size_t) bytes * (size_t) modCh);
+    else
+    {
+        routeChannels (mod, tmpBytes.data(), bytes, modCh, plan.channels, plan.route, (uint8_t) kDsdIdle);
+        writeAll (tmpBytes.data(), (size_t) bytes * (size_t) plan.channels);
+    }
+    return n;
+}
+
 void PlaybackEngine::drainConverters()
 {
+    if (decHavePlan && pcmToDsd != nullptr)
+    {
+        // end of the stream: silence through the resampler and the modulator (look-ahead + interpolator delay)
+        const int srcCh = decPlan.source.numChannels, modCh = decPlan.downmix ? 2 : srcCh;
+        std::vector<double> dx;
+        int nd = 0;
+        if (resampler != nullptr)
+        {
+            const int zeros = (int) std::ceil (resampler->getLatencyInputSamples()) + 2;
+            std::vector<double> in ((size_t) zeros * (size_t) srcCh, 0.0);
+            dx.resize ((size_t) (resampler->maxOutputFor (zeros) + 8) * (size_t) srcCh);
+            nd = resampler->process (in.data(), zeros, dx.data(), resampler->maxOutputFor (zeros));
+            if (decPlan.downmix) foldToStereo (dx.data(), nd, srcCh);
+        }
+        const int tail = pcmToDsd->getLatencyInputFrames();
+        dx.resize ((size_t) (nd + tail) * (size_t) juce::jmax (srcCh, modCh), 0.0);
+        std::fill (dx.begin() + (std::ptrdiff_t) ((size_t) nd * (size_t) modCh), dx.end(), 0.0);
+        std::vector<uint8_t> mod ((size_t) (nd + tail) * (size_t) pcmToDsd->getBytesPerInputFrame() * (size_t) modCh);
+        const int bytes = pcmToDsd->process (dx.data(), nd + tail, mod.data());
+        std::vector<uint8_t> out ((size_t) bytes * (size_t) decPlan.channels);
+        routeChannels (mod.data(), out.data(), bytes, modCh, decPlan.channels, decPlan.route, (uint8_t) kDsdIdle);
+        writeAll (out.data(), out.size());
+        resampler.reset();
+        pcmToDsd.reset();
+        return;
+    }
     if (! decHavePlan || (dsdConverter == nullptr && resampler == nullptr)) return;
     const int srcCh = decPlan.source.numChannels;
     const int outCh = decPlan.channels;
@@ -1526,6 +1611,15 @@ SignalPath PlaybackEngine::getSignalPath() const
                       plan.filterShape == FilterShape::MinimumPhase ? juce::String ("Polyphase 64 bits, phase minimale (sans pré-écho)"_t)
                                                                     : juce::String ("Polyphase 64 bits, 160 dB"), PathQuality::Enhanced);
             break;
+        case PlaybackPlan::Conversion::PcmToDsd:
+        {
+            const auto eff = getEffectiveSettings();
+            path.add ("Conversion", "PCM " + formatRate (src.sampleRate) + " -> DSD" + juce::String ((int) std::lround (plan.conversionRate / 44100.0)),
+                      "Sigma-delta 1 bit, ordre "_t + juce::String (eff.sdmOrder <= 5 ? 5 : 7) + ", 64 bits, marge "_t
+                          + juce::String (eff.pcmToDsdHeadroomDb, 0) + " dB, limiteur de crêtes (plafond -0,9 dB SACD)"_t,
+                      PathQuality::Enhanced);
+            break;
+        }
         case PlaybackPlan::Conversion::FloatToInt:
         case PlaybackPlan::Conversion::None:
             break;

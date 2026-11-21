@@ -52,6 +52,10 @@ struct EngineSettings
     int memoryPlayMaxMb = 1536;          // larger files are read from the disk
     bool dspNeedsPcm = false;            // studio tools on: DSD is converted to PCM so that they can apply (not saved)
     ChannelMode channelMode = ChannelMode::Auto;
+    /** PCM -> DSD: 0 = off, 64 / 128 / 256 = remodulated to that DSD rate (DoP or native) when the DAC takes it. */
+    int pcmToDsd = 0;
+    int sdmOrder = 7;                    // sigma-delta order: 5 or 7
+    double pcmToDsdHeadroomDb = -3.0;    // PCM 0 dBFS -> SACD 0 dB + this (the limiter caps at -0.9 dB SACD)
     /** Multichannel output: source channel c (SACD / WAV order: L R C LFE Ls Rs...) goes to device output channelMap[c]. */
     std::array<int, 8> channelMap { 0, 1, 2, 3, 4, 5, 6, 7 };
 
@@ -94,7 +98,7 @@ struct PlaybackPlan
     }
     int ringBitsHint = 24;               // significant bits stored in the ring (requested from the device)
 
-    enum class Conversion { None, FloatToInt, Resample, DsdToPcm } conversion = Conversion::None;
+    enum class Conversion { None, FloatToInt, Resample, DsdToPcm, PcmToDsd } conversion = Conversion::None;
     double conversionRate = 0.0;         // intermediate rate (DSD -> PCM output before an optional resample)
     bool needsRequantize = false;        // the ring holds more precision than the device word: TPDF dither
 

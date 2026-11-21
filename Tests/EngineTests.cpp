@@ -9,6 +9,7 @@
 #include "../Source/DSP/DsdToPcm.h"
 #include "../Source/DSP/Resampler.h"
 #include "../Source/DSP/FilterDesign.h"
+#include "../Source/DSP/PcmToDsd.h"
 #include "../Source/Engine/DeviceProfiles.h"
 #include "../Source/Audio/LoopingDecoder.h"
 #include <complex>
@@ -1539,5 +1540,227 @@ NX_TEST_SECTION (117, "Sous-étape F : multicanal Auto / Stéréo / Multicanal, 
         t.check (two.cap->config.numChannels == 2 && two.engine->getCurrentPlan().stereoLayer && g2.size() >= stereoRef.size()
                  && std::equal (stereoRef.begin(), stereoRef.end(), g2.begin()),
                  "mode Stéréo sur une interface 8 sorties : la couche stéréo du SACD, au bit près"_t);
+    }
+}
+
+//==============================================================================
+NX_TEST_SECTION (118, "Sous-étape G : modulateur PCM -> DSD (bruit dans la bande, stabilité à 0 dBFS, charge CPU)")
+{
+    constexpr double dxd = 352800.0;
+    // in-band noise: coherent tone (exact FFT bin, rectangular window), DSD decoded back by the DSD -> DXD converter
+    auto measure = [&] (int multiple, int order, double amplitude, double& snrDb, double& noiseDbfs, std::uint64_t& resets)
+    {
+        constexpr int N = 1 << 17;                                     // 0.37 s at 352.8 kHz
+        const int settle = 8192;
+        const double f0 = 1000.0 * N / dxd;                          // ~ 1 kHz, on a bin
+        const double bin = std::round (f0), freq = bin * dxd / N;
+        nx::dsp::PcmToDsd mod;
+        mod.prepare (dxd, 2822400.0 * multiple / 64, 2, order, 0.0);
+        nx::dsp::DsdToPcm back;
+        back.prepare (2822400.0 * multiple / 64, dxd, 2, 1.0);
+        const int total = N + settle + mod.getLatencyInputFrames() + 2048;
+        std::vector<double> in ((size_t) total * 2);
+        for (int i = 0; i < total; ++i) in[(size_t) i * 2] = in[(size_t) i * 2 + 1] = amplitude * std::sin (2.0 * juce::MathConstants<double>::pi * freq * i / dxd);
+        std::vector<uint8_t> bits ((size_t) total * (size_t) mod.getBytesPerInputFrame() * 2);
+        const int bytes = mod.process (in.data(), total, bits.data());
+        std::vector<double> pcm ((size_t) (back.maxOutputFor (bytes) + 8) * 2);
+        const int got = back.process (bits.data(), bytes, pcm.data(), back.maxOutputFor (bytes));
+        // Kaiser beta 20 (side lobes ~ -190 dB): the shaped noise above 20 kHz is ~130 dB stronger than in the band,
+        // a rectangular window would leak it into the 20 Hz - 20 kHz bins
+        std::vector<std::complex<double>> a ((size_t) N);
+        const double i0b = nx::dsp::besselI0 (20.0);
+        for (int i = 0; i < N; ++i)
+        {
+            const double r = (2.0 * i - (N - 1)) / (N - 1);
+            a[(size_t) i] = pcm[(size_t) (got - N - 1024 + i) * 2] * nx::dsp::besselI0 (20.0 * std::sqrt (1.0 - r * r)) / i0b;
+        }
+        nx::dsp::fft (a, false);
+        double sig = 0.0, noise = 0.0;
+        for (int k = 1; k < N / 2; ++k)
+        {
+            const double hz = k * dxd / N, p = std::norm (a[(size_t) k]);
+            if (std::abs (k - bin) <= 12) sig += p;                   // main lobe of the window
+            else if (hz >= 20.0 && hz <= 20000.0) noise += p;
+        }
+        snrDb = 10.0 * std::log10 (sig / noise);
+        // noise referred to PCM full scale: PCM 1.0 = 0.5 on the DSD side (SACD 0 dB)
+        noiseDbfs = 10.0 * std::log10 (noise * 2.0 / ((double) N * N)) - 20.0 * std::log10 (0.5);
+        resets = mod.loopResets;
+    };
+
+    juce::String table;
+    bool floors = true;
+    for (int multiple : { 64, 128, 256 })
+        for (int order : { 5, 7 })
+        {
+            double snr = 0, floor = 0;
+            std::uint64_t resets = 0;
+            measure (multiple, order, 0.5 * std::pow (10.0, -1.0 / 20.0), snr, floor, resets);   // -1 dBFS (SACD -1 dB)
+            table << "DSD" << multiple << "/" << order << " : " << juce::String (snr, 1) << " dB ; ";
+            floors = floors && resets == 0 && snr > (order == 7 ? 125.0 : 105.0) + (multiple > 64 ? 10.0 : 0.0);
+        }
+    t.check (floors, "plancher de bruit 20 Hz - 20 kHz, sinus 1 kHz à -1 dBFS, rapport signal / bruit : "_t + table);
+
+    // stability at 0 dBFS and above: a full-scale sine with 0 dB headroom, and +3 dB inter-sample peaks (fs/4 at 45°)
+    {
+        nx::dsp::Resampler up;
+        up.prepare (44100.0, dxd, 2);
+        const int n44 = 44100 * 2;
+        std::vector<double> src ((size_t) n44 * 2);
+        for (int i = 0; i < n44; ++i)
+        {
+            const double v = i < n44 / 2 ? std::sin (2.0 * juce::MathConstants<double>::pi * 997.0 * i / 44100.0)
+                                         : std::sqrt (2.0) * std::sin (juce::MathConstants<double>::pi * 0.5 * i + juce::MathConstants<double>::pi * 0.25);
+            src[(size_t) i * 2] = src[(size_t) i * 2 + 1] = juce::jlimit (-1.0, 1.0, v);   // samples at +/-1.0, true peak +3 dB
+        }
+        std::vector<double> x ((size_t) (up.maxOutputFor (n44) + 8) * 2);
+        const int nX = up.process (src.data(), n44, x.data(), up.maxOutputFor (n44));
+        double truePeak = 0.0;
+        for (int i = 0; i < nX * 2; ++i) truePeak = juce::jmax (truePeak, std::abs (x[(size_t) i]));
+
+        nx::dsp::PcmToDsd mod;
+        mod.prepare (dxd, 2822400.0, 2, 7, 0.0);
+        std::vector<uint8_t> bits ((size_t) nX * 8 * 2);
+        const int bytes = mod.process (x.data(), nX, bits.data());
+        nx::dsp::DsdToPcm back;
+        back.prepare (2822400.0, dxd, 2, 1.0);
+        std::vector<double> pcm ((size_t) (back.maxOutputFor (bytes) + 8) * 2);
+        const int got = back.process (bits.data(), bytes, pcm.data(), back.maxOutputFor (bytes));
+        // peak of the music only: the decoded stream still carries the shaped noise above 20 kHz, so band-limit first
+        nx::dsp::Resampler down;
+        down.prepare (dxd, 44100.0, 2);
+        std::vector<double> audio ((size_t) (down.maxOutputFor (got) + 8) * 2);
+        const int na = down.process (pcm.data(), got, audio.data(), down.maxOutputFor (got));
+        nx::dsp::Resampler up2;                                                    // and look between the samples again
+        up2.prepare (44100.0, dxd, 2);
+        std::vector<double> fine ((size_t) (up2.maxOutputFor (na) + 8) * 2);
+        const int nf = up2.process (audio.data(), na, fine.data(), up2.maxOutputFor (na));
+        double outPeak = 0.0;
+        for (int i = 8192; i < nf * 2; ++i) outPeak = juce::jmax (outPeak, std::abs (fine[(size_t) i]));
+
+        nx::dsp::PcmToDsd quiet;                                                   // default -3 dB: 0 dBFS passes untouched
+        quiet.prepare (dxd, 2822400.0, 2, 7, -3.0);
+        std::vector<uint8_t> bits2 ((size_t) nX * 8 * 2);
+        quiet.process (x.data(), nX / 2, bits2.data());                            // the 997 Hz half: samples at 0 dBFS
+        t.check (truePeak > 1.35 && mod.loopResets == 0 && mod.limitedFrames > 0 && outPeak < nx::dsp::PcmToDsd::ceiling + 0.005
+                 && quiet.loopResets == 0 && quiet.limitedFrames == 0,
+                 "stabilité : 0 dBFS sans marge et crêtes inter-échantillons à "_t + juce::String (20.0 * std::log10 (truePeak), 2)
+                 + " dBFS -> limiteur, 0 réinitialisation du modulateur, crête DSD " + juce::String (outPeak, 3) + " (plafond 0,45) ; à -3 dB : limiteur inactif"_t);
+    }
+
+    // real-time: no allocation in process(), and the time it takes
+    {
+        juce::String cpu;
+        bool fast = true, noAlloc = true;
+        for (int multiple : { 64, 128, 256 })
+        {
+            nx::dsp::PcmToDsd mod;
+            mod.prepare (dxd, 2822400.0 * multiple / 64, 2, 7, -3.0);
+            const int block = 4096, blocks = (int) (dxd * 2.0 / block);           // 2 s of stereo DXD
+            std::vector<double> in ((size_t) block * 2);
+            for (int i = 0; i < block * 2; ++i) in[(size_t) i] = 0.3 * std::sin (0.01 * i);
+            std::vector<uint8_t> out ((size_t) block * (size_t) mod.getBytesPerInputFrame() * 2);
+            nxtest_allocationCount = 0;
+            const auto t0 = juce::Time::getMillisecondCounterHiRes();
+            for (int b = 0; b < blocks; ++b)
+            {
+                nxtest_countAllocations = true;
+                mod.process (in.data(), block, out.data());
+                nxtest_countAllocations = false;
+            }
+            const double secs = (juce::Time::getMillisecondCounterHiRes() - t0) / 1000.0;
+            noAlloc = noAlloc && nxtest_allocationCount.load() == 0;
+            const double load = secs / 2.0 * 100.0;                                // % of one core for real time
+            cpu << "DSD" << multiple << " " << juce::String (load, 1) << " %  ";
+            fast = fast && load < 100.0;
+        }
+        t.check (noAlloc && fast, "temps réel, stéréo, 7e ordre : 0 allocation ; charge d'un cœur : "_t + cpu);
+    }
+
+    // through the engine: PCM file -> modulator -> DSD (native / DoP) on the virtual DAC
+    auto sineWav = [&] (double rate, const juce::String& name)
+    {
+        const int frames = (int) (rate * 1.2);
+        std::vector<int32_t> pcm ((size_t) frames * 2);
+        for (int i = 0; i < frames; ++i)
+            pcm[(size_t) i * 2] = pcm[(size_t) i * 2 + 1] = (int32_t) std::lround (0.5 * 8388607.0 * std::sin (2.0 * juce::MathConstants<double>::pi * 1000.0 * i / rate)) * 256;
+        auto f = t.tempDir.getChildFile (name);
+        writeWav (f, &pcm, nullptr, 2, (int) rate, 24, 24, false);
+        return f;
+    };
+    // amplitude of the 1 kHz tone in decoded DSD (least squares over 0.25 s in the middle)
+    auto toneLevel = [&] (const std::vector<uint8_t>& dsd, double dsdRate)
+    {
+        nx::dsp::DsdToPcm back;
+        back.prepare (dsdRate, dxd, 2, 1.0);
+        const int bytes = (int) (dsd.size() / 2);
+        std::vector<double> pcm ((size_t) (back.maxOutputFor (bytes) + 8) * 2);
+        const int got = back.process (dsd.data(), bytes, pcm.data(), back.maxOutputFor (bytes));
+        double ss = 0, sc = 0;
+        int start = 0;                                                       // the music starts after the DoP pre-roll
+        while (start < got && std::abs (pcm[(size_t) start * 2]) < 0.05) ++start;
+        const int from = start + 35280, len = 88200;                         // 0.1 s in, 0.25 s long
+        if (from + len > got) return 0.0;
+        for (int i = from; i < from + len; ++i)
+        {
+            const double ph = 2.0 * juce::MathConstants<double>::pi * 1000.0 * i / dxd;
+            ss += pcm[(size_t) i * 2] * std::sin (ph);
+            sc += pcm[(size_t) i * 2] * std::cos (ph);
+        }
+        return 2.0 * std::sqrt (ss * ss + sc * sc) / len;
+    };
+    auto withDsd = [] (int target) { return [target] (nx::PlaybackEngine& e) { auto st = e.getSettings(); st.pcmToDsd = target; e.setSettings (st); }; };
+    const double expectedLevel = 0.5 * 0.5 * std::pow (10.0, -3.0 / 20.0);   // -6 dBFS PCM -> SACD -6 dB, -3 dB margin
+    {
+        const auto f = sineWav (44100.0, "g_native.wav");
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0, 5644800.0 }; });
+        withDsd (128) (*rig.engine);
+        rig.cap->renderFlag = &nxtest_countAllocations;
+        nxtest_allocationCount = 0;
+        nx::SignalPath path;
+        rig.engine->setQueue ({ EngineRig::item (f) }, 0, true);
+        rig.runToEnd (2048, 60.0, [&] (int block) { if (block == 20) path = rig.engine->getSignalPath(); });
+        rig.cap->renderFlag = nullptr;
+        const double level = toneLevel (rig.cap->capturedDsd, 5644800.0);
+        bool node = false;
+        for (auto& n : path.nodes) node = node || (n.title.contains ("DSD128") && n.detail.contains ("Sigma"));
+        t.check (rig.cap->config.wire == nx::WireFormat::NativeDsd && rig.cap->config.sampleRate == 5644800.0 && node
+                 && std::abs (level - expectedLevel) < 0.003 && nxtest_allocationCount.load() == 0,
+                 "moteur : WAV 44,1 kHz -> DSD128 natif, niveau "_t + juce::String (20.0 * std::log10 (level / 0.5), 2)
+                 + " dB SACD (attendu -9,0 : -6 dBFS + marge -3 dB), étape dans le chemin du signal, 0 allocation sur le thread audio"_t);
+    }
+    {
+        const auto f = sineWav (48000.0, "g_dop48.wav");
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.sampleRates = { 48000.0, 176400.0, 352800.0 }; });
+        withDsd (256) (*rig.engine);                                                // 705,6 kHz DoP absent: DSD128
+        rig.engine->setQueue ({ EngineRig::item (f) }, 0, true);
+        rig.runToEnd (2048);
+        const auto& got = rig.cap->capturedInt;
+        bool markers = got.size() > 20000;
+        for (size_t i = 2; markers && i < 20000; i += 2)
+        {
+            const auto m = (uint8_t) ((uint32_t) got[i] >> 24), prev = (uint8_t) ((uint32_t) got[i - 2] >> 24);
+            markers = (m == 0x05 || m == 0xFA) && m != prev;
+        }
+        std::vector<uint8_t> dsd;
+        for (size_t i = 0; i + 1 < got.size(); i += 2)                             // DoP word: 2 DSD bytes, oldest in bits 16-23
+            for (int byteSel : { 16, 8 })
+                for (int c = 0; c < 2; ++c) dsd.push_back ((uint8_t) ((uint32_t) got[i + (size_t) c] >> byteSel));
+        const double level = toneLevel (dsd, 5644800.0);
+        t.check (rig.cap->config.wire == nx::WireFormat::DoP && rig.cap->config.sampleRate == 352800.0 && markers
+                 && std::abs (level - expectedLevel) < 0.003 && rig.engine->getCurrentPlan().reason.contains ("DSD256"),
+                 "moteur : WAV 48 kHz, DSD256 demandé, DAC limité au DoP 352,8 kHz -> DSD128 en DoP (marqueurs 0x05 / 0xFA), niveau "_t
+                 + juce::String (20.0 * std::log10 (level / 0.5), 2) + " dB SACD"_t
+);
+    }
+    {
+        const auto f = sineWav (44100.0, "g_pcm.wav");
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.sampleRates = { 44100.0, 48000.0 }; });
+        withDsd (64) (*rig.engine);
+        rig.engine->setQueue ({ EngineRig::item (f) }, 0, true);
+        rig.runToEnd (2048);
+        t.check (rig.cap->config.wire == nx::WireFormat::Pcm && rig.engine->getCurrentPlan().conversion == nx::PlaybackPlan::Conversion::None
+                 && rig.engine->getCurrentPlan().reason.contains ("n'accepte pas le DSD"),
+                 "DAC sans DSD : le PCM reste bit-perfect, la raison est affichée"_t);
     }
 }

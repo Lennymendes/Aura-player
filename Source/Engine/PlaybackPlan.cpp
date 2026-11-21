@@ -122,6 +122,33 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
         return p;
     }
 
+    // PCM -> DSD: remodulated (64-bit sigma-delta) at the asked DSD rate, or the next lower one the DAC takes
+    juce::String dsdNote;
+    if (s.pcmToDsd >= 64 && ! s.freeEdition)
+    {
+        if (s.dspNeedsPcm) dsdNote = " · "_t + "PCM -> DSD suspendu : les Outils Studio / AURA DSP agissent en PCM"_t;
+        else
+        {
+            for (int mult = juce::jmin (256, s.pcmToDsd); mult >= 64; mult /= 2)
+            {
+                const double rate = 2822400.0 * mult / 64;
+                const bool native = caps.nativeDsdRates.contains (rate) && s.dsdMode != DsdMode::DoP;
+                const bool dop = s.dopAllowed && supports (caps, rate / 16.0) && s.dsdMode != DsdMode::Native;
+                if (! native && ! dop) continue;
+                p.wire = native ? WireFormat::NativeDsd : WireFormat::DoP;
+                p.deviceRate = native ? rate : rate / 16.0;
+                p.ringBitsHint = native ? 1 : 24;
+                p.conversion = PlaybackPlan::Conversion::PcmToDsd;
+                p.conversionRate = rate;
+                p.reason = "Modulateur PCM -> DSD"_t + juce::String (mult) + " (sigma-delta 1 bit, ordre "_t + juce::String (s.sdmOrder <= 5 ? 5 : 7)
+                           + ", marge "_t + juce::String (s.pcmToDsdHeadroomDb, 0) + " dB)" + (native ? " en DSD natif"_t : " en DoP "_t + formatRate (p.deviceRate))
+                           + (mult < s.pcmToDsd ? " · "_t + "DSD"_t + juce::String (s.pcmToDsd) + " non accepté par le DAC"_t : juce::String()) + foldNote;
+                return p;
+            }
+            dsdNote = " · "_t + "PCM -> DSD : le DAC n'accepte pas le DSD (ni natif ni DoP)"_t;
+        }
+    }
+
     // PCM
     double wanted = src.sampleRate;
     if (s.upsampleToDxd)
@@ -156,6 +183,7 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
         p.reason = p.needsRequantize ? "Le DAC est limité à "_t + juce::String (caps.maxBits) + " bits"
                                      : "Bit-perfect : aucun traitement";
     }
+    p.reason += dsdNote;
     if (p.downmix)
     {
         // the 5.1 -> 2.0 mix is computed in 64-bit float, then dithered to the DAC's word

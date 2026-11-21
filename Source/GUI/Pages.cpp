@@ -1791,6 +1791,41 @@ void SettingsPage::buildAudio()
          "Filtre polyphase 64 bits, 160 dB. Rapport entier (×2, ×4, ×8) dans la même famille de fréquences. Désactive le bit-perfect."_t);
     row ("Volume numérique : 100 % = bit-perfect"_t, nullptr, 28);
 
+    // PCM -> DSD remodulation
+    section ("PCM -> DSD"_t);
+    const juce::StringArray dsdTargets { "Désactivé"_t, "DSD64", "DSD128", "DSD256" };
+    const int targetIdx = s.pcmToDsd == 64 ? 1 : s.pcmToDsd == 128 ? 2 : s.pcmToDsd == 256 ? 3 : 0;
+    auto setEngine = [this] (std::function<void (EngineSettings&)> change)
+    {
+        auto st = ctx.engine().getSettings();
+        change (st);
+        ctx.engine().setSettings (st);
+        ctx.applyEngineSettings();
+    };
+    row ("Convertir le PCM en DSD"_t, makeCombo (dsdTargets, dsdTargets[targetIdx], [setEngine, dsdTargets] (const juce::String& v)
+    {
+        const int i = dsdTargets.indexOf (v);
+        setEngine ([i] (EngineSettings& st) { st.pcmToDsd = i == 1 ? 64 : i == 2 ? 128 : i == 3 ? 256 : 0; });
+    }), 36, "Modulateur sigma-delta 1 bit en 64 bits flottants (DoP ou DSD natif). Si le DAC n'accepte pas la fréquence choisie, la suivante plus basse ; "
+            "sans DSD, le PCM reste tel quel. Suspendu tant que les Outils Studio / AURA DSP sont actifs."_t);
+    const juce::StringArray orders { "7e ordre (bruit le plus bas)"_t, "5e ordre"_t };
+    row ("Ordre du modulateur"_t, makeCombo (orders, orders[s.sdmOrder <= 5 ? 1 : 0], [setEngine, orders] (const juce::String& v)
+    {
+        const int o = orders.indexOf (v) == 1 ? 5 : 7;
+        setEngine ([o] (EngineSettings& st) { st.sdmOrder = o; });
+    }), 36);
+    const juce::StringArray margins { "0 dB", "-1 dB", "-3 dB", "-6 dB" };
+    const double marginValues[] = { 0.0, -1.0, -3.0, -6.0 };
+    int marginIdx = 2;
+    for (int i = 0; i < 4; ++i) if (std::abs (s.pcmToDsdHeadroomDb - marginValues[i]) < 0.01) marginIdx = i;
+    row ("Marge (headroom)"_t, makeCombo (margins, margins[marginIdx], [setEngine, margins] (const juce::String& v)
+    {
+        const double values[] = { 0.0, -1.0, -3.0, -6.0 };
+        const double db = values[juce::jmax (0, margins.indexOf (v))];
+        setEngine ([db] (EngineSettings& st) { st.pcmToDsdHeadroomDb = db; });
+    }), 36, "PCM 0 dBFS = SACD 0 dB plus cette marge. Un limiteur à anticipation plafonne les crêtes (inter-échantillons comprises) "
+            "à -0,9 dB SACD avant le modulateur : jamais de saturation ni d'instabilité."_t);
+
     // Multichannel sources (5.1 SACD, DSF / DFF, WAV)
     section ("Multicanal (SACD 5.1, DSF / DFF, WAV)"_t);
     const juce::StringArray chModes { "Auto (selon les sorties du DAC)"_t, "Stéréo"_t, "Multicanal"_t };
