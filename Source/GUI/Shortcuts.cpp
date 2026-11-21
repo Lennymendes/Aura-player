@@ -21,6 +21,8 @@ const std::array<Info, numActions>& all()
         { Action::Repeat,     "repeat",     "Changer le mode Répéter",                 K ('r') },
         { Action::Streamer,   "streamer",   "Activer / désactiver le mode Streamer",   K ('s', cmd | juce::ModifierKeys::shiftModifier, 0) },
         { Action::Search,     "search",     "Rechercher dans la bibliothèque",         K ('f', cmd, 0) },
+        { Action::PageBack,   "pageBack",   "Page précédente",                         K ('[', cmd, 0) },
+        { Action::PageForward,"pageForward","Page suivante",                           K (']', cmd, 0) },
     }};
     return list;
 }

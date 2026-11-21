@@ -67,6 +67,9 @@ class MainComponent : public juce::Component, public juce::DragAndDropContainer,
 {
 public:
     explicit MainComponent (AppContext& ctx);
+    /** ‹ › enabled state and tooltips (with the current Page précédente / suivante shortcuts). */
+    void updateNavButtons();
+    IconButton& getBackButton() noexcept { return backButton; }
     ~MainComponent() override;
 
     void resized() override;
@@ -129,7 +132,6 @@ private:
     void open (const PageRequest& r);
     static bool isLocalPage (PageId p) noexcept;
     void rememberLocalView();
-    void updateNavButtons();
     void placeToast();
     void showPage (juce::Component* page);
     void timerCallback() override;

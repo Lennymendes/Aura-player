@@ -91,6 +91,8 @@ public:
     BandStrip& getBand (int i) { return *bands[i]; }
     EqGraph& getGraph() { return graph; }
     juce::TextButton resetButton, copyButton, saveButton;
+    /** Headphone view, once a profile is loaded: adds the parametric EQ on top (its own bands, the profile untouched). */
+    juce::TextButton addPeqButton;
     juce::ComboBox userPresets;
     juce::ToggleButton headroom, upsample, crossfeed, hpEq, peq, phase;
 

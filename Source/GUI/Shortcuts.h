@@ -12,8 +12,8 @@
 namespace nx::shortcuts
 {
 
-enum class Action { PlayPause, Next, Previous, VolumeUp, VolumeDown, Mute, Shuffle, Repeat, Streamer, Search };
-constexpr int numActions = 10;
+enum class Action { PlayPause, Next, Previous, VolumeUp, VolumeDown, Mute, Shuffle, Repeat, Streamer, Search, PageBack, PageForward };
+constexpr int numActions = 12;
 
 struct Info
 {

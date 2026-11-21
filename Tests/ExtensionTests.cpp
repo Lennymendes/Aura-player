@@ -941,6 +941,31 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         dsp.chooseMonitor (1);
         const bool mono = app.studioTools().monitor.load() == nx::StudioToolsState::Monitor::Mono;
         dsp.chooseMonitor (0);
+        {
+            // Sous-étape E: "+ EQ paramétrique" next to the headphone list adds an EQ of its own, the profile untouched
+            auto gains = [&] { juce::String g; for (auto& band : app.studioTools().parametricBands()) g << band.gain << "/" << band.freq << ";"; return g; };
+            const bool shown = dsp.addPeqButton.isVisible() && dsp.addPeqButton.getButtonText() == "+ EQ paramétrique"_t && ! app.studioTools().peqActive();
+            const auto before = gains();
+            dsp.addPeqButton.triggerClick();
+            settle (60);
+            const bool added = app.studioTools().peqActive() && dsp.getView() == nx::AuraDspPanel::View::Parametric && app.studioTools().eqActive()
+                               && main->audioStatus.eqLabel() == "MOMENTUM M2 CL" && gains() == before;
+            dsp.getBand (2).gain.setValue (4.0, juce::sendNotificationSync);
+            const auto mine = gains();
+            dsp.setView (nx::AuraDspPanel::View::Headphone);
+            dsp.choosePreset (0);                                          // another headphone: the parametric bands stay
+            const bool independent = gains() == mine && main->audioStatus.eqLabel() == "MOMENTUM M2" && app.studioTools().peqActive()
+                                     && dsp.addPeqButton.isVisible() && dsp.addPeqButton.getButtonText() == "EQ paramétrique ›"_t;
+            shoot ("46c_aura_dsp_casque_plus_parametrique");
+            dsp.getBand (2).gain.setValue (0.0, juce::sendNotificationSync);
+            dsp.choosePreset (1);
+            dsp.peq.triggerClick();                                        // off again for the steps below
+            settle (60);
+            dsp.setView (nx::AuraDspPanel::View::Headphone);
+            t.check (shown && added && independent && ! app.studioTools().peqActive(),
+                     "AURA DSP : « + EQ paramétrique » avec un profil casque, bandes propres (pas une copie), inchangées quand on change de casque"_t
+                     + " [" + juce::String ((int) shown) + juce::String ((int) added) + juce::String ((int) independent) + "]");
+        }
         // parametric view: knob, handle on the curve, reset, copy, user preset
         dsp.peq.triggerClick();
         settle (60);
@@ -1390,8 +1415,9 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         t.check (sc::get (app.settings(), sc::Action::PlayPause) == K (K::spaceKey) && sc::get (app.settings(), sc::Action::Next) == K (K::rightKey, cmd, 0)
                  && sc::get (app.settings(), sc::Action::VolumeUp) == K (K::upKey, cmd, 0) && sc::get (app.settings(), sc::Action::Mute) == K ('m')
                  && sc::get (app.settings(), sc::Action::Streamer) == K ('s', cmd | juce::ModifierKeys::shiftModifier, 0)
-                 && sc::get (app.settings(), sc::Action::Search) == K ('f', cmd, 0) && sc::all().size() == 10,
-                 "raccourcis : 10 actions, touches par défaut (Espace, Cmd/Ctrl + flèches, M, S, R, Cmd/Ctrl + Maj + S, Cmd/Ctrl + F)"_t);
+                 && sc::get (app.settings(), sc::Action::Search) == K ('f', cmd, 0) && sc::get (app.settings(), sc::Action::PageBack) == K ('[', cmd, 0)
+                 && sc::get (app.settings(), sc::Action::PageForward) == K (']', cmd, 0) && sc::all().size() == 12,
+                 "raccourcis : 12 actions, touches par défaut (Espace, Cmd/Ctrl + flèches, M, S, R, Cmd/Ctrl + Maj + S, Cmd/Ctrl + F, Cmd/Ctrl + [ / ])"_t);
 
         // they act through the main window
         auto& eng = app.engine();
@@ -1445,6 +1471,45 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         sc::resetAll (app.settings());
         t.check (muteRow != nullptr && reassigned && refused && newKeyWorks && sc::get (app.settings(), sc::Action::Mute) == K ('m'),
                  "Réglages › Raccourcis clavier : réassignation par clic + touches, doublon refusé, enregistré, réinitialisation"_t);
+        {
+            // every row of the list: a real mouse click, then F1..F12 (+ Cmd + Alt): stored, matched, old key free
+            sw.getPage().setTab ("interface");
+            settle (50);
+            int rows = 0, ok = 0;
+            juce::StringArray failed;
+            for (auto& info : sc::all())
+            {
+                juce::Component* row = nullptr;
+                for (auto* c : sw.getPage().content().getChildren()) if (c->getTitle() == nx::tr (juce::String::fromUTF8 (info.label))) row = c;
+                if (row == nullptr) { failed.add (juce::String::fromUTF8 (info.id) + "?"); continue; }
+                ++rows;
+                const auto oldKey = sc::get (app.settings(), info.action);
+                const K newKey (K::F1Key + (int) info.action, cmd | juce::ModifierKeys::altModifier, 0);
+                const juce::MouseEvent click (juce::Desktop::getInstance().getMainMouseSource(), { 5.0f, 5.0f }, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                              row, row, juce::Time::getCurrentTime(), { 5.0f, 5.0f }, juce::Time::getCurrentTime(), 1, false);
+                row->mouseUp (click);
+                row->keyPressed (newKey);
+                if (sc::get (app.settings(), info.action) == newKey && sc::match (app.settings(), newKey) == info.action
+                    && sc::match (app.settings(), oldKey) == std::nullopt)
+                    ++ok;
+                else failed.add (juce::String::fromUTF8 (info.id));
+            }
+            // the reassigned page keys drive the history, and the ‹ › buttons name them
+            app.navigate ({ nx::PageId::Albums });
+            app.navigate ({ nx::PageId::Favourites });
+            main->keyPressed (K (K::F1Key + (int) sc::Action::PageBack, cmd | juce::ModifierKeys::altModifier, 0));
+            const bool back = main->getCurrentPage().page == nx::PageId::Albums;
+            main->keyPressed (K (K::F1Key + (int) sc::Action::PageForward, cmd | juce::ModifierKeys::altModifier, 0));
+            const bool forward = main->getCurrentPage().page == nx::PageId::Favourites;
+            main->updateNavButtons();
+            const bool tip = main->getBackButton().getTooltip().contains ("F11");
+            sc::resetAll (app.settings());
+            main->updateNavButtons();
+            app.navigate ({ nx::PageId::Settings, "interface" });
+            t.check (rows == (int) sc::all().size() && ok == rows && back && forward && tip && main->getBackButton().getTooltip().contains ("["),
+                     "les "_t + juce::String (rows) + " raccourcis de la liste se réassignent au clic (dont Page précédente / suivante), boutons ‹ › avec le raccourci en infobulle"_t
+                     + (failed.isEmpty() ? juce::String() : " [" + failed.joinIntoString (",") + "]"));
+        }
 
         // Easter egg: three clicks on the logo within 800 ms unlock the hidden ZEYN theme (listed, not applied)
         const auto themeBefore = app.theme().id;

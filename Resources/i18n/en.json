@@ -934,5 +934,10 @@
  " » ne répond plus (aucun buffer demandé). Débranchez-le puis rebranchez-le (ou éteignez-le / rallumez-le), puis relancez la lecture. Réglages › À propos › Exporter les journaux si ça persiste.": "” stopped responding (it requests no audio). Unplug it and plug it back in (or switch it off and on), then press play again. Settings › About › Export logs if it persists.",
  "Le DAC ne répondait pas en accès exclusif : sortie système partagée pour cette session (pas bit-perfect). Débranchez / rebranchez le DAC puis choisissez-le à nouveau pour revenir en exclusif.": "The DAC did not respond in exclusive mode: using the shared system output for this session (not bit-perfect). Unplug / replug the DAC, then select it again to return to exclusive mode.",
  "Ajouter aux favoris / retirer": "Add to / remove from favourites",
- "Ce morceau n'est pas dans la bibliothèque": "This track is not in the library"
+ "Ce morceau n'est pas dans la bibliothèque": "This track is not in the library",
+ "Page précédente": "Previous page",
+ "Page suivante": "Next page",
+ "+ EQ paramétrique": "+ Parametric EQ",
+ "EQ paramétrique ›": "Parametric EQ ›",
+ "Un égaliseur paramétrique à vous, en plus du profil casque (en série, 64 bits) : ses bandes ne changent pas quand vous changez de casque.": "Your own parametric equaliser on top of the headphone profile (in series, 64-bit): its bands stay when you change headphones."
 }

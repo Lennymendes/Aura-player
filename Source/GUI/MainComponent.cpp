@@ -527,6 +527,9 @@ void MainComponent::updateNavButtons()
 {
     backButton.setEnabled (canGoBack());
     forwardButton.setEnabled (canGoForward());
+    // the tooltip names the current (reassignable) shortcut
+    backButton.setTooltip ("Page précédente"_t + " (" + shortcuts::describe (shortcuts::get (ctx.settings(), shortcuts::Action::PageBack)) + ")");
+    forwardButton.setTooltip ("Page suivante"_t + " (" + shortcuts::describe (shortcuts::get (ctx.settings(), shortcuts::Action::PageForward)) + ")");
 }
 
 void MainComponent::open (const PageRequest& r)
@@ -905,6 +908,8 @@ void MainComponent::performShortcut (shortcuts::Action a)
         case A::Repeat:     player.repeatButton.onClick(); break;
         case A::Streamer:   ctx.setStreamerMode (! ctx.isStreamerMode()); break;
         case A::Search:     if (! sidebarVisible) setSidebarVisible (true, false); sidebar.getSearchField().grabKeyboardFocus(); break;
+        case A::PageBack:   goBack(); break;
+        case A::PageForward: goForward(); break;
     }
 }
 
@@ -927,9 +932,9 @@ bool MainComponent::keyPressed (const juce::KeyPress& k)
     if (k == juce::KeyPress::leftKey)  { e.seek (juce::jmax (0.0, e.getPositionSeconds() - 10.0)); return true; }
     if (k == juce::KeyPress ('l', juce::ModifierKeys::commandModifier, 0)) { if (player.onToggleLyrics) player.onToggleLyrics(); return true; }
     if (k == juce::KeyPress ('m', juce::ModifierKeys::commandModifier, 0)) { ctx.toggleMiniPlayer(); return true; }
-    // Navigation history and sidebar
-    if (k == juce::KeyPress ('[', juce::ModifierKeys::commandModifier, 0) || k == juce::KeyPress (juce::KeyPress::leftKey, juce::ModifierKeys::altModifier, 0)) { goBack(); return true; }
-    if (k == juce::KeyPress (']', juce::ModifierKeys::commandModifier, 0) || k == juce::KeyPress (juce::KeyPress::rightKey, juce::ModifierKeys::altModifier, 0)) { goForward(); return true; }
+    // Navigation history (Page précédente / suivante are reassignable above; these stay as fixed extras) and sidebar
+    if (k == juce::KeyPress (juce::KeyPress::leftKey, juce::ModifierKeys::altModifier, 0)) { goBack(); return true; }
+    if (k == juce::KeyPress (juce::KeyPress::rightKey, juce::ModifierKeys::altModifier, 0)) { goForward(); return true; }
     if (k == juce::KeyPress ('b', juce::ModifierKeys::commandModifier, 0)) { setSidebarVisible (! sidebarVisible); return true; }
     if (k == juce::KeyPress::backspaceKey && dynamic_cast<juce::TextEditor*> (getCurrentlyFocusedComponent()) == nullptr) { goBack(); return true; }
     // A-B loop: I = start, O = end + loop, L = off

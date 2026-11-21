@@ -273,6 +273,7 @@ namespace
 
 AuraDspPanel::AuraDspPanel (AppContext& c)
     : resetButton ("Réinitialiser (0 dB)"_t), copyButton ("Copier la courbe du casque actif"_t), saveButton ("Enregistrer le preset…"_t),
+      addPeqButton ("+ EQ paramétrique"_t),
       ctx (c), closeButton (style::Icon::Close, "Fermer"_t, c), graph (c)
 {
     setWantsKeyboardFocus (true);
@@ -335,6 +336,15 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
         addChildComponent (strip);
     }
     resetButton.onClick = [this] { bandsChanged (hpeq::flatParametric(), true); syncControls(); };
+    addPeqButton.setTooltip ("Un égaliseur paramétrique à vous, en plus du profil casque (en série, 64 bits) : ses bandes ne changent pas quand vous changez de casque."_t);
+    addPeqButton.onClick = [this]
+    {
+        // its own bands (flat the first time, then the user's last ones): never a copy of the headphone curve
+        if (! ctx.studioTools().peqActive()) ctx.setParametricEq (ctx.studioTools().parametricBands(), true, true);
+        syncControls();
+        setView (View::Parametric);
+    };
+    addChildComponent (addPeqButton);
     copyButton.onClick = [this]
     {
         const auto* p = ctx.studioTools().eqPresetInfo();
@@ -415,6 +425,8 @@ void AuraDspPanel::syncControls()
     hpEq.setToggleState (s.eqActive(), juce::dontSendNotification);
     peq.setToggleState (s.peqActive(), juce::dontSendNotification);
     phase.setToggleState (s.invertPhase.load(), juce::dontSendNotification);
+    addPeqButton.setButtonText (s.peqActive() ? "EQ paramétrique ›"_t : "+ EQ paramétrique"_t);
+    if (const bool show = view == View::Headphone && s.eqActive(); show != addPeqButton.isVisible()) { addPeqButton.setVisible (show); resized(); }
     const auto b = s.parametricBands();
     for (int i = 0; i < 7; ++i) bands[i]->setBand (b[(size_t) i]);
     const auto names = ctx.getParametricPresetNames();
@@ -431,6 +443,7 @@ void AuraDspPanel::setView (View v)
     const bool p = v == View::Parametric;
     search.setVisible (! p);
     list.setVisible (! p);
+    addPeqButton.setVisible (! p && ctx.studioTools().eqActive());
     graph.editable = p;
     for (auto* b : bands) b->setVisible (p);
     for (auto* c : std::initializer_list<juce::Component*> { &resetButton, &copyButton, &saveButton, &userPresets }) c->setVisible (p);
@@ -555,7 +568,9 @@ void AuraDspPanel::resized()
     rr.removeFromTop (24);                                  // view title
     if (view == View::Headphone)
     {
-        search.setBounds (rr.removeFromTop (34));
+        auto top = rr.removeFromTop (34);
+        if (addPeqButton.isVisible()) { addPeqButton.setBounds (top.removeFromRight (190)); top.removeFromRight (8); }
+        search.setBounds (top);
         rr.removeFromTop (8);
         graph.setBounds (rr.removeFromBottom (juce::jmin (210, rr.getHeight() / 2)));
         rr.removeFromBottom (8);
