@@ -17,6 +17,7 @@ public:
     int bitsAccepted = 24;          // what this virtual DAC stores per word
     bool record = true;
     bool* renderFlag = nullptr;     // set to true while the engine renders (allocation tests)
+    bool realtime = false;          // true: the engine's start watchdog applies (tests of a DAC that never clocks)
 
     CaptureBackend()
     {
@@ -45,7 +46,7 @@ public:
         status.sampleRate = c.sampleRate;
         status.deviceBits = c.wire == WireFormat::NativeDsd ? 1 : bitsAccepted;
         status.exactBits = status.deviceBits;
-        status.exclusive = status.osMixerBypassed = true;
+        status.exclusive = status.osMixerBypassed = c.exclusive;
         status.wire = c.wire;
         status.detail = juce::String (toString (c.wire)) + " · "_t + juce::String (status.deviceBits) + " bits";
         ++opens;
@@ -53,7 +54,7 @@ public:
     }
 
     bool start (RenderCallback* cb) override { callback = cb; return true; }
-    bool isRealtime() const noexcept override { return false; }
+    bool isRealtime() const noexcept override { return realtime; }
     void stop() override { callback = nullptr; }
     void close() override { callback = nullptr; status.open = false; }
     OutputStatus getStatus() const override { return status; }

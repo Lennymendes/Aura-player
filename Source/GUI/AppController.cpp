@@ -571,7 +571,9 @@ juce::String AppContext::diagnosticsSummary()
       << "Processeur : " << juce::SystemStats::getCpuModel().trim() << " · " << juce::SystemStats::getNumCpus() << " cœurs\n"
       << "Mémoire : " << juce::SystemStats::getMemorySizeInMegabytes() << " Mo\n"
       << "Langue : " << (i18n::isEnglish() ? "en" : "fr") << " · thème : " << theme().id << " · mode Streamer : " << (isStreamerMode() ? "oui" : "non") << "\n"
-      << "Sortie : " << e.getDeviceName() << " · chaîne : " << (path.nodes.empty() ? juce::String ("—") : toString (path.overall)) << "\n"
+      << "Tampon : " << e.getOutputStatus().bufferFrames << " trames à " << e.getOutputStatus().sampleRate << " Hz"
+      << (e.isOnSharedFallback() ? " · repli sortie partagée" : "") << "\n"
+      << "Sortie : " << e.getDeviceName() << " · chaîne : " << (path.nodes.empty() ? juce::String (juce::CharPointer_UTF8 ("\xe2\x80\x94")) : toString (path.overall)) << "\n"
       << "Généré le : " << juce::Time::getCurrentTime().toISO8601 (true) << "\n";
     return s;
 }

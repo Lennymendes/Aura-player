@@ -94,6 +94,7 @@ void PlaybackEngine::setDevice (const juce::String& name)
     {
         std::lock_guard<std::mutex> l (controlLock);
         deviceName = name;
+        sharedFallback = false;
         caps = newCaps;
     }
     if (wasPlaying && index >= 0)
@@ -1173,7 +1174,7 @@ bool PlaybackEngine::configureDevice (int planId)
     cfg.sampleRate = plan.deviceRate;
     cfg.numChannels = plan.channels;
     cfg.sourceBits = plan.ringBitsHint;
-    cfg.exclusive = s.exclusive;
+    cfg.exclusive = s.exclusive && ! sharedFallback;
     // A manual buffer (ms) always wins; "Automatique" gets 2048 frames for DoP and for Merging / Anubis / RAVENNA.
     cfg.bufferFrames = s.bufferMilliseconds > 0 ? (int) (s.bufferMilliseconds * plan.deviceRate / 1000.0)
                      : s.bufferFrames > 0 ? s.bufferFrames
@@ -1284,27 +1285,98 @@ void PlaybackEngine::watchDeviceStart()
         watchConfirmed = true;
         audioLog ("Moteur : flux confirme, " + juce::String ((juce::int64) cbs) + " callbacks en " + juce::String ((int) elapsed) + " ms");
     }
-    // 4 s, once: when the VAD sees DoP it reconfigures itself in DSD and may pause the stream meanwhile.
-    if (! watchConfirmed && elapsed >= 4000)
+    // No hardware buffer yet. Recovery ladder (logs of 16 and 21 Nov 2026: Anubis after a switch to DoP, FiiO KA17 at
+    // 384 kHz): 1. restart the stream; 2. close the device (Hog Mode released, formats restored) and open it again;
+    // 3. PCM only: the shared system output (a mixer, not bit-perfect, but sound); 4. give up with what to do.
+    // DoP gets twice the patience: the VAD reconfigures itself in DSD (PTP lock) and pauses the stream meanwhile.
+    const auto plan = getCurrentPlan();
+    const bool dopNow = plan.wire == WireFormat::DoP;
+    if (! watchConfirmed && elapsed >= (dopNow ? 2 * startPatienceMs : startPatienceMs))
     {
-        if (watchRetries >= 1)
+        const int planId = activePlanId;
+        const int step = watchRetries + 1;
+        const auto devName = [this] { std::lock_guard<std::mutex> l (controlLock); return deviceName; }();
+        const auto giveUp = [&]
         {
-            audioLog ("Moteur : aucun callback apres un redemarrage du flux, abandon");
-            abortDeviceStart ("Sortie audio : le DAC ne cadence pas le flux (aucun buffer reçu). Journal : "_t + audioLogFile().getFullPathName());
+            audioLog ("Moteur : aucun callback apres " + juce::String (watchRetries) + " tentatives de reprise, abandon");
+            abortDeviceStart ("Le DAC « "_t + devName + " » ne répond plus (aucun buffer demandé). Débranchez-le puis rebranchez-le "
+                              "(ou éteignez-le / rallumez-le), puis relancez la lecture. Réglages › À propos › Exporter les journaux si ça persiste."_t);
+        };
+        if (watchRetries == 0)
+        {
+            audioLog ("Moteur : " + juce::String ((juce::int64) cbs) + " callbacks en " + juce::String ((int) elapsed) + " ms, redemarrage du flux (essai 1)");
+            backend->stop();
+            stableCallbacks = 0; lastCallbackFrames = 0;       // the device is stopped: audio-thread state can be set directly
+            deviceRunning = backend->start (this);
+            if (! deviceRunning) { giveUp(); return; }
+            startedAtMs = juce::Time::getMillisecondCounter();
+            callbacksAtStart = stats.callbacks.load();
+            watchStage = 0;
+            watchRetries = step;
             return;
         }
-        ++watchRetries;
-        audioLog ("Moteur : " + juce::String ((juce::int64) cbs) + " callbacks en 4 s, redemarrage du flux (essai " + juce::String (watchRetries) + ")");
-        backend->stop();
-        stableCallbacks = 0; lastCallbackFrames = 0;       // the device is stopped: audio-thread state can be set directly
-        deviceRunning = backend->start (this);
-        if (! deviceRunning) { abortDeviceStart ("Sortie audio : le périphérique n'a pas redémarré (journal : "_t + audioLogFile().getFullPathName() + ")"); return; }
-        startedAtMs = juce::Time::getMillisecondCounter();
-        callbacksAtStart = stats.callbacks.load();
-        watchStage = 0;
+        const bool canShare = ! dopNow && ! sharedFallback && plan.wire == WireFormat::Pcm;
+        if (watchRetries == 1 || (watchRetries == 2 && canShare))
+        {
+            if (watchRetries == 1) audioLog ("Moteur : toujours aucun callback, fermeture complete du peripherique et reouverture (essai 2)");
+            else
+            {
+                sharedFallback = true;
+                audioLog ("Moteur : toujours aucun callback en acces exclusif, sortie systeme partagee (essai 3)");
+            }
+            if (deviceRunning) { backend->stop(); deviceRunning = false; }
+            backend->close();                                  // Hog Mode released, formats put back
+            juce::Thread::sleep (250);
+            if (! configureDevice (planId)) return;            // configureDevice reported the error
+            watchRetries = step;                               // configureDevice restarted the watch from zero
+            if (sharedFallback)
+            {
+                std::lock_guard<std::mutex> l (controlLock);
+                lastError = "Le DAC ne répondait pas en accès exclusif : sortie système partagée pour cette session (pas bit-perfect). "
+                            "Débranchez / rebranchez le DAC puis choisissez-le à nouveau pour revenir en exclusif."_t;
+                errorFlag = true;
+            }
+            return;
+        }
+        giveUp();
         return;
     }
     if (watchStage >= 4 && watchConfirmed) startedAtMs = 0;
+}
+
+/** After the start watch, for the whole playback: logs every dropout (ring empty) and every hardware stall (the DAC
+    asks for nothing for 300 ms or more), with the position and the ring level. This is what tells a starved decoder
+    (dropouts, ring near 0) from a device that stops clocking (stall, ring full) when another application starts. */
+void PlaybackEngine::monitorPlayback()
+{
+    const auto u = stats.underruns.load();
+    const auto cb = stats.callbacks.load();
+    const auto now = juce::Time::getMillisecondCounter();
+    if (state.load() != State::Playing || ! deviceRunning || startedAtMs != 0 || ! backend->isRealtime())
+    {
+        monUnderruns = u; monCallbacks = cb; monStallSince = 0;
+        return;
+    }
+    if (cb == monCallbacks)
+    {
+        if (monStallSince == 0) monStallSince = now;
+    }
+    else
+    {
+        if (monStallSince != 0 && now - monStallSince >= 300)
+            audioLog ("Moteur : blocage du DAC, aucun buffer demande pendant " + juce::String ((int) (now - monStallSince))
+                      + " ms (position " + juce::String (getPositionSeconds(), 2) + " s, ring " + juce::String ((juce::int64) ring.readable()) + " octets)");
+        monStallSince = 0;
+        monCallbacks = cb;
+    }
+    if (u != monUnderruns && now - monLastGlitchLog >= 1000)
+    {
+        audioLog ("Moteur : coupure, " + juce::String ((juce::int64) (u - monUnderruns)) + " sous-alimentation(s) (total "
+                  + juce::String ((juce::int64) u) + "), position " + juce::String (getPositionSeconds(), 2) + " s, ring "
+                  + juce::String ((juce::int64) ring.readable()) + " octets, decodeur " + (decoderBusy.load() ? "actif" : "en attente"));
+        monUnderruns = u;
+        monLastGlitchLog = now;
+    }
 }
 
 void PlaybackEngine::timerCallback()
@@ -1319,6 +1391,7 @@ void PlaybackEngine::timerCallback()
         configureDevice (rp);
 
     watchDeviceStart();
+    monitorPlayback();
 
     // DoP carrier idling in Stopped: release the DAC (Hog Mode, MT VAD) after 10 s. Paused keeps it, resume stays instant.
     if (state.load() == State::Stopped && keepsDopCarrier())

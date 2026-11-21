@@ -155,6 +155,10 @@ public:
 
     /** For tests: run the message-thread housekeeping now instead of waiting for the timer. */
     void serviceMessageThread() { timerCallback(); }
+    /** Start watchdog: how long a fresh stream may stay silent (no hardware buffer) before recovery. Tests shorten it. */
+    juce::uint32 startPatienceMs = 4000;
+    /** True after the exclusive (Hog Mode) stream never clocked and the shared system output took over. */
+    bool isOnSharedFallback() const noexcept { return sharedFallback; }
 
 private:
     //== RenderCallback (audio thread) ========================================
@@ -266,6 +270,11 @@ private:
     juce::uint64 callbacksAtStart = 0;
     int watchStage = 0, watchRetries = 0;
     bool watchConfirmed = false;
+    bool sharedFallback = false;             // exclusive access gave no clock: the shared output is used (until another device)
+    // Continuous monitor (message thread), after the start watch: dropouts and hardware stalls with their time.
+    juce::uint64 monUnderruns = 0, monCallbacks = 0;
+    juce::uint32 monStallSince = 0, monLastGlitchLog = 0;
+    void monitorPlayback();
     void abortDeviceStart (const juce::String& why);
     void watchDeviceStart();
     juce::uint32 stoppedAtMs = 0;            // message thread: when the DoP carrier started idling in Stopped

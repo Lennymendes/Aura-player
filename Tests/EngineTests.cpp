@@ -14,6 +14,7 @@
 #include <complex>
 #include "../Source/Engine/PlaybackEngine.h"
 #include "../Source/Output/CaptureBackend.h"
+#include "../Source/Core/AudioLog.h"
 #include "../Source/Audio/SacdIso.h"
 #include "SacdFixture.h"
 #include "DstEncoder.h"
@@ -1336,4 +1337,93 @@ NX_TEST_SECTION (115, "Édition Free dans le moteur : PCM jusqu'à 192 kHz, Stud
     t.check (! nx::resolveProfile (s, "Anubis").exclusive && nx::activeFamily (s, "Anubis") == nx::DeviceFamily::None
              && nx::resolveProfile (s, "Anubis").profileTag.isEmpty(),
              "Free : mode exclusif et profils matériels neutralisés (profil standard)"_t);
+}
+
+//==============================================================================
+NX_TEST_SECTION (116, "Sous-étape A : DAC qui ne cadence plus (reprise complète, sortie partagée, message clair)")
+{
+    // Logs of 16 and 21 Nov 2026: the device opens and starts, then asks for no buffer (Anubis after a switch to DoP,
+    // FiiO KA17 at 384 kHz). The engine must climb its recovery ladder instead of looping on the same dead stream.
+    const auto pcm = randomPcm (96000, 2, 24, 4242u);
+    auto wav = t.tempDir.getChildFile ("stall.wav");
+    writeWav (wav, &pcm, nullptr, 2, 96000, 24, 24, false);
+    auto dsf = t.tempDir.getChildFile ("stall.dsf");
+    writeDsf (dsf, dsdSine (2822400.0, 0.4, 2, 1000.0, 0.5), 2, 2822400.0, true);
+
+    struct Result { int opens = 0; bool shared = false, playing = false, finished = false, gotAudio = false, closed = false; juce::String error; };
+    // clocks(exclusive) says whether the virtual DAC delivers callbacks in that mode
+    auto run = [&] (const juce::File& f, std::function<bool (bool exclusive)> clocks)
+    {
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.realtime = true; });
+        rig.engine->startPatienceMs = 150;
+        Result r;
+        rig.engine->onError = [&r] (const juce::String& m) { r.error = m; };
+        rig.engine->onQueueFinished = [&r] { r.finished = true; };
+        rig.engine->setQueue ({ EngineRig::item (f) }, 0, true);
+        const auto t0 = juce::Time::getMillisecondCounter();
+        while (juce::Time::getMillisecondCounter() - t0 < 4000)
+        {
+            rig.engine->serviceMessageThread();
+            if (rig.cap->isRunning() && clocks (rig.cap->config.exclusive))
+            {
+                for (int w = 0; w < 500 && rig.engine->isDecoderBusy() && rig.engine->getBufferedBytes() < (1u << 18); ++w) juce::Thread::sleep (1);
+                rig.cap->pump (512);
+            }
+            if (rig.engine->getState() == nx::PlaybackEngine::State::Stopped && (r.error.isNotEmpty() || r.finished)) break;
+            juce::Thread::sleep (2);
+        }
+        r.opens = rig.cap->opens;
+        r.shared = rig.engine->isOnSharedFallback();
+        r.playing = rig.engine->getState() == nx::PlaybackEngine::State::Playing;
+        r.gotAudio = ! rig.cap->capturedInt.empty();
+        r.closed = ! rig.cap->getStatus().open;
+        return r;
+    };
+
+    // 1. exclusive access never clocks, the shared output does: playback goes on, and the user is told why
+    const auto a = run (wav, [] (bool exclusive) { return ! exclusive; });
+    t.check (a.opens == 3 && a.shared && (a.playing || a.finished) && a.gotAudio && a.error.contains ("partag"),
+             "PCM : redémarrage, fermeture / réouverture, puis sortie système partagée : la lecture continue (ouvertures "_t
+             + juce::String (a.opens) + ")");
+
+    // 2. nothing clocks at all: stop, let go of the DAC, and say what to do
+    const auto b = run (wav, [] (bool) { return false; });
+    t.check (b.opens == 3 && ! b.playing && b.closed && b.error.contains ("Débranchez"),
+             "PCM : le DAC ne répond toujours pas : arrêt, DAC libéré, message « débranchez / rebranchez »"_t);
+
+    // 3. DoP: never the shared mixer (it would turn DoP into noise); full reopen, then the clear message
+    const auto c = run (dsf, [] (bool) { return false; });
+    t.check (c.opens == 2 && ! c.shared && ! c.playing && c.closed && c.error.contains ("Débranchez"),
+             "DoP : fermeture / réouverture complète puis message clair, jamais de mixeur système (ouvertures "_t
+             + juce::String (c.opens) + ")");
+
+    // 4. a device that clocks normally is left alone (no reopen)
+    const auto d = run (wav, [] (bool) { return true; });
+    t.check (d.opens == 1 && ! d.shared && (d.playing || d.finished) && d.gotAudio && d.error.isEmpty(), "DAC normal : aucune reprise, une seule ouverture"_t);
+
+    // 5. during playback (after the start watch), a DAC that stops asking for buffers for 600 ms is written in audio.log
+    {
+        EngineRig rig ([] (nx::CaptureBackend& cap) { cap.realtime = true; });
+        rig.engine->startPatienceMs = 150;
+        rig.engine->setQueue ({ EngineRig::item (wav) }, 0, true);
+        const auto logBefore = nx::audioLogFile().loadFileAsString().length();
+        const auto t0 = juce::Time::getMillisecondCounter();
+        bool paused = false;
+        while (juce::Time::getMillisecondCounter() - t0 < 8000)
+        {
+            rig.engine->serviceMessageThread();
+            const auto ms = juce::Time::getMillisecondCounter() - t0;
+            const bool stalled = ms > 6000 && ms < 6600;            // after the 5 s start log, before the end of the track
+            paused = paused || stalled;
+            if (rig.cap->isRunning() && ! stalled)
+            {
+                for (int w = 0; w < 500 && rig.engine->isDecoderBusy() && rig.engine->getBufferedBytes() < (1u << 18); ++w) juce::Thread::sleep (1);
+                rig.cap->pump (48);                                 // slow pump: the 1 s track lasts the whole test
+            }
+            juce::Thread::sleep (5);
+        }
+        const auto added = nx::audioLogFile().loadFileAsString().substring (logBefore);
+        t.check (paused && added.contains ("blocage du DAC, aucun buffer demande pendant"),
+                 "audio.log : un blocage du DAC en cours de lecture est noté avec sa durée, la position et le ring"_t);
+    }
 }
