@@ -4,6 +4,8 @@
 // gaplessly; a different wire reopens the device at the track boundary.
 #pragma once
 
+#include <array>
+
 #include "../Core/Format.h"
 #include "../Output/OutputBackend.h"
 
@@ -31,6 +33,10 @@ enum class RmeProfile
 };
 
 enum class FilterShape { LinearPhase, MinimumPhase };
+/** Multichannel sources (5.1 SACD, DSF / DFF, WAV): Auto = what the output can play (and the device profile allows);
+    Stereo = always two channels (the disc's stereo area, otherwise an ITU mix computed in DXD); Multichannel = every
+    channel whenever the output has them, even under a 2-channel device profile. */
+enum class ChannelMode { Auto, Stereo, Multichannel };
 
 struct EngineSettings
 {
@@ -45,6 +51,9 @@ struct EngineSettings
     bool memoryPlay = true;              // Memory Play: each local file is copied into RAM, the disk is idle while it plays
     int memoryPlayMaxMb = 1536;          // larger files are read from the disk
     bool dspNeedsPcm = false;            // studio tools on: DSD is converted to PCM so that they can apply (not saved)
+    ChannelMode channelMode = ChannelMode::Auto;
+    /** Multichannel output: source channel c (SACD / WAV order: L R C LFE Ls Rs...) goes to device output channelMap[c]. */
+    std::array<int, 8> channelMap { 0, 1, 2, 3, 4, 5, 6, 7 };
 
     // Device profiles (see DeviceProfiles.h): resolved against the device name at each track.
     HardwareProfile hardwareProfile = HardwareProfile::Auto;
@@ -73,7 +82,16 @@ struct PlaybackPlan
     WireFormat wire = WireFormat::Pcm;
     double deviceRate = 44100.0;         // PCM / DoP word rate, DSD bit rate in native DSD
     int channels = 2;                    // channels sent to the device (mono is doubled)
-    bool downmix = false;                // multichannel source on a stereo output: front L / R (DSD), 5.1 -> 2.0 mix (PCM)
+    bool downmix = false;                // multichannel source on a stereo output: ITU 5.1 -> 2.0 mix in 64 bits (DSD through DXD)
+    bool stereoLayer = false;            // SACD image: the disc's own stereo area plays instead of the multichannel one
+    /** Device output o plays source channel route[o] (-1: silence). Identity for a plain stereo / multichannel file. */
+    std::array<int, 8> route { 0, 1, 2, 3, 4, 5, 6, 7 };
+    bool identityRoute() const noexcept
+    {
+        if (channels != source.numChannels) return false;
+        for (int o = 0; o < channels; ++o) if (route[(size_t) o] != o) return false;
+        return true;
+    }
     int ringBitsHint = 24;               // significant bits stored in the ring (requested from the device)
 
     enum class Conversion { None, FloatToInt, Resample, DsdToPcm } conversion = Conversion::None;

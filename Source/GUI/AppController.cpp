@@ -458,6 +458,9 @@ void AppController::loadEngineSettings()
         s.anubisHarmonics = (bool) v.getProperty ("anubisHarmonics", true);
         s.memoryPlay = (bool) v.getProperty ("memoryPlay", true);
         s.memoryPlayMaxMb = juce::jlimit (64, 8192, (int) v.getProperty ("memoryPlayMaxMb", 1536));
+        s.channelMode = (ChannelMode) juce::jlimit (0, 2, (int) v.getProperty ("channelMode", 0));
+        if (const auto* map = v.getProperty ("channelMap", {}).getArray(); map != nullptr && map->size() == 8)
+            for (int c = 0; c < 8; ++c) s.channelMap[(size_t) c] = juce::jlimit (0, 7, (int) (*map)[c]);
     }
     eng->setSettings (s);
     const auto device = appSettings.get ("device").toString();
@@ -469,6 +472,10 @@ void AppController::saveEngineSettings()
     const auto s = eng->getSettings();
     auto* o = new juce::DynamicObject();
     o->setProperty ("dsdMode", (int) s.dsdMode);
+    o->setProperty ("channelMode", (int) s.channelMode);
+    juce::Array<juce::var> map;
+    for (auto m : s.channelMap) map.add (m);
+    o->setProperty ("channelMap", map);
     o->setProperty ("dop", s.dopAllowed);
     o->setProperty ("upsample", s.upsampleToDxd);
     o->setProperty ("dsdGain", s.dsdToPcmGainDb);

@@ -1221,18 +1221,21 @@ NX_TEST_SECTION (114, "Partie 2/3 : décodeur DST (MPEG-4), SACD / DFF compress�
         t.check (tolerant, "pistes 2ch dont la liste des pistes ne correspond pas aux codes temporels : lues depuis leur première trame"_t);
     }
 
-    // 5. a 6-channel track on a DAC with 2 outputs: never refused
+    // 5. a 6-channel track on a DAC with 2 outputs: never refused, and the disc's own stereo area plays (Sous-étape F)
     auto mcItem = EngineRig::item (iso);
     mcItem.uri = nx::sacd::virtualUri (iso, 1, 1);
-    const auto mcRef = expected (1, 1, 6, 3);
+    const auto stereoRef = expected (0, 1, 2, 6);
     {
         EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0 }; c.capabilities.outputChannels = 2; });
+        nx::SignalPath path;
         rig.engine->setQueue ({ mcItem }, 0, true);
-        rig.runToEnd (512);
+        rig.runToEnd (512, 60.0, [&] (int block) { if (block == 5) path = rig.engine->getSignalPath(); });
         const auto& got = rig.cap->capturedDsd;
-        bool front = rig.cap->config.numChannels == 2 && got.size() >= mcRef.size() / 3;
-        for (size_t i = 0; front && i < mcRef.size() / 6; ++i) front = got[i * 2] == mcRef[i * 6] && got[i * 2 + 1] == mcRef[i * 6 + 1];
-        t.check (front, "6 canaux DSD sur un DAC stéréo (DSD natif) : avant gauche / droit transmis au bit près"_t);
+        bool layer = false;
+        for (auto& n : path.nodes) layer = layer || n.title.contains ("Couche");
+        t.check (rig.cap->config.numChannels == 2 && rig.cap->config.wire == nx::WireFormat::NativeDsd && got.size() >= stereoRef.size()
+                 && std::equal (stereoRef.begin(), stereoRef.end(), got.begin()) && layer,
+                 "SACD 6 canaux sur un DAC stéréo : la couche stéréo du disque est lue au bit près (DSD natif), affichée dans le chemin du signal"_t);
     }
     {
         EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.sampleRates = { 44100.0, 88200.0, 176400.0 }; c.capabilities.outputChannels = 2; });
@@ -1242,15 +1245,19 @@ NX_TEST_SECTION (114, "Partie 2/3 : décodeur DST (MPEG-4), SACD / DFF compress�
                  "6 canaux DSD sur un DAC stéréo (DoP) : flux stéréo valide"_t);
     }
     {
-        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.sampleRates = { 88200.0 }; c.capabilities.outputChannels = 2; });
+        // a multichannel DSF has no stereo layer: ITU mix computed in DXD, never front L / R alone
+        const auto six = dsdSine (2822400.0, 0.2, 6, 1000.0, 0.5);
+        auto f = t.tempDir.getChildFile ("six.dsf");
+        writeDsf (f, six, 6, 2822400.0, true);
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.sampleRates = { 88200.0, 176400.0, 352800.0 }; c.capabilities.outputChannels = 2; });
         nx::SignalPath path;
-        rig.engine->setQueue ({ mcItem }, 0, true);
+        rig.engine->setQueue ({ EngineRig::item (f) }, 0, true);
         rig.runToEnd (512, 60.0, [&] (int block) { if (block == 5) path = rig.engine->getSignalPath(); });
         bool stage = false;
-        for (auto& n : path.nodes) stage = stage || n.title.contains ("-> 2");
-        t.check (rig.cap->config.wire == nx::WireFormat::Pcm && rig.cap->config.numChannels == 2 && rig.engine->getCurrentPlan().downmix && stage
-                 && rig.cap->capturedInt.size() > 1000,
-                 "6 canaux DSD -> PCM sur un DAC stéréo : mixage 5.1 -> 2.0, étape affichée dans le chemin du signal"_t);
+        for (auto& n : path.nodes) stage = stage || n.title.contains ("ITU");
+        t.check (rig.cap->config.wire == nx::WireFormat::Pcm && rig.cap->config.numChannels == 2 && rig.cap->config.sampleRate == 352800.0
+                 && rig.engine->getCurrentPlan().downmix && stage && rig.cap->capturedInt.size() > 1000,
+                 "DSF 6 canaux sur un DAC stéréo (même compatible DoP) : mixage ITU 5.1 -> 2.0 en DXD 352,8 kHz, étape dans le chemin du signal"_t);
     }
 
     // PCM 5.1: the 2.0 mix follows L = FL + 0,707 C + 0,707 SL (normalised), never clips; 6 outputs: 6 channels as they are
@@ -1425,5 +1432,112 @@ NX_TEST_SECTION (116, "Sous-étape A : DAC qui ne cadence plus (reprise complèt
         const auto added = nx::audioLogFile().loadFileAsString().substring (logBefore);
         t.check (paused && added.contains ("blocage du DAC, aucun buffer demande pendant"),
                  "audio.log : un blocage du DAC en cours de lecture est noté avec sa durée, la position et le ring"_t);
+    }
+}
+
+//==============================================================================
+NX_TEST_SECTION (117, "Sous-étape F : multicanal Auto / Stéréo / Multicanal, couche stéréo SACD, correspondance des sorties")
+{
+    // 1. the plan's rules (pure function)
+    nx::StreamFormat pcm6;
+    pcm6.kind = nx::SampleKind::PcmInt; pcm6.sampleRate = 48000.0; pcm6.numChannels = 6; pcm6.bitsPerSample = 24;
+    nx::StreamFormat dsd6 = pcm6;
+    dsd6.kind = nx::SampleKind::Dsd; dsd6.sampleRate = 2822400.0; dsd6.bitsPerSample = 1;
+    nx::DeviceCapabilities eight;
+    eight.sampleRates = { 48000.0, 176400.0, 352800.0 };
+    eight.outputChannels = 8;
+    nx::EngineSettings s;
+    s.maxChannels = 2;                                                       // a 2-channel device profile (Anubis Pure DoP)
+    const auto autoPlan = nx::makePlan (pcm6, eight, s);
+    s.channelMode = nx::ChannelMode::Multichannel;
+    const auto multiPlan = nx::makePlan (pcm6, eight, s);
+    s.maxChannels = 8;
+    s.channelMode = nx::ChannelMode::Stereo;
+    const auto stereoPlan = nx::makePlan (pcm6, eight, s);
+    const auto stereoDsd = nx::makePlan (dsd6, eight, s);
+    s.channelMode = nx::ChannelMode::Auto;
+    const auto autoDsd = nx::makePlan (dsd6, eight, s);
+    t.check (autoPlan.downmix && autoPlan.channels == 2 && ! multiPlan.downmix && multiPlan.channels == 6 && multiPlan.identityRoute()
+             && stereoPlan.downmix && stereoPlan.channels == 2 && stereoDsd.downmix && stereoDsd.wire == nx::WireFormat::Pcm
+             && stereoDsd.deviceRate == 352800.0 && ! autoDsd.downmix && autoDsd.wire == nx::WireFormat::DoP && autoDsd.channels == 6,
+             "plan : Auto suit le profil (2 canaux -> mixage), Multicanal passe outre, Stéréo force le mixage (DSD via DXD 352,8 kHz)"_t);
+
+    s.channelMap = { 0, 1, 7, 3, 4, 5, 6, 2 };                               // centre on output 8
+    const auto mapped = nx::makePlan (pcm6, eight, s);
+    s.channelMap = { 0, 1, 0, 3, 4, 5, 6, 7 };                               // two speakers on one output: refused
+    const auto clash = nx::makePlan (pcm6, eight, s);
+    nx::DeviceCapabilities sixOut = eight;
+    sixOut.outputChannels = 6;
+    s.channelMap = { 0, 1, 7, 3, 4, 5, 6, 2 };
+    const auto tooFar = nx::makePlan (pcm6, sixOut, s);                      // output 8 does not exist on this device
+    t.check (mapped.channels == 8 && mapped.route[7] == 2 && mapped.route[2] == -1 && mapped.route[0] == 0 && mapped.route[5] == 5 && ! mapped.identityRoute()
+             && clash.identityRoute() && clash.channels == 6 && tooFar.identityRoute() && tooFar.channels == 6,
+             "correspondance : centre vers la sortie 8 (sortie 3 muette) ; doublon ou sortie absente -> ordre standard"_t);
+
+    // 2. PCM 5.1 through the engine with the centre on output 8: every sample where it belongs, output 3 silent
+    {
+        const int frames = 6000;
+        std::vector<int32_t> pcm ((size_t) frames * 6);
+        juce::Random rnd (617);
+        for (auto& v : pcm) v = (rnd.nextInt (1 << 24) - (1 << 23)) * 256;
+        auto f = t.tempDir.getChildFile ("map51.wav");
+        writeWav (f, &pcm, nullptr, 6, 48000, 24, 24, false);
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.outputChannels = 8; });
+        auto st = rig.engine->getSettings();
+        st.channelMap = { 0, 1, 7, 3, 4, 5, 6, 2 };
+        rig.engine->setSettings (st);
+        rig.engine->setQueue ({ EngineRig::item (f) }, 0, true);
+        rig.runToEnd (1024);
+        const auto& got = rig.cap->capturedInt;
+        bool ok = rig.cap->config.numChannels == 8 && got.size() >= (size_t) frames * 8;
+        const int to[6] = { 0, 1, 7, 3, 4, 5 };
+        for (int i = 0; ok && i < frames; ++i)
+        {
+            for (int c = 0; c < 6; ++c) ok = ok && got[(size_t) i * 8 + (size_t) to[c]] == pcm[(size_t) i * 6 + (size_t) c];
+            ok = ok && got[(size_t) i * 8 + 2] == 0 && got[(size_t) i * 8 + 6] == 0;
+        }
+        t.check (ok, "PCM 5.1 sur 8 sorties, centre -> sortie 8 : chaque échantillon à sa place, bit-perfect, sorties libres muettes"_t);
+    }
+
+    // 3. DSD (SACD multichannel area, native DSD) with the same map: the bytes move, unused outputs carry DSD silence
+    {
+        using namespace sacdfixture;
+        std::vector<AreaSpec> areas { { 2, { { 4, "Stereo", "F" } } }, { 6, { { 3, "Surround", "F" } } } };
+        const auto img = build (areas, "Routage", "F");
+        const auto iso = t.tempDir.getChildFile ("route117.iso");
+        iso.replaceWithData (img.data(), img.size());
+        auto item = EngineRig::item (iso);
+        item.uri = nx::sacd::virtualUri (iso, 1, 1);
+        const auto ref = expected (1, 1, 6, 3);
+
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0 }; c.capabilities.outputChannels = 8; });
+        auto st = rig.engine->getSettings();
+        st.channelMap = { 0, 1, 7, 3, 4, 5, 6, 2 };
+        rig.engine->setSettings (st);
+        rig.engine->setQueue ({ item }, 0, true);
+        rig.runToEnd (512);
+        const auto& got = rig.cap->capturedDsd;
+        const size_t frames = ref.size() / 6;
+        bool ok = rig.cap->config.numChannels == 8 && got.size() >= frames * 8;
+        const int to[6] = { 0, 1, 7, 3, 4, 5 };
+        for (size_t i = 0; ok && i < frames; ++i)
+        {
+            for (int c = 0; c < 6; ++c) ok = ok && got[i * 8 + (size_t) to[c]] == ref[i * 6 + (size_t) c];
+            ok = ok && got[i * 8 + 2] == 0x69 && got[i * 8 + 6] == 0x69;
+        }
+        t.check (ok, "SACD 5.1 en DSD natif sur 8 sorties, centre -> sortie 8 : octets DSD à leur place, sorties libres en silence DSD"_t);
+
+        // 4. "Stéréo" on the same 8-output device: the stereo area, bit-perfect; "Multicanal": the 6 channels
+        EngineRig two ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0 }; c.capabilities.outputChannels = 8; });
+        auto s2 = two.engine->getSettings();
+        s2.channelMode = nx::ChannelMode::Stereo;
+        two.engine->setSettings (s2);
+        two.engine->setQueue ({ item }, 0, true);
+        two.runToEnd (512);
+        const auto stereoRef = expected (0, 1, 2, 4);
+        const auto& g2 = two.cap->capturedDsd;
+        t.check (two.cap->config.numChannels == 2 && two.engine->getCurrentPlan().stereoLayer && g2.size() >= stereoRef.size()
+                 && std::equal (stereoRef.begin(), stereoRef.end(), g2.begin()),
+                 "mode Stéréo sur une interface 8 sorties : la couche stéréo du SACD, au bit près"_t);
     }
 }

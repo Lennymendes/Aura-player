@@ -38,11 +38,34 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
 {
     PlaybackPlan p;
     p.source = src;
-    p.channels = src.numChannels == 1 ? 2 : src.numChannels;
-    // more channels than the output has (a stereo DAC, a 2-channel profile): stereo, never a refusal
-    const int outputs = juce::jmin (caps.outputChannels > 0 ? caps.outputChannels : 8, juce::jlimit (1, 8, s.maxChannels));
-    if (src.numChannels > 2 && src.numChannels > outputs) { p.channels = 2; p.downmix = true; }
-    const juce::String foldNote = p.downmix ? " · "_t + juce::String (src.numChannels) + " canaux -> stéréo"_t : juce::String();
+    // Channels. More than the output has (a stereo DAC, a 2-channel profile), or "Stéréo" chosen: a stereo mix,
+    // never a refusal. "Multicanal" lifts a profile's 2-channel limit, never the device's own.
+    const int deviceOutputs = caps.outputChannels > 0 ? juce::jmin (8, caps.outputChannels) : 8;
+    const int outputs = s.channelMode == ChannelMode::Multichannel ? deviceOutputs : juce::jmin (deviceOutputs, juce::jlimit (1, 8, s.maxChannels));
+    const bool multi = src.numChannels > 2;
+    p.downmix = multi && (s.channelMode == ChannelMode::Stereo || src.numChannels > outputs);
+    p.channels = p.downmix || src.numChannels == 1 ? 2 : src.numChannels;
+    for (int o = 0; o < 8; ++o) p.route[(size_t) o] = src.numChannels == 1 ? (o < 2 ? 0 : -1) : (o < p.channels ? o : -1);
+    if (multi && ! p.downmix)
+    {
+        // speakers: each source channel to its own existing output, otherwise the plain order
+        std::array<bool, 8> used {};
+        int need = 0;
+        bool ok = true;
+        for (int c = 0; c < src.numChannels && ok; ++c)
+        {
+            const int m = s.channelMap[(size_t) c];
+            ok = m >= 0 && m < outputs && ! used[(size_t) m];
+            if (ok) { used[(size_t) m] = true; need = juce::jmax (need, m + 1); }
+        }
+        if (ok)
+        {
+            p.channels = need;
+            p.route.fill (-1);
+            for (int c = 0; c < src.numChannels; ++c) p.route[(size_t) s.channelMap[(size_t) c]] = c;
+        }
+    }
+    const juce::String foldNote = p.downmix ? " · "_t + juce::String (src.numChannels) + " canaux -> stéréo (mixage ITU)"_t : juce::String();
     p.filterShape = s.filterShape;
     p.profileTag = s.profileTag;
     const juce::String filterName = s.filterShape == FilterShape::MinimumPhase ? juce::String ("filtre à phase minimale 64 bits"_t)
@@ -50,8 +73,9 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
 
     if (src.isDsd())
     {
-        const bool nativeOk = ! s.dspNeedsPcm && caps.nativeDsdRates.contains (src.sampleRate);
-        const bool dopOk = ! s.dspNeedsPcm && s.dopAllowed && supports (caps, src.sampleRate / 16.0);
+        // a stereo mix of a multichannel DSD stream can only be computed in PCM (DXD)
+        const bool nativeOk = ! s.dspNeedsPcm && ! p.downmix && caps.nativeDsdRates.contains (src.sampleRate);
+        const bool dopOk = ! s.dspNeedsPcm && ! p.downmix && s.dopAllowed && supports (caps, src.sampleRate / 16.0);
 
         if ((s.dsdMode == DsdMode::Auto || s.dsdMode == DsdMode::Native) && nativeOk)
         {
@@ -89,11 +113,12 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
         }
         p.ringBitsHint = 32;
         p.needsRequantize = true;
-        p.reason = juce::String (s.dspNeedsPcm ? "Outils Studio actifs : "_t
+        p.reason = juce::String (p.downmix ? "Mixage stéréo ITU de "_t + juce::String (src.numChannels) + " canaux : "_t
+                                 : s.dspNeedsPcm ? "Outils Studio actifs : "_t
                                  : s.profileTag.isNotEmpty() ? "Profil "_t + s.profileTag + " : "
                                  : caps.nativeDsdRates.isEmpty() && ! dopOk ? "Le DAC n'accepte ni DSD natif ni DoP à ce débit : "_t
                                                                             : "Conversion demandée : "_t)
-                   + "DSD -> PCM " + formatRate (p.deviceRate) + " (" + filterName + ")" + foldNote;
+                   + "DSD -> PCM " + formatRate (p.deviceRate) + " (" + filterName + ")" + (p.downmix ? juce::String() : foldNote);
         return p;
     }
 

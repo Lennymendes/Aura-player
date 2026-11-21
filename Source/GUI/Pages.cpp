@@ -1790,6 +1790,29 @@ void SettingsPage::buildAudio()
     row ("Suréchantillonnage sinc vers DXD (352,8 / 384 kHz)"_t, makeToggle (s.upsampleToDxd, [this] (bool v) { auto st = ctx.engine().getSettings(); st.upsampleToDxd = v; ctx.engine().setSettings (st); ctx.applyEngineSettings(); }), 36,
          "Filtre polyphase 64 bits, 160 dB. Rapport entier (×2, ×4, ×8) dans la même famille de fréquences. Désactive le bit-perfect."_t);
     row ("Volume numérique : 100 % = bit-perfect"_t, nullptr, 28);
+
+    // Multichannel sources (5.1 SACD, DSF / DFF, WAV)
+    section ("Multicanal (SACD 5.1, DSF / DFF, WAV)"_t);
+    const juce::StringArray chModes { "Auto (selon les sorties du DAC)"_t, "Stéréo"_t, "Multicanal"_t };
+    row ("Écoute des sources multicanal"_t, makeCombo (chModes, chModes[(int) s.channelMode], [this, chModes] (const juce::String& v)
+    {
+        auto st = ctx.engine().getSettings();
+        st.channelMode = (ChannelMode) juce::jmax (0, chModes.indexOf (v));
+        ctx.engine().setSettings (st);
+        ctx.applyEngineSettings();
+    }), 36, "Stéréo : la couche stéréo du SACD quand le disque en a une, sinon un mixage ITU (centre et surround à −3 dB, LFE omis) calculé en DXD 64 bits. "
+            "Multicanal : tous les canaux dès que le DAC a assez de sorties, même avec un profil limité à 2 canaux."_t);
+    const char* speakers[] = { "Avant gauche (L)", "Avant droit (R)", "Centre (C)", "Caisson (LFE)", "Surround gauche (Ls)", "Surround droit (Rs)" };
+    juce::StringArray outputs;
+    for (int o = 1; o <= 8; ++o) outputs.add ("Sortie "_t + juce::String (o));
+    for (int c = 0; c < 6; ++c)
+        row (tr (juce::String::fromUTF8 (speakers[c])), makeCombo (outputs, outputs[s.channelMap[(size_t) c]], [this, c, outputs] (const juce::String& v)
+        {
+            auto st = ctx.engine().getSettings();
+            st.channelMap[(size_t) c] = juce::jmax (0, outputs.indexOf (v));
+            ctx.engine().setSettings (st);
+            ctx.applyEngineSettings();
+        }), 34, c == 0 ? juce::String ("Sortie du DAC de chaque enceinte en multicanal (ordre SACD / WAV : L R C LFE Ls Rs). Deux enceintes sur la même sortie : ordre standard."_t) : juce::String());
 }
 
 void SettingsPage::buildLibrary()

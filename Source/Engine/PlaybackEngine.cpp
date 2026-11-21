@@ -539,8 +539,34 @@ bool PlaybackEngine::openItem (int index, double startSeconds, bool flush)
             return false;
         }
     }
+    // A SACD's multichannel track that would be mixed down: the disc's own stereo area (the engineer's mix) instead
+    bool stereoLayer = false;
+    if (sacd::isVirtualUri (item.uri) && dec->getFormat().numChannels > 2 && makePlan (dec->getFormat(), c, s).downmix)
+    {
+        juce::File iso;
+        int area = 0, track = 0;
+        if (sacd::parseVirtualUri (item.uri, iso, area, track) && area == 1)
+        {
+            auto f = std::make_unique<juce::FileInputStream> (iso);
+            juce::String err2;
+            if (f->openedOk())
+                if (auto two = sacd::openTrack (std::make_unique<juce::BufferedInputStream> (f.release(), 1 << 17, true), 0, track, err2);
+                    two != nullptr && two->getFormat().numChannels == 2)
+                {
+                    dec = std::move (two);
+                    stereoLayer = true;
+                }
+        }
+    }
+
     auto plan = makePlan (dec->getFormat(), c, s);
-    plan.channels = juce::jmin (plan.channels, juce::jlimit (1, 8, s.maxChannels));
+    if (s.channelMode != ChannelMode::Multichannel)
+        plan.channels = juce::jmin (plan.channels, juce::jlimit (1, 8, s.maxChannels));
+    if (stereoLayer)
+    {
+        plan.stereoLayer = true;
+        plan.reason += " · "_t + "couche stéréo du SACD (au lieu du multicanal)"_t;
+    }
     plan.inMemory = inMemory;
     plan.fileBytes = sacd::isVirtualUri (item.uri) ? 0 : juce::File::isAbsolutePath (item.uri) ? juce::File (item.uri).getSize() : 0;
 
@@ -650,6 +676,18 @@ void PlaybackEngine::writeAll (const void* data, size_t numBytes)
     }
 }
 
+/** Device output o <- source channel route[o] (silence for -1): mono doubled, speaker map of a multichannel output. */
+template <typename T>
+static void routeChannels (const T* in, T* out, int frames, int srcCh, int outCh, const std::array<int, 8>& route, T silence) noexcept
+{
+    for (int i = 0; i < frames; ++i)
+        for (int o = 0; o < outCh; ++o)
+        {
+            const int c = route[(size_t) o];
+            out[(size_t) i * (size_t) outCh + (size_t) o] = c >= 0 && c < srcCh ? in[(size_t) i * (size_t) srcCh + (size_t) c] : silence;
+        }
+}
+
 /** Multichannel -> stereo, in place over `frames` interleaved frames of srcCh channels (out: 2 channels).
     6 ch = FL FR C LFE SL SR, 5 ch = FL FR C SL SR, 4 ch = FL FR SL SR, 3 ch = FL FR C. LFE is left out;
     L = FL + 0.707 C + 0.707 SL, R = FR + 0.707 C + 0.707 SR, scaled by 1 / (1 + 0.707 + 0.707): no clipping possible. */
@@ -693,11 +731,9 @@ int PlaybackEngine::produce (int writableBytes)
         for (int i = 0; i < frames; ++i)
             for (int c = 0; c < srcCh; ++c)
                 out[(size_t) i * srcCh + c] = doubleToInt32 (in[(size_t) i * srcCh + c]);
-        if (srcCh == outCh) { writeAll (out, (size_t) frames * (size_t) outCh * 4); return; }
+        if (plan.identityRoute()) { writeAll (out, (size_t) frames * (size_t) outCh * 4); return; }
         auto* exp = reinterpret_cast<int32_t*> (tmpBytes.data());
-        for (int i = 0; i < frames; ++i)
-            for (int c = 0; c < outCh; ++c)
-                exp[(size_t) i * outCh + c] = out[(size_t) i * srcCh + juce::jmin (c, srcCh - 1)];
+        routeChannels (out, exp, frames, srcCh, outCh, plan.route, (int32_t) 0);
         writeAll (exp, (size_t) frames * (size_t) outCh * 4);
     };
 
@@ -709,11 +745,9 @@ int PlaybackEngine::produce (int writableBytes)
             doublesToRing (tmpDouble.data(), frames);
             return;
         }
-        if (srcCh == outCh) { writeAll (in, (size_t) frames * (size_t) outCh * 4); return; }
+        if (plan.identityRoute()) { writeAll (in, (size_t) frames * (size_t) outCh * 4); return; }
         auto* out = reinterpret_cast<int32_t*> (tmpBytes.data());
-        for (int i = 0; i < frames; ++i)
-            for (int c = 0; c < outCh; ++c)
-                out[(size_t) i * outCh + c] = in[(size_t) i * srcCh + juce::jmin (c, srcCh - 1)];
+        routeChannels (in, out, frames, srcCh, outCh, plan.route, (int32_t) 0);
         writeAll (out, (size_t) frames * (size_t) outCh * 4);
     };
 
@@ -722,12 +756,10 @@ int PlaybackEngine::produce (int writableBytes)
         const int n = decoder->readDsd (tmpBytes.data() + (size_t) kChunkFrames * 8, maxOutFrames);
         if (n <= 0) return 0;
         const uint8_t* in = tmpBytes.data() + (size_t) kChunkFrames * 8;
-        if (srcCh == outCh) writeAll (in, (size_t) n * (size_t) outCh);
+        if (plan.identityRoute()) writeAll (in, (size_t) n * (size_t) outCh);
         else
         {
-            for (int i = 0; i < n; ++i)
-                for (int c = 0; c < outCh; ++c)
-                    tmpBytes[(size_t) i * outCh + c] = in[(size_t) i * srcCh + juce::jmin (c, srcCh - 1)];
+            routeChannels (in, tmpBytes.data(), n, srcCh, outCh, plan.route, (uint8_t) kDsdIdle);   // unused outputs: DSD silence
             writeAll (tmpBytes.data(), (size_t) n * (size_t) outCh);
         }
         return n;
@@ -810,8 +842,11 @@ void PlaybackEngine::drainConverters()
             return;
         }
         for (int i = 0; i < frames; ++i)
-            for (int c = 0; c < outCh; ++c)
-                ints[(size_t) i * outCh + c] = doubleToInt32 (pcm[(size_t) i * srcCh + juce::jmin (c, srcCh - 1)]);
+            for (int o = 0; o < outCh; ++o)
+            {
+                const int c = decPlan.route[(size_t) o];
+                ints[(size_t) i * outCh + o] = c >= 0 && c < srcCh ? doubleToInt32 (pcm[(size_t) i * srcCh + c]) : 0;
+            }
         writeAll (ints.data(), ints.size() * 4);
     };
 
@@ -1462,13 +1497,17 @@ SignalPath PlaybackEngine::getSignalPath() const
                   PathQuality::BitPerfect);
 
     if (plan.downmix)
+        path.add ("Canaux"_t, juce::String (src.numChannels) + " -> 2 (mixage stéréo ITU)"_t,
+                  juce::String (src.isDsd() ? "Calculé en DXD 64 bits. "_t : "") + "L = AvG + 0,707 C + 0,707 SurrG (idem à droite), LFE omis, normalisé : sans écrêtage"_t,
+                  PathQuality::Enhanced);
+    else if (plan.stereoLayer)
+        path.add ("Canaux"_t, "Couche stéréo du SACD"_t, "Le mixage stéréo du disque, lu tel quel à la place de la zone multicanal"_t, PathQuality::BitPerfect);
+    else if (src.numChannels > 2 && ! plan.identityRoute())
     {
-        if (plan.wire == WireFormat::Pcm)
-            path.add ("Canaux"_t, juce::String (src.numChannels) + " -> 2 (mixage stéréo)"_t,
-                      "L = AvG + 0,707 C + 0,707 SurrG (idem à droite), 64 bits, normalisé : sans écrêtage"_t, PathQuality::Enhanced);
-        else
-            path.add ("Canaux"_t, juce::String (src.numChannels) + " -> 2 (avant gauche / droit)"_t,
-                      "Sortie stéréo : canaux avant transmis tels quels"_t, PathQuality::BitPerfect);
+        juce::StringArray map;
+        for (int o = 0; o < plan.channels; ++o)
+            if (plan.route[(size_t) o] >= 0) map.add (juce::String (plan.route[(size_t) o] + 1) + juce::String::fromUTF8 ("\xe2\x86\x92") + juce::String (o + 1));
+        path.add ("Canaux"_t, juce::String (src.numChannels) + " canaux, correspondance des sorties"_t, map.joinIntoString ("  "), PathQuality::BitPerfect);
     }
 
     switch (plan.conversion)
