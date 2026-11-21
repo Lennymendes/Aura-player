@@ -463,6 +463,7 @@ void AppController::loadEngineSettings()
         if (s.pcmToDsd != 64 && s.pcmToDsd != 128 && s.pcmToDsd != 256) s.pcmToDsd = 0;
         s.sdmOrder = (int) v.getProperty ("sdmOrder", 7) <= 5 ? 5 : 7;
         s.pcmToDsdHeadroomDb = juce::jlimit (-12.0, 0.0, (double) v.getProperty ("pcmToDsdHeadroom", -3.0));
+        s.keepDsdOutput = (bool) v.getProperty ("keepDsdOutput", true);
         if (const auto* map = v.getProperty ("channelMap", {}).getArray(); map != nullptr && map->size() == 8)
             for (int c = 0; c < 8; ++c) s.channelMap[(size_t) c] = juce::jlimit (0, 7, (int) (*map)[c]);
     }
@@ -480,6 +481,7 @@ void AppController::saveEngineSettings()
     o->setProperty ("pcmToDsd", s.pcmToDsd);
     o->setProperty ("sdmOrder", s.sdmOrder);
     o->setProperty ("pcmToDsdHeadroom", s.pcmToDsdHeadroomDb);
+    o->setProperty ("keepDsdOutput", s.keepDsdOutput);
     juce::Array<juce::var> map;
     for (auto m : s.channelMap) map.add (m);
     o->setProperty ("channelMap", map);
@@ -1070,10 +1072,15 @@ void AppController::timerCallback()
 //==============================================================================
 void AppController::rebuildDspChain()
 {
-    auto chain = pluginManager.buildDspChain();
-    if (chain == nullptr) chain = std::make_unique<DspChain>();
-    chain->processors.push_back (std::make_unique<StudioToolsProcessor> (studio));
-    eng->setDspChain (std::move (chain));
+    // two instances of the same chain: the audio thread's (PCM output) and the decoder's (before the DSD modulator)
+    for (const bool forDecoder : { false, true })
+    {
+        auto chain = pluginManager.buildDspChain();
+        if (chain == nullptr) chain = std::make_unique<DspChain>();
+        chain->processors.push_back (std::make_unique<StudioToolsProcessor> (studio));
+        if (forDecoder) eng->setDecoderDspChain (std::move (chain));
+        else eng->setDspChain (std::move (chain));
+    }
 }
 
 void AppController::applyStudioTools()
@@ -1085,9 +1092,10 @@ void AppController::applyStudioTools()
     if (s.dspNeedsPcm != need)
     {
         s.dspNeedsPcm = need;
-        // Re-plan the current track only when DSD is on the wire (DSD -> DXD now, or back to DoP / native).
+        // Re-plan the current track when DSD is involved: DSD source (remodulated / converted / back to bit-perfect),
+        // or PCM -> DSD (the processing moves to the decoder, whose lead must be refilled at once)
         const auto plan = eng->getCurrentPlan();
-        const bool affectsCurrent = plan.source.isDsd();
+        const bool affectsCurrent = plan.source.isDsd() || plan.remodulates();
         eng->setSettings (s, affectsCurrent);
     }
     if (auto* m = getMainComponent()) m->stateChanged();

@@ -128,6 +128,9 @@ public:
     bool isFixedVolume() const noexcept { return fixedVolume.load() || profileLocksVolume.load(); }
     bool isVolumeLockedByProfile() const noexcept { return profileLocksVolume.load(); }
     void setDspChain (std::unique_ptr<DspChain> chain);
+    /** A second instance of the same chain, for the decoder thread: it processes the DXD signal before the DSD
+        modulator (PCM -> DSD, DSD -> DXD -> DSD). Never shared with the audio thread's chain. */
+    void setDecoderDspChain (std::unique_ptr<DspChain> chain);
 
     //== Status ===============================================================
     PlaybackPlan getCurrentPlan() const;
@@ -138,6 +141,8 @@ public:
     struct Stats
     {
         std::atomic<juce::uint64> underruns { 0 }, callbacks { 0 }, framesOut { 0 }, reconfigurations { 0 }, clipped { 0 };
+        // DSD modulator (PCM -> DSD, DSD -> DXD -> DSD): DXD frames held down by its limiter, loop resets (never expected)
+        std::atomic<juce::uint64> modulatorLimited { 0 }, modulatorResets { 0 };
     };
     const Stats& getStats() const noexcept { return stats; }
     juce::String getLastError() const;
@@ -248,7 +253,12 @@ private:
     std::unique_ptr<dsp::DsdToPcm> dsdConverter;
     std::unique_ptr<dsp::Resampler> resampler;
     std::unique_ptr<dsp::PcmToDsd> pcmToDsd;   // PCM -> DSD remodulation (decoder thread, prepared per plan)
-    int producePcmToDsd (int maxOutFrames);
+    int produceRemodulated (int maxOutFrames);
+    std::atomic<DspChain*> pendingDecChain { nullptr };
+    SpscRing<DspChain*> retiredDecChains { 16 };
+    DspChain* decChain = nullptr;                // decoder thread
+    std::vector<double> decPlanar;               // planar DXD for decChain (preallocated)
+    bool decoderDspOn() const noexcept { return decChain != nullptr && decChain->isActive(); }
     dsp::OutputShaper shaper;                 // warmth / limiter after a conversion (device profiles)
     std::vector<int32_t> tmpInt;
     std::vector<double> tmpDouble, tmpDouble2;

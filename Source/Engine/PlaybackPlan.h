@@ -56,6 +56,9 @@ struct EngineSettings
     int pcmToDsd = 0;
     int sdmOrder = 7;                    // sigma-delta order: 5 or 7
     double pcmToDsdHeadroomDb = -3.0;    // PCM 0 dBFS -> SACD 0 dB + this (the limiter caps at -0.9 dB SACD)
+    /** A DSD source that must be processed (AURA DSP / Studio Tools, 5.1 -> 2.0 mix) stays DSD on the wire:
+        DSD -> DXD 64 bits -> processing -> modulator, instead of DXD PCM. */
+    bool keepDsdOutput = true;
     /** Multichannel output: source channel c (SACD / WAV order: L R C LFE Ls Rs...) goes to device output channelMap[c]. */
     std::array<int, 8> channelMap { 0, 1, 2, 3, 4, 5, 6, 7 };
 
@@ -98,7 +101,9 @@ struct PlaybackPlan
     }
     int ringBitsHint = 24;               // significant bits stored in the ring (requested from the device)
 
-    enum class Conversion { None, FloatToInt, Resample, DsdToPcm, PcmToDsd } conversion = Conversion::None;
+    enum class Conversion { None, FloatToInt, Resample, DsdToPcm, PcmToDsd, DsdRemodulate } conversion = Conversion::None;
+    /** PCM -> DSD or DSD -> DXD -> DSD: computed on the decoder thread (its own DSP chain), DSD on the wire. */
+    bool remodulates() const noexcept { return conversion == Conversion::PcmToDsd || conversion == Conversion::DsdRemodulate; }
     double conversionRate = 0.0;         // intermediate rate (DSD -> PCM output before an optional resample)
     bool needsRequantize = false;        // the ring holds more precision than the device word: TPDF dither
 

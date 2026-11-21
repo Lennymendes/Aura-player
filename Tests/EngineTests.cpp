@@ -111,7 +111,7 @@ namespace
         }
 
         /** Pumps blocks until the queue ends (or timeout). Waits for the decoder so nothing underruns. */
-        void runToEnd (int block = 1024, double timeoutSeconds = 60.0, std::function<void (int)> perBlock = {})
+        void runToEnd (int block = 1024, double timeoutSeconds = 60.0, std::function<void (int)> perBlock = {}, size_t wantBuffered = 1u << 19)
         {
             const auto t0 = juce::Time::getMillisecondCounterHiRes();
             int blocks = 0;
@@ -120,7 +120,7 @@ namespace
                 engine->serviceMessageThread();
                 if (engine->getState() == nx::PlaybackEngine::State::Stopped && blocks > 0) break;
                 if (! cap->isRunning()) { juce::Thread::sleep (1); continue; }
-                for (int w = 0; w < 4000 && engine->isDecoderBusy() && engine->getBufferedBytes() < (1u << 19); ++w)
+                for (int w = 0; w < 4000 && engine->isDecoderBusy() && engine->getBufferedBytes() < wantBuffered; ++w)
                     juce::Thread::sleep (1);
                 cap->pump (block);
                 if (perBlock) perBlock (blocks);
@@ -1251,6 +1251,9 @@ NX_TEST_SECTION (114, "Partie 2/3 : décodeur DST (MPEG-4), SACD / DFF compress�
         auto f = t.tempDir.getChildFile ("six.dsf");
         writeDsf (f, six, 6, 2822400.0, true);
         EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.sampleRates = { 88200.0, 176400.0, 352800.0 }; c.capabilities.outputChannels = 2; });
+        auto st = rig.engine->getSettings();
+        st.keepDsdOutput = false;                       // DXD output (the DSD one is checked in section 119)
+        rig.engine->setSettings (st);
         nx::SignalPath path;
         rig.engine->setQueue ({ EngineRig::item (f) }, 0, true);
         rig.runToEnd (512, 60.0, [&] (int block) { if (block == 5) path = rig.engine->getSignalPath(); });
@@ -1415,8 +1418,8 @@ NX_TEST_SECTION (116, "Sous-étape A : DAC qui ne cadence plus (reprise complèt
         const auto longPcm = randomPcm (96000 * 4, 2, 24, 4243u);
         auto longWav = t.tempDir.getChildFile ("stall_long.wav");
         writeWav (longWav, &longPcm, nullptr, 2, 96000, 24, 24, false);
+        // normal start patience: a slow machine (macOS CI) may take > 150 ms to deliver its first buffers here
         EngineRig rig ([] (nx::CaptureBackend& cap) { cap.realtime = true; });
-        rig.engine->startPatienceMs = 150;
         rig.engine->setQueue ({ EngineRig::item (longWav) }, 0, true);
         // a unique mark: the log may be trimmed meanwhile (512 KB cap), an offset would not survive that
         const auto mark = "test: repere blocage " + juce::String (juce::Random::getSystemRandom().nextInt64());
@@ -1437,7 +1440,8 @@ NX_TEST_SECTION (116, "Sous-étape A : DAC qui ne cadence plus (reprise complèt
             juce::Thread::sleep (5);
         }
         const auto added = nx::audioLogFile().loadFileAsString().fromLastOccurrenceOf (mark, false, false);
-        t.check (paused && rig.engine->getState() == nx::PlaybackEngine::State::Playing && added.contains ("blocage du DAC, aucun buffer demande pendant"),
+        t.check (paused && rig.engine->getState() == nx::PlaybackEngine::State::Playing && rig.cap->opens == 1
+                 && added.contains ("blocage du DAC, aucun buffer demande pendant"),
                  "audio.log : un blocage du DAC en cours de lecture est noté avec sa durée, la position et le ring"_t);
     }
 }
@@ -1460,6 +1464,7 @@ NX_TEST_SECTION (117, "Sous-étape F : multicanal Auto / Stéréo / Multicanal, 
     const auto multiPlan = nx::makePlan (pcm6, eight, s);
     s.maxChannels = 8;
     s.channelMode = nx::ChannelMode::Stereo;
+    s.keepDsdOutput = false;                            // the mix to DXD PCM (to DSD: section 119)
     const auto stereoPlan = nx::makePlan (pcm6, eight, s);
     const auto stereoDsd = nx::makePlan (dsd6, eight, s);
     s.channelMode = nx::ChannelMode::Auto;
@@ -1768,5 +1773,172 @@ NX_TEST_SECTION (118, "Sous-étape G : modulateur PCM -> DSD (bruit dans la band
         t.check (rig.cap->config.wire == nx::WireFormat::Pcm && rig.engine->getCurrentPlan().conversion == nx::PlaybackPlan::Conversion::None
                  && rig.engine->getCurrentPlan().reason.contains ("n'accepte pas le DSD"),
                  "DAC sans DSD : le PCM reste bit-perfect, la raison est affichée"_t);
+    }
+}
+
+//==============================================================================
+namespace
+{
+    /** A worst-case "EQ" for the tests: +6 dB everywhere (or unity, still "active"). */
+    struct TestGain final : nx::DspProcessor
+    {
+        explicit TestGain (double g) : gain (g) {}
+        juce::String getName() const override { return gain > 1.0 ? "Test EQ +6 dB" : "Test EQ 0 dB"; }
+        bool prepare (double, int, int) override { return true; }
+        void process (double* const* ch, int numCh, int n) noexcept override { for (int c = 0; c < numCh; ++c) for (int i = 0; i < n; ++i) ch[c][i] *= gain; }
+        double gain;
+    };
+    std::unique_ptr<nx::DspChain> testChain (double gain)
+    {
+        auto c = std::make_unique<nx::DspChain>();
+        c->processors.push_back (std::make_unique<TestGain> (gain));
+        return c;
+    }
+}
+
+NX_TEST_SECTION (119, "Sous-étape H : DSD -> DXD 64 bits -> DSP -> modulateur DSD (sortie DSD conservée)")
+{
+    // 1. the plan's rules
+    nx::StreamFormat dsd64; dsd64.kind = nx::SampleKind::Dsd; dsd64.sampleRate = 2822400.0; dsd64.numChannels = 2; dsd64.bitsPerSample = 1;
+    nx::StreamFormat dsd256 = dsd64; dsd256.sampleRate = 11289600.0;
+    nx::StreamFormat dsd6 = dsd64; dsd6.numChannels = 6;
+    nx::StreamFormat pcm; pcm.kind = nx::SampleKind::PcmInt; pcm.sampleRate = 44100.0; pcm.bitsPerSample = 24;
+    nx::DeviceCapabilities dop; dop.sampleRates = { 44100.0, 176400.0, 352800.0 }; dop.outputChannels = 2;
+    nx::DeviceCapabilities native = dop; native.nativeDsdRates = { 2822400.0, 5644800.0 };
+    nx::EngineSettings s;
+    s.dspNeedsPcm = true;
+    const auto a = nx::makePlan (dsd64, dop, s);
+    const auto b = nx::makePlan (dsd256, dop, s);           // DoP 705,6 kHz absent: DSD128
+    const auto c = nx::makePlan (dsd64, native, s);
+    s.channelMode = nx::ChannelMode::Stereo;
+    s.dspNeedsPcm = false;
+    const auto mix = nx::makePlan (dsd6, dop, s);           // 5.1 -> 2.0 needs DXD, the output stays DSD
+    s.channelMode = nx::ChannelMode::Auto;
+    s.dspNeedsPcm = true;
+    s.pcmToDsd = 64;
+    const auto p = nx::makePlan (pcm, dop, s);              // PCM -> DSD no longer paused by the DSP
+    s.pcmToDsd = 0;
+    s.keepDsdOutput = false;
+    const auto off = nx::makePlan (dsd64, dop, s);
+    using Cv = nx::PlaybackPlan::Conversion;
+    t.check (a.conversion == Cv::DsdRemodulate && a.wire == nx::WireFormat::DoP && a.deviceRate == 176400.0
+             && b.conversion == Cv::DsdRemodulate && b.conversionRate == 5644800.0 && b.deviceRate == 352800.0
+             && c.conversion == Cv::DsdRemodulate && c.wire == nx::WireFormat::NativeDsd && c.deviceRate == 2822400.0
+             && mix.conversion == Cv::DsdRemodulate && mix.downmix && mix.channels == 2 && mix.wire == nx::WireFormat::DoP
+             && p.conversion == Cv::PcmToDsd && p.wire == nx::WireFormat::DoP
+             && off.conversion == Cv::DsdToPcm && off.wire == nx::WireFormat::Pcm,
+             "plan : DSD + DSP -> remodulé (DoP / natif, DSD256 -> DSD128 si besoin), 5.1 -> 2.0 en DSD, PCM -> DSD avec DSP, option désactivée -> DXD"_t);
+
+    // decoded tone level of a DoP capture
+    auto dopToDsd = [] (const std::vector<int32_t>& got)
+    {
+        std::vector<uint8_t> dsd;
+        for (size_t i = 0; i + 1 < got.size(); i += 2)
+            for (int byteSel : { 16, 8 })
+                for (int ch = 0; ch < 2; ++ch) dsd.push_back ((uint8_t) ((uint32_t) got[i + (size_t) ch] >> byteSel));
+        return dsd;
+    };
+    auto toneLevel = [] (const std::vector<uint8_t>& dsd, double dsdRate, double freq)
+    {
+        nx::dsp::DsdToPcm back;
+        back.prepare (dsdRate, 352800.0, 2, 1.0);
+        const int bytes = (int) (dsd.size() / 2);
+        std::vector<double> pcmOut ((size_t) (back.maxOutputFor (bytes) + 8) * 2);
+        const int got = back.process (dsd.data(), bytes, pcmOut.data(), back.maxOutputFor (bytes));
+        int start = 0;
+        while (start < got && std::abs (pcmOut[(size_t) start * 2]) < 0.05) ++start;
+        const int from = start + 35280, len = 70560;
+        if (from + len > got) return 0.0;
+        double ss = 0, sc = 0;
+        for (int i = from; i < from + len; ++i)
+        {
+            const double ph = 2.0 * juce::MathConstants<double>::pi * freq * i / 352800.0;
+            ss += pcmOut[(size_t) i * 2] * std::sin (ph);
+            sc += pcmOut[(size_t) i * 2] * std::cos (ph);
+        }
+        return 2.0 * std::sqrt (ss * ss + sc * sc) / len;
+    };
+
+    // 2. a DSD64 file at SACD 0 dB through a +6 dB "EQ": DSD out (DoP), limited, never unstable, nothing allocated
+    {
+        const double sacd0 = 0.5;
+        auto dsf = t.tempDir.getChildFile ("h_eq.dsf");
+        writeDsf (dsf, dsdSine (2822400.0, 1.2, 2, 1000.0, sacd0), 2, 2822400.0, true);
+        EngineRig rig ([] (nx::CaptureBackend& cap) { cap.capabilities.sampleRates = { 44100.0, 176400.0 }; });
+        auto st = rig.engine->getSettings();
+        st.dspNeedsPcm = true;                                 // what the app sets while AURA DSP / Studio Tools are on
+        rig.engine->setSettings (st);
+        rig.engine->setDecoderDspChain (testChain (2.0));
+        rig.engine->setDspChain (testChain (2.0));            // the audio thread's copy (shown in the Signal Path)
+        rig.cap->renderFlag = &nxtest_countAllocations;
+        nxtest_allocationCount = 0;
+        nx::SignalPath path;
+        size_t maxLead = 0;
+        rig.engine->setQueue ({ EngineRig::item (dsf) }, 0, true);
+        rig.runToEnd (2048, 60.0, [&] (int block)
+        {
+            if (block == 40) path = rig.engine->getSignalPath();
+            if (block > 200) maxLead = juce::jmax (maxLead, rig.engine->getBufferedBytes());
+        }, 1u << 16);                                          // the decoder keeps only ~0.5 s ahead here
+        rig.cap->renderFlag = nullptr;
+        const double level = toneLevel (dopToDsd (rig.cap->capturedInt), 2822400.0, 1000.0);
+        bool conv = false, dspNode = false, modNode = false;
+        for (auto& n : path.nodes)
+        {
+            conv |= n.stage == "Conversion" && n.title.contains ("DXD");
+            dspNode |= n.stage == "DSP" && n.title.contains ("Test EQ");
+            modNode |= n.stage == "Modulateur" && n.title.contains ("DSD64");
+        }
+        const auto& stx = rig.engine->getStats();
+        const size_t leadLimit = (size_t) (176400.0 * 2.0 * 0.9) * 2 + 65536;     // 0.9 s of DoP bytes (+ one chunk)
+        t.check (rig.cap->config.wire == nx::WireFormat::DoP && rig.engine->getCurrentPlan().conversion == nx::PlaybackPlan::Conversion::DsdRemodulate
+                 && level > 0.43 && level < 0.455 && stx.modulatorResets.load() == 0 && stx.modulatorLimited.load() > 0
+                 && conv && dspNode && modNode && path.overall == nx::PathQuality::Enhanced && nxtest_allocationCount.load() == 0,
+                 "DSD64 à SACD 0 dB + EQ +6 dB -> DSD64 DoP : limiteur, crête "_t + juce::String (level, 3) + " (plafond 0,45), 0 réinitialisation, "
+                 + "chemin du signal DSD -> DXD -> DSP -> modulateur « Amélioré », 0 allocation sur le thread audio"_t);
+        t.check (maxLead > 0 && maxLead <= leadLimit,
+                 "DSP actif avant le modulateur : avance du décodeur limitée à "_t + juce::String ((double) maxLead / (176400.0 * 2.0 * 2.0), 2)
+                 + " s (au lieu de ~6 s) : un réglage d'EQ s'entend tout de suite"_t);
+    }
+
+    // 3. PCM -> DSD with the DSP on: the chain applies before the modulator (unity "EQ": the level of G, -9 dB SACD)
+    {
+        const int frames = (int) (44100 * 1.2);
+        std::vector<int32_t> pcmData ((size_t) frames * 2);
+        for (int i = 0; i < frames; ++i)
+            pcmData[(size_t) i * 2] = pcmData[(size_t) i * 2 + 1] = (int32_t) std::lround (0.5 * 8388607.0 * std::sin (2.0 * juce::MathConstants<double>::pi * 1000.0 * i / 44100.0)) * 256;
+        auto wav = t.tempDir.getChildFile ("h_pcm.wav");
+        writeWav (wav, &pcmData, nullptr, 2, 44100, 24, 24, false);
+        EngineRig rig ([] (nx::CaptureBackend& cap) { cap.capabilities.nativeDsdRates = { 2822400.0 }; });
+        auto st = rig.engine->getSettings();
+        st.dspNeedsPcm = true;
+        st.pcmToDsd = 64;
+        rig.engine->setSettings (st);
+        rig.engine->setDecoderDspChain (testChain (2.0));
+        rig.engine->setQueue ({ EngineRig::item (wav) }, 0, true);
+        rig.runToEnd (2048, 60.0, {}, 1u << 16);
+        const double level = toneLevel (rig.cap->capturedDsd, 2822400.0, 1000.0);
+        const double expected = 2.0 * 0.5 * 0.5 * std::pow (10.0, -3.0 / 20.0);      // -6 dBFS, +6 dB EQ, -3 dB margin
+        t.check (rig.cap->config.wire == nx::WireFormat::NativeDsd && std::abs (level - expected) < 0.004 && rig.engine->getStats().modulatorResets.load() == 0,
+                 "PCM -> DSD64 natif avec DSP actif (plus de pause) : EQ appliqué avant le modulateur, niveau "_t
+                 + juce::String (20.0 * std::log10 (level / 0.5), 2) + " dB SACD (attendu -3,0)"_t);
+    }
+
+    // 4. a 6-channel DSF on a stereo DoP DAC: ITU 5.1 -> 2.0 in DXD, then DSD again (no DSP involved)
+    {
+        auto dsf = t.tempDir.getChildFile ("h_six.dsf");
+        writeDsf (dsf, dsdSine (2822400.0, 1.2, 6, 1000.0, 0.2), 6, 2822400.0, true);   // channel c: phase c x 0.3 rad
+        EngineRig rig ([] (nx::CaptureBackend& cap) { cap.capabilities.sampleRates = { 44100.0, 176400.0 }; cap.capabilities.outputChannels = 2; });
+        rig.engine->setQueue ({ EngineRig::item (dsf) }, 0, true);
+        rig.runToEnd (2048);
+        const double level = toneLevel (dopToDsd (rig.cap->capturedInt), 2822400.0, 1000.0);
+        // left = g (FL + 0.707 C + 0.707 SL), FL / C / SL at phases 0, 0.6, 1.2 rad; DSD -> DSD keeps SACD scale, x margin
+        const double k = 0.70710678118654752, g = 1.0 / (1.0 + 2.0 * k);
+        const double mixAmp = g * std::abs (std::complex<double> (1.0) + k * std::polar (1.0, 0.6) + k * std::polar (1.0, 1.2));
+        const double expected = 0.2 * mixAmp * std::pow (10.0, -3.0 / 20.0);
+        t.check (rig.cap->config.wire == nx::WireFormat::DoP && rig.cap->config.numChannels == 2 && rig.engine->getCurrentPlan().downmix
+                 && rig.engine->getCurrentPlan().conversion == nx::PlaybackPlan::Conversion::DsdRemodulate && std::abs (level - expected) < 0.004,
+                 "DSF 6 canaux sur un DAC stéréo DoP : mixage ITU en DXD puis DSD64 en DoP, niveau gauche "_t + juce::String (level, 4)
+                 + " (attendu " + juce::String (expected, 4) + ")");
     }
 }

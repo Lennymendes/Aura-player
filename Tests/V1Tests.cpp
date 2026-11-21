@@ -386,12 +386,13 @@ NX_TEST_SECTION (111, "Moteur v1 : Memory Play (fichier en RAM) et Outils Studio
         Rig rig ([] (nx::CaptureBackend& c) { c.capabilities.sampleRates = { 44100.0, 88200.0, 176400.0, 352800.0 }; });
         auto st = rig.engine->getSettings();
         st.dspNeedsPcm = true;
+        st.keepDsdOutput = false;                       // "Garder la sortie DSD" off: the DXD output of before
         rig.engine->setSettings (st);
         rig.engine->setQueue ({ Rig::item (dsf) }, 0, true);
         nx::PlaybackPlan plan;
         rig.run ([&] (int b) { if (b == 3) plan = rig.engine->getCurrentPlan(); }, 2048);
         t.check (plan.wire == nx::WireFormat::Pcm && plan.conversion == nx::PlaybackPlan::Conversion::DsdToPcm && plan.reason.contains ("Outils Studio"),
-                 "DSD + outil actif : converti en PCM "_t + nx::formatRate (plan.deviceRate) + " (au lieu du DoP) pour que l'outil s'applique");
+                 "DSD + outil actif, sortie DSD non conservée : converti en PCM "_t + nx::formatRate (plan.deviceRate) + " pour que l'outil s'applique");
     }
 }
 

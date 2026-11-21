@@ -983,5 +983,18 @@
  "PCM -> DSD : le DAC n'accepte pas le DSD (ni natif ni DoP)": "PCM -> DSD: the DAC takes no DSD (neither native nor DoP)",
  "Sigma-delta 1 bit, ordre ": "1-bit sigma-delta, order ",
  ", 64 bits, marge ": ", 64-bit, headroom ",
- " dB, limiteur de crêtes (plafond -0,9 dB SACD)": " dB, peak limiter (ceiling -0.9 dB SACD)"
+ " dB, limiteur de crêtes (plafond -0,9 dB SACD)": " dB, peak limiter (ceiling -0.9 dB SACD)",
+ "DSD -> DXD 64 bits -> ": "DSD -> 64-bit DXD -> ",
+ "AURA DSP / Outils Studio -> ": "AURA DSP / Studio Tools -> ",
+ "mixage stéréo ITU -> ": "ITU stereo mix -> ",
+ "modulateur DSD": "DSD modulator",
+ " natif": " native",
+ " (sortie DSD conservée)": " (DSD output kept)",
+ "AURA DSP / Outils Studio en DXD 64 bits -> ": "AURA DSP / Studio Tools in 64-bit DXD -> ",
+ "Modulateur sigma-delta 1 bit en 64 bits flottants (DoP ou DSD natif). Si le DAC n'accepte pas la fréquence choisie, la suivante plus basse ; sans DSD, le PCM reste tel quel. AURA DSP / Outils Studio s'appliquent en DXD avant le modulateur.": "1-bit sigma-delta modulator in 64-bit floating point (DoP or native DSD). If the DAC does not take the chosen rate, the next lower one; without DSD, PCM stays as it is. AURA DSP / Studio Tools apply in DXD before the modulator.",
+ "Garder la sortie DSD pendant un traitement": "Keep the DSD output while processing",
+ "Source DSD avec AURA DSP / Outils Studio ou mixage 5.1 -> 2.0 : DSD -> DXD 64 bits -> traitement -> modulateur DSD (même ordre et même marge). Désactivé : sortie DXD (PCM 352,8 kHz).": "DSD source with AURA DSP / Studio Tools or a 5.1 -> 2.0 mix: DSD -> 64-bit DXD -> processing -> DSD modulator (same order and headroom). Off: DXD output (PCM 352.8 kHz).",
+ "FIR 64 bits, 150 dB (le DSD d'origine n'est plus transmis tel quel)": "64-bit FIR, 150 dB (the original DSD is no longer sent as is)",
+ "Sinc polyphase 64 bits, 160 dB": "64-bit polyphase sinc, 160 dB",
+ "64 bits en DXD, avant le modulateur": "64-bit in DXD, before the modulator"
 }

@@ -1807,7 +1807,10 @@ void SettingsPage::buildAudio()
         const int i = dsdTargets.indexOf (v);
         setEngine ([i] (EngineSettings& st) { st.pcmToDsd = i == 1 ? 64 : i == 2 ? 128 : i == 3 ? 256 : 0; });
     }), 36, "Modulateur sigma-delta 1 bit en 64 bits flottants (DoP ou DSD natif). Si le DAC n'accepte pas la fréquence choisie, la suivante plus basse ; "
-            "sans DSD, le PCM reste tel quel. Suspendu tant que les Outils Studio / AURA DSP sont actifs."_t);
+            "sans DSD, le PCM reste tel quel. AURA DSP / Outils Studio s'appliquent en DXD avant le modulateur."_t);
+    row ("Garder la sortie DSD pendant un traitement"_t, makeToggle (s.keepDsdOutput, [setEngine] (bool v) { setEngine ([v] (EngineSettings& st) { st.keepDsdOutput = v; }); }), 36,
+         "Source DSD avec AURA DSP / Outils Studio ou mixage 5.1 -> 2.0 : DSD -> DXD 64 bits -> traitement -> modulateur DSD (même ordre et même marge). "
+         "Désactivé : sortie DXD (PCM 352,8 kHz)."_t);
     const juce::StringArray orders { "7e ordre (bruit le plus bas)"_t, "5e ordre"_t };
     row ("Ordre du modulateur"_t, makeCombo (orders, orders[s.sdmOrder <= 5 ? 1 : 0], [setEngine, orders] (const juce::String& v)
     {

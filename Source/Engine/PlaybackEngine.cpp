@@ -43,6 +43,7 @@ PlaybackEngine::PlaybackEngine (std::unique_ptr<OutputBackend> b)
     : juce::Thread ("NX decoder"), backend (std::move (b)), ring (kRingBytes)
 {
     planar.assign ((size_t) 8 * maxBlock, 0.0);
+    decPlanar.assign ((size_t) 8 * 16384, 0.0);
     for (int c = 0; c < 8; ++c) planarPtrs[(size_t) c] = planar.data() + (size_t) c * maxBlock;
     rtBytes.assign ((size_t) maxBlock * 2 * 8, 0);
     rtTap.assign ((size_t) maxBlock * 2 * 8, 0.0f);
@@ -366,6 +367,16 @@ void PlaybackEngine::setDspChain (std::unique_ptr<DspChain> chain)
     pathChangedFlag = true;
 }
 
+void PlaybackEngine::setDecoderDspChain (std::unique_ptr<DspChain> chain)
+{
+    if (chain == nullptr) chain = std::make_unique<DspChain>();
+    auto* raw = chain.get();
+    chainStore.push_back (std::move (chain));
+    if (auto* never = pendingDecChain.exchange (raw))            // not picked up yet: no thread has it, drop it here
+        for (auto it = chainStore.begin(); it != chainStore.end(); ++it)
+            if (it->get() == never) { chainStore.erase (it); break; }
+}
+
 PlaybackPlan PlaybackEngine::getCurrentPlan() const
 {
     std::lock_guard<std::mutex> l (controlLock);
@@ -419,7 +430,15 @@ void PlaybackEngine::run()
             continue;
         }
 
-        const auto writable = (int) std::min<size_t> (ring.writable(), 1u << 20);
+        auto writable = (int) std::min<size_t> (ring.writable(), 1u << 20);
+        if (decHavePlan && decPlan.remodulates() && decoderDspOn())
+        {
+            // live DSP before the modulator: keep 0.5 s ahead only, so a change of EQ is heard at once
+            // (0.9 s while a cold DoP start waits for its 0.8 s of pre-roll)
+            const double seconds = coldPreroll.load (std::memory_order_relaxed) ? 0.9 : 0.5;
+            const auto lead = (size_t) (decPlan.ringUnitsPerSecond() * seconds) * (size_t) decPlan.ringFrameBytes();
+            writable = ring.readable() >= lead ? 0 : (int) std::min<size_t> ((size_t) writable, lead - ring.readable());
+        }
         if (writable < 16384)
         {
             wait (3);
@@ -671,6 +690,14 @@ void PlaybackEngine::preparePlanConverters (const PlaybackPlan& plan, bool keepS
         pcmToDsd = std::make_unique<dsp::PcmToDsd>();
         pcmToDsd->prepare (dxd, plan.conversionRate, plan.downmix ? 2 : ch, eff.sdmOrder, eff.pcmToDsdHeadroomDb);
     }
+    else if (plan.conversion == PlaybackPlan::Conversion::DsdRemodulate)
+    {
+        // DSD -> DXD with gain 2: SACD 0 dB becomes 1.0, the scale the modulator expects from PCM (it halves it back)
+        dsdConverter = std::make_unique<dsp::DsdToPcm>();
+        dsdConverter->prepare (plan.source.sampleRate, 352800.0, ch, 2.0, false);
+        pcmToDsd = std::make_unique<dsp::PcmToDsd>();
+        pcmToDsd->prepare (352800.0, plan.conversionRate, plan.downmix ? 2 : ch, eff.sdmOrder, eff.pcmToDsdHeadroomDb);
+    }
 
     // Only converted streams are shaped: a bit-perfect plan never goes through this stage.
     const bool converted = plan.conversion == PlaybackPlan::Conversion::DsdToPcm || plan.conversion == PlaybackPlan::Conversion::Resample;
@@ -766,7 +793,7 @@ int PlaybackEngine::produce (int writableBytes)
         writeAll (out, (size_t) frames * (size_t) outCh * 4);
     };
 
-    if (plan.conversion == PlaybackPlan::Conversion::PcmToDsd) return producePcmToDsd (maxOutFrames);
+    if (plan.remodulates()) return produceRemodulated (maxOutFrames);
 
     if (plan.wire != WireFormat::Pcm)
     {
@@ -785,7 +812,8 @@ int PlaybackEngine::produce (int writableBytes)
     switch (plan.conversion)
     {
         case PlaybackPlan::Conversion::PcmToDsd:     // handled above (a DSD wire)
-            return producePcmToDsd (maxOutFrames);
+        case PlaybackPlan::Conversion::DsdRemodulate:
+            return produceRemodulated (maxOutFrames);
 
         case PlaybackPlan::Conversion::None:
         {
@@ -845,43 +873,80 @@ int PlaybackEngine::produce (int writableBytes)
     return 0;
 }
 
-/** PCM source -> (DXD) -> modulator -> DSD bytes in the ring (DoP framing / native DSD happen at the output, as for
-    a DSD file). Decoder thread; every buffer is preallocated. Returns the source frames consumed. */
-int PlaybackEngine::producePcmToDsd (int maxOutFrames)
+/** PCM -> DSD and DSD -> DXD -> DSD, decoder thread: the source becomes DXD 352,8 kHz (64-bit doubles), then the
+    5.1 -> 2.0 mix, the decoder's DSP chain (AURA DSP, Studio Tools, plug-ins), the modulator, and DSD bytes go to
+    the ring (DoP framing / native DSD at the output, as for a DSF file). No allocation once the chain is prepared.
+    Returns the source units consumed (frames, or DSD bytes per channel). */
+int PlaybackEngine::produceRemodulated (int maxOutFrames)
 {
     const auto& plan = decPlan;
     const int srcCh = plan.source.numChannels;
     const int modCh = plan.downmix ? 2 : srcCh;
+    constexpr double dxd = 352800.0;
+
+    if (auto* p = pendingDecChain.exchange (nullptr))
+    {
+        if (decChain != nullptr) retiredDecChains.write (&decChain, 1);
+        decChain = p;
+    }
+    if (decChain != nullptr && (decChain->preparedRate != dxd || decChain->preparedChannels != modCh))
+        decChain->prepare (dxd, modCh, 16384);                                 // decoder thread, not the audio one
+
     const int bpf = pcmToDsd->getBytesPerInputFrame();
-    const double ratio = resampler != nullptr ? resampler->getRatio() : 1.0;
-    const int dxdBudget = juce::jmax (1, maxOutFrames / bpf - 4);
-    const int inFrames = juce::jlimit (1, kChunkFrames, (int) std::floor ((dxdBudget - 4) / ratio));
-    int n = 0;
-    if (plan.source.kind == SampleKind::PcmInt)
-    {
-        n = decoder->readInt (tmpInt.data(), inFrames);
-        for (int i = 0; i < n * srcCh; ++i) tmpDouble[(size_t) i] = tmpInt[(size_t) i] * (1.0 / 2147483648.0);
-    }
-    else n = decoder->readDouble (tmpDouble.data(), inFrames);
-    if (n <= 0) return 0;
+    const int dxdBudget = juce::jlimit (8, 8192, maxOutFrames / bpf - 4);
     double* dx = tmpDouble.data();
-    int nd = n;
-    if (resampler != nullptr)
+    int nd = 0, consumed = 0;
+    if (plan.source.isDsd())
     {
-        nd = resampler->process (tmpDouble.data(), n, tmpDouble2.data(), resampler->maxOutputFor (n));
-        dx = tmpDouble2.data();
+        const int bytesIn = juce::jmin (dxdBudget * dsdConverter->getBytesPerOutputSample(), kChunkFrames * 8);
+        consumed = decoder->readDsd (tmpBytes.data(), bytesIn);
+        if (consumed <= 0) return 0;
+        nd = dsdConverter->process (tmpBytes.data(), consumed, tmpDouble.data(), dsdConverter->maxOutputFor (consumed));
     }
+    else
+    {
+        const double ratio = resampler != nullptr ? resampler->getRatio() : 1.0;
+        const int inFrames = juce::jlimit (1, kChunkFrames, (int) std::floor ((dxdBudget - 4) / ratio));
+        if (plan.source.kind == SampleKind::PcmInt)
+        {
+            consumed = decoder->readInt (tmpInt.data(), inFrames);
+            for (int i = 0; i < consumed * srcCh; ++i) tmpDouble[(size_t) i] = tmpInt[(size_t) i] * (1.0 / 2147483648.0);
+        }
+        else consumed = decoder->readDouble (tmpDouble.data(), inFrames);
+        if (consumed <= 0) return 0;
+        nd = consumed;
+        if (resampler != nullptr)
+        {
+            nd = resampler->process (tmpDouble.data(), consumed, tmpDouble2.data(), resampler->maxOutputFor (consumed));
+            dx = tmpDouble2.data();
+        }
+    }
+    if (nd <= 0) return consumed;
     if (plan.downmix) foldToStereo (dx, nd, srcCh);
-    if (nd <= 0) return n;
+    if (decoderDspOn())
+    {
+        // planar, in place, then back to interleaved
+        std::array<double*, 8> ptr {};
+        for (int c = 0; c < modCh; ++c)
+        {
+            ptr[(size_t) c] = decPlanar.data() + (size_t) c * 16384;
+            for (int i = 0; i < nd; ++i) ptr[(size_t) c][i] = dx[(size_t) i * (size_t) modCh + (size_t) c];
+        }
+        decChain->process (ptr.data(), modCh, nd);
+        for (int c = 0; c < modCh; ++c)
+            for (int i = 0; i < nd; ++i) dx[(size_t) i * (size_t) modCh + (size_t) c] = ptr[(size_t) c][i];
+    }
     uint8_t* mod = tmpBytes.data() + tmpBytes.size() / 2;                      // second half: modulator output
     const int bytes = pcmToDsd->process (dx, nd, mod);
+    stats.modulatorLimited.fetch_add (std::exchange (pcmToDsd->limitedFrames, 0), std::memory_order_relaxed);
+    stats.modulatorResets.fetch_add (std::exchange (pcmToDsd->loopResets, 0), std::memory_order_relaxed);
     if (plan.channels == modCh && plan.identityRoute()) writeAll (mod, (size_t) bytes * (size_t) modCh);
     else
     {
         routeChannels (mod, tmpBytes.data(), bytes, modCh, plan.channels, plan.route, (uint8_t) kDsdIdle);
         writeAll (tmpBytes.data(), (size_t) bytes * (size_t) plan.channels);
     }
-    return n;
+    return consumed;
 }
 
 void PlaybackEngine::drainConverters()
@@ -892,7 +957,15 @@ void PlaybackEngine::drainConverters()
         const int srcCh = decPlan.source.numChannels, modCh = decPlan.downmix ? 2 : srcCh;
         std::vector<double> dx;
         int nd = 0;
-        if (resampler != nullptr)
+        if (dsdConverter != nullptr)
+        {
+            const int bytes = dsdConverter->getNumTaps() / 8 + 8;
+            std::vector<uint8_t> idle ((size_t) bytes * (size_t) srcCh, kDsdIdle);
+            dx.resize ((size_t) (dsdConverter->maxOutputFor (bytes) + 8) * (size_t) srcCh);
+            nd = dsdConverter->process (idle.data(), bytes, dx.data(), dsdConverter->maxOutputFor (bytes));
+            if (decPlan.downmix) foldToStereo (dx.data(), nd, srcCh);
+        }
+        else if (resampler != nullptr)
         {
             const int zeros = (int) std::ceil (resampler->getLatencyInputSamples()) + 2;
             std::vector<double> in ((size_t) zeros * (size_t) srcCh, 0.0);
@@ -909,6 +982,7 @@ void PlaybackEngine::drainConverters()
         routeChannels (mod.data(), out.data(), bytes, modCh, decPlan.channels, decPlan.route, (uint8_t) kDsdIdle);
         writeAll (out.data(), out.size());
         resampler.reset();
+        dsdConverter.reset();
         pcmToDsd.reset();
         return;
     }
@@ -1502,7 +1576,7 @@ void PlaybackEngine::monitorPlayback()
 void PlaybackEngine::timerCallback()
 {
     DspChain* retired = nullptr;
-    while (retiredChains.read (&retired, 1) == 1)
+    while (retiredChains.read (&retired, 1) == 1 || retiredDecChains.read (&retired, 1) == 1)
         for (auto it = chainStore.begin(); it != chainStore.end(); ++it)
             if (it->get() == retired) { chainStore.erase (it); break; }
 
@@ -1612,9 +1686,18 @@ SignalPath PlaybackEngine::getSignalPath() const
                                                                     : juce::String ("Polyphase 64 bits, 160 dB"), PathQuality::Enhanced);
             break;
         case PlaybackPlan::Conversion::PcmToDsd:
+        case PlaybackPlan::Conversion::DsdRemodulate:
         {
+            // the decoder's chain mirrors the audio thread's one (same processors): its state is shown from here
             const auto eff = getEffectiveSettings();
-            path.add ("Conversion", "PCM " + formatRate (src.sampleRate) + " -> DSD" + juce::String ((int) std::lround (plan.conversionRate / 44100.0)),
+            const auto dsdName = "DSD" + juce::String ((int) std::lround (plan.conversionRate / 44100.0));
+            if (plan.conversion == PlaybackPlan::Conversion::DsdRemodulate)
+                path.add ("Conversion", src.codec + " -> DXD 352,8 kHz", "FIR 64 bits, 150 dB (le DSD d'origine n'est plus transmis tel quel)"_t, PathQuality::Enhanced);
+            else if (src.sampleRate != 352800.0)
+                path.add ("Conversion", "PCM " + formatRate (src.sampleRate) + " -> DXD 352,8 kHz", "Sinc polyphase 64 bits, 160 dB"_t, PathQuality::Enhanced);
+            if (activeChain != nullptr && activeChain->isActive())
+                path.add ("DSP", activeChain->names().joinIntoString (" · "_t), "64 bits en DXD, avant le modulateur"_t, PathQuality::Enhanced);
+            path.add ("Modulateur", "DXD -> " + dsdName,
                       "Sigma-delta 1 bit, ordre "_t + juce::String (eff.sdmOrder <= 5 ? 5 : 7) + ", 64 bits, marge "_t
                           + juce::String (eff.pcmToDsdHeadroomDb, 0) + " dB, limiteur de crêtes (plafond -0,9 dB SACD)"_t,
                       PathQuality::Enhanced);

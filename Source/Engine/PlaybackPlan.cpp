@@ -73,6 +73,29 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
 
     if (src.isDsd())
     {
+        // Processing (DSP, 5.1 -> 2.0 mix) and DSD kept on the wire: DSD -> DXD 64 bits -> processing -> modulator,
+        // at the source's DSD rate or the next lower one the DAC takes
+        if ((s.dspNeedsPcm || p.downmix) && s.keepDsdOutput && ! s.freeEdition)
+        {
+            for (int mult = juce::jmin (256, (int) std::lround (src.sampleRate / 44100.0)); mult >= 64; mult /= 2)
+            {
+                const double rate = 2822400.0 * mult / 64;
+                const bool native = caps.nativeDsdRates.contains (rate) && s.dsdMode != DsdMode::DoP;
+                const bool dop = s.dopAllowed && supports (caps, rate / 16.0) && s.dsdMode != DsdMode::Native;
+                if (! native && ! dop) continue;
+                p.wire = native ? WireFormat::NativeDsd : WireFormat::DoP;
+                p.deviceRate = native ? rate : rate / 16.0;
+                p.ringBitsHint = native ? 1 : 24;
+                p.conversion = PlaybackPlan::Conversion::DsdRemodulate;
+                p.conversionRate = rate;
+                p.reason = "DSD -> DXD 64 bits -> "_t + (s.dspNeedsPcm ? juce::String ("AURA DSP / Outils Studio -> "_t) : juce::String())
+                           + (p.downmix ? juce::String ("mixage stéréo ITU -> "_t) : juce::String())
+                           + "modulateur DSD"_t + juce::String (mult) + (native ? " natif"_t : " en DoP "_t + formatRate (p.deviceRate))
+                           + " (sortie DSD conservée)"_t;
+                return p;
+            }
+        }
+
         // a stereo mix of a multichannel DSD stream can only be computed in PCM (DXD)
         const bool nativeOk = ! s.dspNeedsPcm && ! p.downmix && caps.nativeDsdRates.contains (src.sampleRate);
         const bool dopOk = ! s.dspNeedsPcm && ! p.downmix && s.dopAllowed && supports (caps, src.sampleRate / 16.0);
@@ -126,9 +149,7 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
     juce::String dsdNote;
     if (s.pcmToDsd >= 64 && ! s.freeEdition)
     {
-        if (s.dspNeedsPcm) dsdNote = " · "_t + "PCM -> DSD suspendu : les Outils Studio / AURA DSP agissent en PCM"_t;
-        else
-        {
+        {   // AURA DSP / Studio Tools, when on, run before the modulator (decoder thread)
             for (int mult = juce::jmin (256, s.pcmToDsd); mult >= 64; mult /= 2)
             {
                 const double rate = 2822400.0 * mult / 64;
@@ -140,7 +161,7 @@ PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, 
                 p.ringBitsHint = native ? 1 : 24;
                 p.conversion = PlaybackPlan::Conversion::PcmToDsd;
                 p.conversionRate = rate;
-                p.reason = "Modulateur PCM -> DSD"_t + juce::String (mult) + " (sigma-delta 1 bit, ordre "_t + juce::String (s.sdmOrder <= 5 ? 5 : 7)
+                p.reason = (s.dspNeedsPcm ? "AURA DSP / Outils Studio en DXD 64 bits -> "_t : juce::String()) + "Modulateur PCM -> DSD"_t + juce::String (mult) + " (sigma-delta 1 bit, ordre "_t + juce::String (s.sdmOrder <= 5 ? 5 : 7)
                            + ", marge "_t + juce::String (s.pcmToDsdHeadroomDb, 0) + " dB)" + (native ? " en DSD natif"_t : " en DoP "_t + formatRate (p.deviceRate))
                            + (mult < s.pcmToDsd ? " · "_t + "DSD"_t + juce::String (s.pcmToDsd) + " non accepté par le DAC"_t : juce::String()) + foldNote;
                 return p;
