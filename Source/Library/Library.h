@@ -170,8 +170,13 @@ public:
 
     /** Stores artwork bytes in the cache (content-addressed) and returns its key. */
     juce::String storeArtwork (const juce::MemoryBlock& image, const juce::String& mime);
-    /** cover / folder / front / albumart (.jpg .jpeg .png .webp), any case, in the album folder. Empty file when none. */
-    static juce::File findFolderCover (const juce::File& albumFolder);
+    /** The cover next to a track (.jpg .jpeg .png .webp, any case). In order: cover / folder / front / albumart / album,
+        "Cover (front)"-like names, the album's own name, the only image of the folder; then the Scans / Artwork / Covers
+        subfolders; then, for a disc folder (CD1, Disc 2...), the album folder above. Empty file when none. */
+    static juce::File findFolderCover (const juce::File& trackFolder, const juce::String& albumName = {});
+    /** Play time / Aura Remote: a local track still without artwork gets its embedded picture or folder cover, saved
+        for its folder in the library. Returns the key (empty when there is really none). */
+    juce::String resolveMissingArtwork (const TrackInfo& t);
     /** Gives every local track without artwork the cover found in its folder. Returns the number of tracks updated. */
     /** Metadata editor, one track: title, artist, number (the files are not touched; a rescan keeps the values). */
     int updateTrack (juce::int64 id, const juce::String& title, const juce::String& artist, int trackNumber);

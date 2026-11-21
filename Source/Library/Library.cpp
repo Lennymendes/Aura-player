@@ -780,22 +780,69 @@ juce::String Library::storeArtwork (const juce::MemoryBlock& image, const juce::
     return key;
 }
 
-juce::File Library::findFolderCover (const juce::File& folder)
+juce::File Library::findFolderCover (const juce::File& trackFolder, const juce::String& albumName)
 {
-    // by priority: cover, folder, front, albumart, album
-    static const char* names[] = { "cover", "folder", "front", "albumart", "album" };
-    juce::File best;
-    int bestRank = 99;
-    for (const auto& e : juce::RangedDirectoryIterator (folder, false, "*", juce::File::findFiles))
+    const auto album = albumName.trim().toLowerCase();
+    // rank of one image in a folder (lower is better, 99 = not a cover name)
+    auto rankOf = [&album] (const juce::String& baseName)
     {
-        const auto f = e.getFile();
-        const auto ext = f.getFileExtension().toLowerCase();
-        if (ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp") continue;
-        const auto base = f.getFileNameWithoutExtension().toLowerCase();
-        for (int i = 0; i < 5; ++i)
-            if (base == names[i] && i < bestRank) { best = f; bestRank = i; }
+        static const char* exact[] = { "cover", "folder", "front", "albumart", "album" };
+        for (int i = 0; i < 5; ++i) if (baseName == exact[i]) return i;
+        for (auto* p : { "cover", "front", "folder" })                 // "Cover (front)", "front cover", "folder_hq"
+            if (baseName.startsWith (p) || baseName.endsWith (p)) return 10;
+        if (album.isNotEmpty() && baseName == album) return 11;
+        if (baseName.startsWith ("albumart")) return 12;               // AlbumArtSmall, AlbumArt_{GUID}_Large
+        return 99;
+    };
+    auto inFolder = [&rankOf] (const juce::File& folder, bool anySingle)
+    {
+        juce::File best;
+        int bestRank = 99, images = 0;
+        juce::File only;
+        for (const auto& e : juce::RangedDirectoryIterator (folder, false, "*", juce::File::findFiles))
+        {
+            const auto f = e.getFile();
+            const auto ext = f.getFileExtension().toLowerCase();
+            if (ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp") continue;
+            ++images; only = f;
+            const auto r = rankOf (f.getFileNameWithoutExtension().toLowerCase());
+            if (r < bestRank || (r == bestRank && f.getFileName() < best.getFileName())) { best = f; bestRank = r; }
+        }
+        if (bestRank < 99) return best;
+        return anySingle && images == 1 ? only : juce::File();         // one picture in an album folder: it is the cover
+    };
+    auto inAlbumFolder = [&] (const juce::File& folder)
+    {
+        if (! folder.isDirectory()) return juce::File();
+        if (auto f = inFolder (folder, true); f.existsAsFile()) return f;
+        for (auto* sub : { "scans", "artwork", "covers", "cover", "images" })
+            for (const auto& e : juce::RangedDirectoryIterator (folder, false, "*", juce::File::findDirectories))
+                if (e.getFile().getFileName().toLowerCase() == sub)
+                    if (auto f = inFolder (e.getFile(), false); f.existsAsFile()) return f;
+        return juce::File();
+    };
+    if (auto f = inAlbumFolder (trackFolder); f.existsAsFile()) return f;
+    // multi-disc rips: Album/CD1/01.flac with the cover in Album/
+    const auto name = trackFolder.getFileName().toLowerCase().removeCharacters (" _-.");
+    for (const juce::String disc : { "cd", "disc", "disk" })
+        if (name.startsWith (disc) && name.length() > disc.length() && name.substring (disc.length()).containsOnly ("0123456789"))
+            return inFolder (trackFolder.getParentDirectory(), false);
+    return {};
+}
+
+juce::String Library::resolveMissingArtwork (const TrackInfo& t)
+{
+    if (t.artworkKey.isNotEmpty()) return t.artworkKey;
+    if (t.source != "local" || t.id <= 0) return {};
+    const juce::File file (t.externalId.isNotEmpty() ? t.externalId : t.uri);
+    TrackInfo fresh;
+    if (! file.existsAsFile() || ! readLocalTrack (file, *this, fresh) || fresh.artworkKey.isEmpty()) return {};
+    {   // the album (and Aura Remote's album grid) takes its cover from any of its tracks
+        std::lock_guard<std::recursive_mutex> l (db.getMutex());
+        SqliteStatement u (db, "UPDATE tracks SET artwork = ?2 WHERE id = ?1");
+        u.bind (1, t.id).bind (2, fresh.artworkKey).execute();
     }
-    return best;
+    return fresh.artworkKey;
 }
 
 int Library::updateAlbum (const juce::String& artist, const juce::String& album, const juce::String& newAlbum,
@@ -916,7 +963,7 @@ bool readLocalTrack (const juce::File& file, Library& library, TrackInfo& t)
         t.artworkKey = library.storeArtwork (tags.picture, tags.pictureMime);
     else
     {
-        const auto img = Library::findFolderCover (file.getParentDirectory());
+        const auto img = Library::findFolderCover (file.getParentDirectory(), t.album);
         if (img.existsAsFile())
         {
             juce::MemoryBlock mb;

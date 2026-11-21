@@ -980,6 +980,16 @@ void AppController::onTrackChanged()
                      : t->source == "local" ? t->externalId : lib.getOfflineCopy (*t);
         if (analysisPath.isNotEmpty()) trackScan->request (analysisPath);
     }
+    if (const auto* t = currentTrack(); t != nullptr && ! externalPlaying && t->artworkKey.isEmpty())
+    {
+        // no cover yet (embedded picture or folder image added after the scan, CD1/ folder...): look now, keep it
+        if (const auto key = lib.resolveMissingArtwork (*t); key.isNotEmpty())
+        {
+            const auto id = t->id;
+            for (auto& q : queueTracks) if (q.id == id && q.artworkKey.isEmpty()) q.artworkKey = key;
+            lib.notifyChanged();
+        }
+    }
     if (auto* m = getMainComponent()) m->trackChanged();
     if (miniWindow) miniWindow->getMini().trackChanged();
     if (overlayWindow) overlayWindow->getOverlay().trackChanged();
@@ -1316,13 +1326,7 @@ juce::MemoryBlock AppController::remoteArtwork (const juce::String& requested, i
         key = {};
         if (auto t = lib.getTrack (requested.fromFirstOccurrenceOf (":", false, false).getLargeIntValue()))
         {
-            if (t->artworkKey.isNotEmpty()) key = t->artworkKey;
-            else if (t->source == "local")
-            {
-                TrackInfo fresh;
-                const juce::File file (t->uri);
-                if (file.existsAsFile() && readLocalTrack (file, lib, fresh)) key = fresh.artworkKey;
-            }
+            key = lib.resolveMissingArtwork (*t);         // same search as at play time, and remembered
         }
     }
     if (key.isEmpty()) return {};

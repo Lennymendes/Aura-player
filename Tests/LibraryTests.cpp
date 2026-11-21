@@ -807,3 +807,55 @@ NX_TEST_SECTION (209, "Hors-ligne : téléchargement depuis le NAS / Jellyfin ve
     t.check (dl.enqueue (remote) == 0, "déjà hors-ligne : pas de second téléchargement"_t);
     t.check (lib.getFolders().contains (folder.getFullPathName()), "dossier de téléchargement surveillé par la bibliothèque"_t);
 }
+
+//==============================================================================
+NX_TEST_SECTION (212, "Sous-étape C : pochettes du dossier (noms, sous-dossiers, CD1/CD2, à la lecture et pour Aura Remote)")
+{
+    auto img = [] (const juce::File& f)
+    {
+        f.getParentDirectory().createDirectory();
+        juce::Image im (juce::Image::RGB, 32, 32, true);
+        juce::FileOutputStream out (f);
+        out.setPosition (0); out.truncate();
+        if (f.hasFileExtension ("png")) juce::PNGImageFormat().writeImageToStream (im, out);
+        else juce::JPEGImageFormat().writeImageToStream (im, out);
+    };
+    const auto root = t.tempDir.getChildFile ("covers212");
+    root.deleteRecursively();
+    auto found = [] (const juce::File& folder, const juce::String& album = {}) { return nx::Library::findFolderCover (folder, album).getFileName(); };
+
+    img (root.getChildFile ("a/Cover (Front).PNG"));  img (root.getChildFile ("a/back.jpg"));
+    img (root.getChildFile ("b/Neon Roads.jpg"));     img (root.getChildFile ("b/booklet.jpg"));
+    img (root.getChildFile ("c/IMG_0042.jpg"));
+    img (root.getChildFile ("d/one.jpg"));            img (root.getChildFile ("d/two.jpg"));
+    img (root.getChildFile ("e/Scans/Front.jpg"));    root.getChildFile ("e/x.txt").create();
+    img (root.getChildFile ("f/folder.jpg"));         root.getChildFile ("f/CD 2").createDirectory();   root.getChildFile ("f/CD Extras").createDirectory();
+    img (root.getChildFile ("g/cover.jpg"));          img (root.getChildFile ("g/front.jpg"));
+    t.check (found (root.getChildFile ("a")) == "Cover (Front).PNG" && found (root.getChildFile ("b"), "Neon Roads") == "Neon Roads.jpg"
+             && found (root.getChildFile ("c")) == "IMG_0042.jpg" && found (root.getChildFile ("d")).isEmpty()
+             && found (root.getChildFile ("e")) == "Front.jpg" && found (root.getChildFile ("f/CD 2")) == "folder.jpg"
+             && found (root.getChildFile ("f/CD Extras")).isEmpty() && found (root.getChildFile ("g")) == "cover.jpg",
+             "pochette du dossier : « Cover (Front) », nom de l'album, image seule, Scans/, CD 2 -> dossier parent, cover avant front"_t);
+
+    // a track scanned before its cover existed (CD1 folder, cover added in the album folder): found at play time, kept
+    nx::Library lib;
+    juce::String err;
+    lib.openInMemory (t.tempDir.getChildFile ("art212"), err);
+    const auto cd1 = root.getChildFile ("Album/CD1");
+    cd1.createDirectory();
+    writeWavInts (cd1.getChildFile ("01.wav"), randomPcm (1000, 2, 16, 3), 2, 44100, 16, 16, false);
+    lib.addFolder (root.getChildFile ("Album"));
+    nx::LibraryScanner scanner (lib);
+    scanner.scanFolderNow (root.getChildFile ("Album"));
+    auto tracks = lib.getTracks ("artist", 10);
+    const bool noneAtScan = tracks.size() == 1 && tracks[0].artworkKey.isEmpty();
+    img (root.getChildFile ("Album/cover.jpg"));
+    const auto key = tracks.empty() ? juce::String() : lib.resolveMissingArtwork (tracks[0]);
+    const auto again = tracks.empty() ? std::optional<nx::TrackInfo>() : lib.getTrack (tracks[0].id);
+    const auto albums = lib.getAlbums ("added", 10, {});
+    t.check (noneAtScan && key.isNotEmpty() && again && again->artworkKey == key && albums.size() == 1 && albums[0].artworkKey == key
+             && lib.getArtworkFile (key).existsAsFile(),
+             "à la lecture (et pour Aura Remote) : pochette ajoutée après le scan trouvée, gardée pour le morceau et l'album"_t
+             + " [" + juce::String ((int) tracks.size()) + (noneAtScan ? "n" : "-") + (key.isNotEmpty() ? "k" : "-")
+             + (again && again->artworkKey == key ? "t" : "-") + juce::String ((int) albums.size()) + "]");
+}
