@@ -1411,10 +1411,16 @@ NX_TEST_SECTION (116, "Sous-étape A : DAC qui ne cadence plus (reprise complèt
 
     // 5. during playback (after the start watch), a DAC that stops asking for buffers for 600 ms is written in audio.log
     {
+        // 4 s of music: whatever the speed of the machine, the track is still playing when the stall comes
+        const auto longPcm = randomPcm (96000 * 4, 2, 24, 4243u);
+        auto longWav = t.tempDir.getChildFile ("stall_long.wav");
+        writeWav (longWav, &longPcm, nullptr, 2, 96000, 24, 24, false);
         EngineRig rig ([] (nx::CaptureBackend& cap) { cap.realtime = true; });
         rig.engine->startPatienceMs = 150;
-        rig.engine->setQueue ({ EngineRig::item (wav) }, 0, true);
-        const auto logBefore = nx::audioLogFile().loadFileAsString().length();
+        rig.engine->setQueue ({ EngineRig::item (longWav) }, 0, true);
+        // a unique mark: the log may be trimmed meanwhile (512 KB cap), an offset would not survive that
+        const auto mark = "test: repere blocage " + juce::String (juce::Random::getSystemRandom().nextInt64());
+        nx::audioLog (mark);
         const auto t0 = juce::Time::getMillisecondCounter();
         bool paused = false;
         while (juce::Time::getMillisecondCounter() - t0 < 8000)
@@ -1430,8 +1436,8 @@ NX_TEST_SECTION (116, "Sous-étape A : DAC qui ne cadence plus (reprise complèt
             }
             juce::Thread::sleep (5);
         }
-        const auto added = nx::audioLogFile().loadFileAsString().substring (logBefore);
-        t.check (paused && added.contains ("blocage du DAC, aucun buffer demande pendant"),
+        const auto added = nx::audioLogFile().loadFileAsString().fromLastOccurrenceOf (mark, false, false);
+        t.check (paused && rig.engine->getState() == nx::PlaybackEngine::State::Playing && added.contains ("blocage du DAC, aucun buffer demande pendant"),
                  "audio.log : un blocage du DAC en cours de lecture est noté avec sa durée, la position et le ring"_t);
     }
 }
