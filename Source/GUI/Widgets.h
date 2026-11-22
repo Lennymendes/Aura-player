@@ -29,6 +29,30 @@ private:
     AppContext& ctx;
 };
 
+/** Explanation of an advanced feature (the "+" buttons of AURA DSP and Settings › Audio), translated. */
+struct Explainer { juce::String title, what, gain, limits; };
+/** Ids: e9ds, dxd, crossfeed, headroom, hpeq, rate, fades, pcmdsd, keepdsd. Empty title for an unknown id. */
+Explainer explainer (const juce::String& id);
+juce::StringArray explainerIds();
+
+/** Small round "+" next to a feature: opens a popover with what it does, what it brings, its limits. */
+class InfoButton : public juce::Button
+{
+public:
+    InfoButton (AppContext& c, juce::String id);
+    void paintButton (juce::Graphics& g, bool hi, bool down) override;
+    void clicked() override;
+    const juce::String id;
+    static constexpr int size = 18;
+    /** Tests: the popover last opened (null once closed). */
+    static juce::Component* lastPopover();
+private:
+    AppContext& ctx;
+};
+
+/** Heart of the track being played (Now Playing, immersive view): filled accent when it is a favourite. */
+void syncHeart (IconButton& heart, const TrackInfo* track);
+
 class ArtworkView : public juce::Component, private juce::ChangeListener
 {
 public:

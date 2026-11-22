@@ -103,6 +103,8 @@ public:
     SettingsWindow& getSettingsWindow() { return settingsWindow; }
     OnboardingWizard& getOnboarding() { return onboarding; }
     ImmersiveView& getImmersive() { return immersive; }
+    NowPlayingPage& getNowPlaying() { return nowPlaying; }
+    void favouriteChanged() { nowPlaying.favouriteChanged(); immersive.favouriteChanged(); }
     ListingPage& getListing() { return listing; }
     int rememberedScroll (const PageRequest& r) const { auto it = scrollMemory.find (viewKey (r)); return it == scrollMemory.end() ? 0 : it->second; }
     PageRequest getCurrentPage() const { return current; }

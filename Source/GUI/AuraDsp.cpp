@@ -310,6 +310,12 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
         setView (View::Parametric);
     };
     e9ds.onClick = [this] { e9Changed (true); setView (View::E9ds); };
+    for (auto [row, id] : std::initializer_list<std::pair<int, const char*>> { { Headroom, "headroom" }, { Conversion, "dxd" }, { Crossfeed, "crossfeed" },
+                                                                            { HeadphoneEq, "hpeq" }, { E9ds, "e9ds" } })
+    {
+        infos.emplace_back (row, std::make_unique<InfoButton> (ctx, id));
+        addAndMakeVisible (*infos.back().second);
+    }
     for (auto* sl : { &e9Focus, &e9Amount })
     {
         sl->setSliderStyle (juce::Slider::LinearHorizontal);
@@ -617,6 +623,13 @@ void AuraDspPanel::resized()
     left = p.removeFromLeft (juce::jmin (340, p.getWidth() / 3));
     juce::ToggleButton* toggles[] = { nullptr, &headroom, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds };
     for (int r = 1; r < numRows; ++r) toggles[r]->setBounds (rowBounds (r).removeFromRight (52).withSizeKeepingCentre (48, 28));
+    for (auto& [r, b] : infos)
+    {
+        // "+" right after the row's title (first half of the row, see drawRow)
+        auto row = rowBounds (r);
+        const int x = row.getX() + 30 + (int) style::textWidth (style::font (14.5f, true), tr (juce::String::fromUTF8 (rowTitles[r]))) + 6;
+        b->setBounds (x, row.getY() + row.getHeight() / 2 + 2 - 17, InfoButton::size, InfoButton::size);
+    }
     p.removeFromLeft (22);
     right = p;
     auto rr = right;

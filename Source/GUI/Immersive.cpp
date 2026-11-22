@@ -185,8 +185,11 @@ ImmersiveView::ImmersiveView (AppContext& c)
     : ctx (c), artwork (c, 1600), lyricsView (c), waveform (c), overlaySlot (c, "immersive.overlay"),
       closeButton (style::Icon::Close, "Quitter la vue immersive (Échap)"_t, c),
       menuButton (style::Icon::Grid, "Widgets de la vue immersive"_t, c),
-      prevButton (style::Icon::Previous, "Précédent"_t, c), playButton (style::Icon::Play, "Lecture / pause"_t, c), nextButton (style::Icon::Next, "Suivant"_t, c)
+      prevButton (style::Icon::Previous, "Précédent"_t, c), playButton (style::Icon::Play, "Lecture / pause"_t, c), nextButton (style::Icon::Next, "Suivant"_t, c),
+      favButton (style::Icon::HeartOutline, "Ajouter aux favoris / retirer"_t, c)
 {
+    favButton.onClick = [this] { ctx.toggleCurrentFavourite(); };
+    addChildComponent (favButton);
     artwork.cornerRadius = 18.0f;
     for (auto* comp : std::initializer_list<juce::Component*> { &artwork, &lyricsView, &waveform, &overlaySlot, &closeButton, &menuButton, &prevButton, &playButton, &nextButton })
         addAndMakeVisible (comp);
@@ -245,7 +248,25 @@ void ImmersiveView::trackChanged()
     artwork.setArtwork (t != nullptr ? t->artworkKey : juce::String(), t != nullptr ? (t->album.isNotEmpty() ? t->album : t->title) : juce::String ("NX"));
     waveform.setAnalysis (ctx.currentAnalysis());   // the scan itself is requested by the controller
     updatePalette();
+    favouriteChanged();
     repaint();
+}
+
+void ImmersiveView::favouriteChanged()
+{
+    syncHeart (favButton, ctx.currentTrack());
+    placeHeart();
+}
+
+void ImmersiveView::placeHeart()
+{
+    // next to the title line of paint(): after its end when centred, after the text when left-aligned
+    const auto* t = ctx.currentTrack();
+    if (t == nullptr || infoArea.isEmpty()) return;
+    const bool centred = config.layout != "split" || ! config.lyrics;
+    const int w = juce::jmin ((int) style::textWidth (style::font (30.0f, true), t->title), infoArea.getWidth() - 80);
+    const int x = centred ? infoArea.getCentreX() + w / 2 + 10 : infoArea.getX() + w + 10;
+    favButton.setBounds (juce::jmin (x, infoArea.getRight() - 34), infoArea.getY() + 3, 34, 34);
 }
 
 void ImmersiveView::updatePalette()
@@ -364,6 +385,7 @@ void ImmersiveView::resized()
         techArea = config.tech ? info.removeFromTop (40) : juce::Rectangle<int>();
         metersArea = (config.vu || config.spectrum) ? juce::Rectangle<int> (getWidth() - 260, getHeight() - 260, 220, 90) : juce::Rectangle<int>();
     }
+    placeHeart();
 }
 
 void ImmersiveView::paintMeters (juce::Graphics& g, juce::Rectangle<float> r)
@@ -415,7 +437,8 @@ void ImmersiveView::paint (juce::Graphics& g)
     {
         g.setColour (juce::Colours::white);
         g.setFont (style::font (30.0f, true));
-        g.drawText (tr->title, info.removeFromTop (40), just, true);
+        auto line = info.removeFromTop (40);
+        g.drawText (tr->title, centred ? line.withSizeKeepingCentre (infoArea.getWidth() - 80, 40) : line.withWidth (infoArea.getWidth() - 80), just, true);
         g.setColour (juce::Colours::white.withAlpha (0.75f));
         g.setFont (style::font (18.0f));
         g.drawText (tr->displayArtist() + (tr->album.isNotEmpty() ? " — "_t + tr->album : juce::String()), info.removeFromTop (28), just, true);

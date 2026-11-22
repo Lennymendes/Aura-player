@@ -129,6 +129,10 @@ private:
     int e9Ticks = 0;
     juce::Rectangle<int> left, right;
     juce::Rectangle<int> e9Meter;
+    std::vector<std::pair<int, std::unique_ptr<InfoButton>>> infos;   // row, its "+"
+public:
+    InfoButton* infoFor (const juce::String& id) { for (auto& [r, b] : infos) if (b->id == id) return b.get(); return nullptr; }
+private:
     void e9Changed (bool persist);
 };
 

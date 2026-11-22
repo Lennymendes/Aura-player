@@ -485,6 +485,45 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         return colourVariety (img);
     };
 
+    // shown in the (off-screen) window: it and all its parents visible (isShowing() needs a desktop peer)
+    auto shownInMain = [&] (juce::Component* c)
+    {
+        for (; c != nullptr && c != main; c = c->getParentComponent()) if (! c->isVisible()) return false;
+        return c == main;
+    };
+    // "+" buttons: find one by id anywhere in the window, open its popover, close it
+    auto findInfo = [&] (const juce::String& id)
+    {
+        nx::InfoButton* found = nullptr;
+        std::function<void (juce::Component*)> walk = [&] (juce::Component* c)
+        {
+            if (auto* b = dynamic_cast<nx::InfoButton*> (c); b != nullptr && b->id == id && shownInMain (b)) found = b;
+            for (auto* k : c->getChildren()) walk (k);
+        };
+        walk (main);
+        return found;
+    };
+    auto closePopover = [&]
+    {
+        if (auto* p = nx::InfoButton::lastPopover())
+            if (auto* box = p->findParentComponentOfClass<juce::CallOutBox>()) box->dismiss();
+        settle (200);
+    };
+    auto openInfo = [&] (const juce::String& id)
+    {
+        auto* b = findInfo (id);
+        if (b == nullptr) return false;
+        if (auto* page = b->findParentComponentOfClass<nx::ScrollPage>())       // bring the row into view first
+        {
+            page->setScrollY (juce::jmax (0, b->getY() - 260));
+            settle (100);
+        }
+        b->triggerClick();
+        settle (150);
+        auto* p = nx::InfoButton::lastPopover();
+        return p != nullptr && p->findParentComponentOfClass<juce::CallOutBox>() != nullptr && p->getHeight() > 120;
+    };
+
     app.navigate ({ nx::PageId::Home });
     t.check (shoot ("01_accueil") > 60, "Accueil (grille, ajouts récents, spectre)"_t);
     app.navigate ({ nx::PageId::Albums });
@@ -514,6 +553,24 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     settle (300);
     t.check (app.currentTrack() != nullptr && app.currentTrack()->title.contains ("Night"), "lecture lancée depuis l'interface : "_t + (app.currentTrack() ? app.currentTrack()->title : juce::String()));
     t.check (shoot ("04_en_cours_paroles") > 60, "En cours : pochette, paroles synchronisées, chemin du signal"_t);
+    {
+        // Patch 21 V2: heart next to the title in Now Playing, in step with the player bar, the library and the lists
+        auto& np = main->getNowPlaying();
+        const auto id = app.currentTrack()->id;
+        const bool before = app.currentTrack()->favourite;
+        const bool shown = shownInMain (&np.favButton) && np.favButton.getX() > 0;
+        np.favButton.triggerClick();
+        settle (150);
+        auto inFavourites = [&] { for (auto& f : app.library().getFavouriteTracks()) if (f.id == id) return true; return false; };
+        const bool added = app.currentTrack()->favourite != before && np.favButton.active == app.currentTrack()->favourite
+                           && main->player.favButton.active == app.currentTrack()->favourite && inFavourites() == app.currentTrack()->favourite;
+        shoot ("04c_en_cours_coeur");
+        app.library().setFavourite (id, before);            // as a click on a list's heart does
+        settle (100);
+        const bool synced = np.favButton.active == before && main->player.favButton.active == before && app.currentTrack()->favourite == before;
+        t.check (shown && added && synced, "En cours : cœur à droite du titre, ajout / retrait en un clic, synchronisé avec la barre de lecture, la page Favoris et les listes"_t
+                 + " [" + juce::String ((int) shown) + juce::String ((int) added) + juce::String ((int) synced) + "]");
+    }
     main->player.setWaveformShown (true);
     for (int i = 0; i < 60 && app.currentAnalysis() == nullptr; ++i) settle (50);
     shoot ("04b_barre_forme_onde");
@@ -776,6 +833,32 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
 
     app.navigate ({ nx::PageId::Settings });
     t.check (shoot ("09_reglages") > 30, "Réglages (sortie, DSD, paroles, téléchargements)"_t);
+    {
+        bool all = true;
+        juce::String missing;
+        for (auto* id : { "rate", "fades", "pcmdsd", "keepdsd" }) if (findInfo (id) == nullptr) { all = false; missing << id << " "; }
+        const bool opened = openInfo ("pcmdsd");
+        shoot ("09b_reglages_explication");
+        closePopover();
+        t.check (all && opened && nx::InfoButton::lastPopover() == nullptr,
+                 "Réglages › Audio : « + » sur Fréquence de sortie, Micro-fondus, PCM -> DSD / XZ Automatic, Garder la sortie DSD ; fenêtre ouverte puis fermée"_t
+                 + (missing.isNotEmpty() ? " [" + missing + "]" : juce::String()));
+        // the texts: three points each, all translated to English
+        const auto english = juce::JSON::parse (juce::String::fromUTF8 (NXData::en_json, NXData::en_jsonSize));
+        bool complete = true, translated = true;
+        juce::String untranslated;
+        for (auto& id : nx::explainerIds())
+        {
+            const auto e = nx::explainer (id);
+            complete = complete && e.title.isNotEmpty() && e.what.length() > 40 && e.gain.length() > 30 && e.limits.length() > 30;
+            for (auto& str : { e.what, e.gain, e.limits })
+                if (! english.hasProperty (juce::Identifier (str))) { translated = false; untranslated << id << " "; }
+        }
+        for (auto* head : { "CE QUE ÇA FAIT", "GAIN RÉEL À L'ÉCOUTE", "COMPROMIS / LIMITES" })
+            if (! english.hasProperty (juce::Identifier (juce::String::fromUTF8 (head)))) { translated = false; untranslated << head << " "; }
+        t.check (complete && translated, "explications « + » : 9 fiches (ce que ça fait, gain à l'écoute, compromis), toutes traduites en anglais"_t
+                 + (untranslated.isNotEmpty() ? " [" + untranslated + "]" : juce::String()));
+    }
     app.plugins().setUiPluginEnabled ("nx.analog-vu", true);
     app.navigate ({ nx::PageId::NowPlaying });
     t.check (shoot ("10_vu_metres") > 60, "plug-in VU-mètres dans « En cours »"_t);
@@ -1047,6 +1130,12 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
                             && app.engine().getSettings().dspNeedsPcm;
             settle (100);
             shoot ("46d_aura_dsp_e9ds");
+            bool infos = true;
+            for (auto* id : { "headroom", "dxd", "crossfeed", "hpeq", "e9ds" }) infos = infos && dsp.infoFor (id) != nullptr && shownInMain (dsp.infoFor (id));
+            const bool e9Info = openInfo ("e9ds");
+            shoot ("46e_aura_dsp_explication_e9ds");
+            closePopover();
+            t.check (infos && e9Info, "AURA DSP : « + » sur Headroom, Conversion DXD, Crossfeed, Égaliseur casque, E9DS ; fenêtre E9DS en 3 points"_t);
             dsp.e9Split.triggerClick();
             dsp.e9ds.triggerClick();
             settle (60);
@@ -1756,6 +1845,21 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     t.check (main->isImmersive() && main->getImmersive().getPalette().size() == 4 && main->getImmersive().hasWaveform(),
              "vue immersive : 4 couleurs extraites de la pochette, forme d'onde calculée"_t);
     t.check (shoot ("29_vue_immersive") > 60, "vue immersive (fond animé, pochette HD, paroles, forme d'onde)"_t);
+    if (app.currentTrack() != nullptr)
+    {
+        auto& heart = main->getImmersive().favButton;
+        const bool before = app.currentTrack()->favourite;
+        const bool shown = shownInMain (&heart);
+        heart.triggerClick();
+        settle (150);
+        const bool toggled = app.currentTrack()->favourite != before && heart.active == ! before && main->player.favButton.active == ! before
+                             && main->getNowPlaying().favButton.active == ! before;
+        shoot ("29b_vue_immersive_coeur");
+        heart.triggerClick();
+        settle (150);
+        t.check (shown && toggled && app.currentTrack()->favourite == before, "vue immersive : cœur près du titre, synchronisé avec la barre de lecture et « En cours »"_t
+                 + " [" + juce::String ((int) shown) + juce::String ((int) toggled) + "]");
+    }
     {
         auto folder = app.userDataDirectory().getChildFile ("Themes/immersive-test.nxtheme");
         folder.createDirectory();

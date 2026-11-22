@@ -200,7 +200,11 @@ AppController::AppController (Options options)
     lib.onFavouriteChanged = [this] (juce::int64 id, bool fav)
     {
         for (auto& q : queueTracks) if (q.id == id) q.favourite = fav;
-        if (auto* m = getMainComponent()) m->player.syncTransportButtons();
+        if (auto* m = getMainComponent())
+        {
+            m->player.syncTransportButtons();
+            m->favouriteChanged();          // hearts of Now Playing and the immersive view
+        }
     };
     lib.onChanged = [this]
     {

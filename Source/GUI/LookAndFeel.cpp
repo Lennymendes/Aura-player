@@ -135,6 +135,16 @@ void NXLookAndFeel::drawPopupMenuBackground (juce::Graphics& g, int w, int h)
     g.drawRect (0, 0, w, h);
 }
 
+void NXLookAndFeel::drawCallOutBoxBackground (juce::CallOutBox&, juce::Graphics& g, const juce::Path& path, juce::Image&)
+{
+    // popovers ("+" explanations, Aura Remote): the theme's surface, a thin border, a soft shadow
+    juce::DropShadow (juce::Colours::black.withAlpha (0.45f), 18, { 0, 6 }).drawForPath (g, path);
+    g.setColour (theme.surface());
+    g.fillPath (path);
+    g.setColour (theme.border());
+    g.strokePath (path, juce::PathStrokeType (1.0f));
+}
+
 void NXLookAndFeel::drawTooltip (juce::Graphics& g, const juce::String& text, int w, int h)
 {
     g.setColour (theme.surface());

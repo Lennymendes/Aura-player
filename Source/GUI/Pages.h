@@ -148,7 +148,9 @@ private:
     void row (const juce::String& label, juce::Component* control, int height = 36, const juce::String& help = {});
     void fullRow (juce::Component* control, int height);   // a component across the whole width (banners)
     juce::OwnedArray<juce::Component> owned;
-    struct Row { juce::String label, help; juce::Component* control = nullptr; int height = 36; bool isSection = false, full = false; };
+    struct Row { juce::String label, help; juce::Component* control = nullptr; int height = 36; bool isSection = false, full = false; juce::Component* info = nullptr; };
+    /** "+" after the label of the last row: opens explainer (id). */
+    void explain (const juce::String& id);
     std::vector<Row> layoutRows;
     struct Labels : juce::Component { SettingsPage& p; explicit Labels (SettingsPage& s) : p (s) { setInterceptsMouseClicks (false, false); } void paint (juce::Graphics&) override; };
     Labels labels { *this };

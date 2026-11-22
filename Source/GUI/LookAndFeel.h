@@ -27,6 +27,7 @@ public:
     void drawPopupMenuBackground (juce::Graphics&, int w, int h) override;
     juce::Font getPopupMenuFont() override { return style::font (14.0f); }
     void drawTooltip (juce::Graphics&, const juce::String& text, int w, int h) override;
+    void drawCallOutBoxBackground (juce::CallOutBox&, juce::Graphics&, const juce::Path&, juce::Image&) override;
 
 private:
     Theme theme;

@@ -1012,3 +1012,149 @@ void drawPageTitle (juce::Graphics& g, const Theme& t, juce::Rectangle<int> r, c
 }
 
 } // namespace nx
+
+namespace nx
+{
+
+//==============================================================================
+// "+" explanations (AURA DSP, Settings › Audio)
+//==============================================================================
+juce::StringArray explainerIds() { return { "e9ds", "dxd", "crossfeed", "headroom", "hpeq", "rate", "fades", "pcmdsd", "keepdsd" }; }
+
+Explainer explainer (const juce::String& id)
+{
+    if (id == "e9ds")
+        return { "E9DS",
+                 "Baisse automatiquement les sibilances (« s », « ch ») ou les aigus durs autour de la fréquence choisie, seulement quand ils ressortent trop. Le reste du spectre ne bouge pas."_t,
+                 "Masters modernes très brillants et voix proches du micro moins fatigants, surtout au casque ou sur un tweeter vif."_t,
+                 "Tant qu'il est actif, plus de bit-perfect ; une source DSD passe par le DXD 64 bits. Sous le seuil, la sortie reste identique à l'entrée au bit près."_t };
+    if (id == "dxd")
+        return { "Conversion de fréquence (DXD)"_t,
+                 "Suréchantillonne le PCM vers 352,8 / 384 kHz avec un filtre sinc polyphase 64 bits, avant le DAC."_t,
+                 "Utile avec un DAC dont le filtre interne est moyen à 44,1 / 48 kHz : le filtrage se fait ici, plus raide et plus propre. Sans effet sur un DAC qui suréchantillonne déjà très bien."_t,
+                 "Plus de bit-perfect, charge CPU un peu plus haute ; le DAC change de fréquence moins souvent (toujours 352,8 ou 384 kHz)."_t };
+    if (id == "crossfeed")
+        return { "Crossfeed",
+                 "Mélange un peu de chaque voie dans l'autre, filtré et retardé comme à l'écoute sur enceintes (Bauer bs2b 700 Hz / 4,5 dB)."_t,
+                 "Au casque : moins de fatigue sur les vieux mixages très séparés (jazz, rock des années 60), image recentrée devant soi."_t,
+                 "Inutile sur enceintes ; stéréo un peu moins large ; plus de bit-perfect tant qu'il est actif."_t };
+    if (id == "headroom")
+        return { "Gestion du headroom"_t,
+                 "Baisse le niveau juste ce qu'il faut avant les égaliseurs pour que leurs bosses ne dépassent jamais 0 dBFS."_t,
+                 "Aucune saturation numérique quand un EQ remonte des basses ou des aigus, même sur des masters déjà au maximum."_t,
+                 "Le volume baisse de la valeur de la plus grande bosse : à compenser au volume de l'ampli. Sans effet si aucun EQ n'est actif."_t };
+    if (id == "hpeq")
+        return { "Égaliseur casque"_t,
+                 "Corrige la courbe de réponse d'un casque mesuré pour la rapprocher d'une cible neutre (profils intégrés, 64 bits)."_t,
+                 "Casques colorés (basses gonflées, pic dans les aigus) : timbres plus justes, voix plus naturelles."_t,
+                 "Valable pour le modèle choisi seulement ; plus de bit-perfect ; le headroom baisse un peu le niveau."_t };
+    if (id == "rate")
+        return { "Fréquence de sortie"_t,
+                 "Auto suit la fréquence du morceau, sauf en sortie sans fil (Bluetooth, AirPlay) où la fréquence réglée par le système est gardée. « Toujours suivre la source » et « Fixe » forcent l'un ou l'autre."_t,
+                 "Enceinte ou casque Bluetooth : plus de coupures ni de pops entre deux morceaux de fréquences différentes."_t,
+                 "Fréquence fixe : les morceaux d'une autre fréquence sont convertis (sinc 64 bits), donc plus de bit-perfect pour eux."_t };
+    if (id == "fades")
+        return { "Micro-fondus (10 ms)"_t,
+                 "Ajoute un fondu de 10 ms au démarrage, à la pause, à l'arrêt, au saut de piste, au déplacement et au changement de fréquence."_t,
+                 "Plus de « pop » ni de clic aux coupures, surtout audible au casque et sur les DAC qui se recalent."_t,
+                 "Jamais entre deux morceaux enchaînés sans blanc (gapless intact). Désactivé : bit-perfect strict dès le premier échantillon."_t };
+    if (id == "pcmdsd")
+        return { "Conversion PCM -> DSD · XZ Automatic"_t,
+                 "Transforme le PCM en DSD 1 bit (modulateur sigma-delta 64 bits, ordre 5 ou 7). XZ Automatic choisit le taux selon la source : 44,1 kHz -> DSD64 ; 48 / 88,2 / 176,4 kHz -> DSD128 ; 96 kHz et plus -> DSD256."_t,
+                 "Avec un DAC qui sonne mieux en DSD Direct (chemin 1 bit sans filtre PCM) : présentation souvent plus fluide et aérée."_t,
+                 "Plus de bit-perfect ; CPU d'un cœur : ~12 % en DSD64, ~21 % en DSD128, ~39 % en DSD256. Pas de gapless entre deux taux DSD différents (fondu de 10 ms). Repli automatique au taux maximum du DAC."_t };
+    if (id == "keepdsd")
+        return { "Garder la sortie DSD"_t,
+                 "Une source DSD qui doit être traitée (AURA DSP, mixage 5.1 -> 2.0) passe en DXD 64 bits puis repasse en DSD au lieu de sortir en PCM."_t,
+                 "Le DAC reste sur son chemin DSD : utile si vous le préférez en DSD Direct."_t,
+                 "Le DSD d'origine n'est plus transmis tel quel (remodulé) ; charge CPU du modulateur ; un réglage d'EQ s'entend avec ~0,5 s de délai."_t };
+    return {};
+}
+
+namespace
+{
+    juce::Component::SafePointer<juce::Component> openPopover;
+
+    /** The popover: title, then the three points, in the theme's colours. */
+    struct ExplainerView : juce::Component
+    {
+        ExplainerView (AppContext& c, Explainer e) : ctx (c), text (std::move (e))
+        {
+            setWantsKeyboardFocus (true);
+            setSize (width, (int) std::ceil (layout().getHeight()) + 2 * pad);
+        }
+        juce::TextLayout layout() const
+        {
+            const auto& t = ctx.theme();
+            juce::AttributedString as;
+            as.setWordWrap (juce::AttributedString::byWord);
+            as.setLineSpacing (1.5f);
+            as.append (text.title + "\n", style::font (15.0f, true), t.textCol());
+            auto point = [&] (const juce::String& head, const juce::String& body)
+            {
+                as.append ("\n" + head + "\n", style::font (12.0f, true), t.accent());
+                as.append (body + "\n", style::font (13.0f), t.textCol().withAlpha (0.88f));
+            };
+            point ("CE QUE ÇA FAIT"_t, text.what);
+            point ("GAIN RÉEL À L'ÉCOUTE"_t, text.gain);
+            point ("COMPROMIS / LIMITES"_t, text.limits);
+            juce::TextLayout tl;
+            tl.createLayout (as, (float) (width - 2 * pad));
+            return tl;
+        }
+        void paint (juce::Graphics& g) override { layout().draw (g, getLocalBounds().reduced (pad).toFloat()); }
+        bool keyPressed (const juce::KeyPress& k) override
+        {
+            if (k != juce::KeyPress::escapeKey) return false;
+            if (auto* box = findParentComponentOfClass<juce::CallOutBox>()) box->dismiss();
+            return true;
+        }
+        static constexpr int width = 340, pad = 14;
+        AppContext& ctx;
+        Explainer text;
+    };
+}
+
+InfoButton::InfoButton (AppContext& c, juce::String i) : juce::Button ("+"), id (std::move (i)), ctx (c)
+{
+    setTooltip ("En savoir plus"_t);
+    setTitle ("En savoir plus : "_t + explainer (id).title);
+    setWantsKeyboardFocus (false);
+    setSize (size, size);
+}
+
+void InfoButton::paintButton (juce::Graphics& g, bool hi, bool down)
+{
+    const auto& t = ctx.theme();
+    auto r = getLocalBounds().toFloat().reduced (1.5f);
+    const auto c = hi || down ? t.accent() : t.textDim();
+    if (hi || down) { g.setColour (t.accent().withAlpha (0.15f)); g.fillEllipse (r); }
+    g.setColour (c);
+    g.drawEllipse (r, 1.2f);
+    const auto m = r.getCentre();
+    const float a = r.getWidth() * 0.24f;
+    g.drawLine (m.x - a, m.y, m.x + a, m.y, 1.4f);
+    g.drawLine (m.x, m.y - a, m.x, m.y + a, 1.4f);
+}
+
+void InfoButton::clicked()
+{
+    auto view = std::make_unique<ExplainerView> (ctx, explainer (id));
+    openPopover = view.get();
+    auto* top = getTopLevelComponent();
+    auto& box = juce::CallOutBox::launchAsynchronously (std::move (view), top->getLocalArea (this, getLocalBounds()), top);
+    box.setArrowSize (8.0f);
+    if (openPopover != nullptr) openPopover->grabKeyboardFocus();
+}
+
+juce::Component* InfoButton::lastPopover() { return openPopover.getComponent(); }
+
+void syncHeart (IconButton& heart, const TrackInfo* track)
+{
+    const bool fav = track != nullptr && track->favourite;
+    heart.setVisible (track != nullptr);
+    heart.setIcon (fav ? style::Icon::Heart : style::Icon::HeartOutline);
+    if (heart.active != fav) { heart.active = fav; heart.repaint(); }
+}
+
+} // namespace nx

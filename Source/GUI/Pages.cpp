@@ -1524,6 +1524,14 @@ void SettingsPage::row (const juce::String& label, juce::Component* control, int
     layoutRows.push_back (r);
 }
 
+void SettingsPage::explain (const juce::String& id)
+{
+    auto* b = new InfoButton (ctx, id);
+    owned.add (b);
+    contentComp.addAndMakeVisible (b);
+    layoutRows.back().info = b;
+}
+
 juce::StringArray SettingsPage::tabIds() { return { "audio", "bibliotheque", "interface", "remote", "outils", "apropos" }; }
 juce::StringArray SettingsPage::tabLabels()
 {
@@ -1802,6 +1810,7 @@ void SettingsPage::buildAudio()
             ctx.applyEngineSettings();
         }), 36, "Un DAC filaire suit la fréquence de chaque morceau (bit-perfect). Une sortie Bluetooth ou AirPlay garde la fréquence réglée par le système : "
                 "chaque changement renégocie la liaison (pops, coupures) ; Aura convertit alors en 64 bits."_t);
+        explain ("rate");
         row ("Micro-fondus aux transitions (10 ms)"_t, makeToggle (s.transitionFades, [this] (bool v)
         {
             auto st = ctx.engine().getSettings();
@@ -1810,6 +1819,7 @@ void SettingsPage::buildAudio()
             ctx.applyEngineSettings();
         }), 36, "Supprime les pops au démarrage, à la pause, à l'arrêt, au saut de piste, au déplacement et au changement de fréquence. "
                 "Jamais entre deux morceaux enchaînés sans blanc. Désactivé : bit-perfect strict dès le premier échantillon."_t);
+        explain ("fades");
     }
 
     // PCM -> DSD remodulation
@@ -1830,9 +1840,11 @@ void SettingsPage::buildAudio()
     }), 36, "Modulateur sigma-delta 1 bit en 64 bits flottants (DoP ou DSD natif). XZ Automatic : 44,1 kHz -> DSD64, 48 / 88,2 / 176,4 kHz -> DSD128, "
             "96 kHz et plus -> DSD256. Si le DAC n'accepte pas la fréquence choisie, la suivante plus basse ; "
             "sans DSD, le PCM reste tel quel. AURA DSP / Outils Studio s'appliquent en DXD avant le modulateur."_t);
+    explain ("pcmdsd");
     row ("Garder la sortie DSD pendant un traitement"_t, makeToggle (s.keepDsdOutput, [setEngine] (bool v) { setEngine ([v] (EngineSettings& st) { st.keepDsdOutput = v; }); }), 36,
          "Source DSD avec AURA DSP / Outils Studio ou mixage 5.1 -> 2.0 : DSD -> DXD 64 bits -> traitement -> modulateur DSD (même ordre et même marge). "
          "Désactivé : sortie DXD (PCM 352,8 kHz)."_t);
+    explain ("keepdsd");
     const juce::StringArray orders { "7e ordre (bruit le plus bas)"_t, "5e ordre"_t };
     row ("Ordre du modulateur"_t, makeCombo (orders, orders[s.sdmOrder <= 5 ? 1 : 0], [setEngine, orders] (const juce::String& v)
     {
@@ -2158,6 +2170,9 @@ void SettingsPage::layoutContent (int width)
         auto rowArea = juce::Rectangle<int> (pad, y, inner, r.height + (r.help.isNotEmpty() ? 20 : 0));
         if (r.control != nullptr)
             r.control->setBounds (rowArea.getRight() - controlW, y, controlW, r.height);
+        if (r.info != nullptr)
+            r.info->setBounds (pad + juce::jmin ((int) style::textWidth (style::font (14.0f), r.label) + 8, rowArea.getWidth() - controlW - 40),
+                               y + (r.height - InfoButton::size) / 2, InfoButton::size, InfoButton::size);
         painted.push_back ({ rowArea.withTrimmedRight (r.control != nullptr ? controlW + 20 : 0), r });
         y += rowArea.getHeight() + 10;
     }

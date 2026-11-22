@@ -55,8 +55,13 @@ public:
     void setLyrics (const Lyrics& l, const juce::String& status = {}) { lyricsView.statusText = status; lyricsView.setLyrics (l); resized(); }
     void refreshPlugins() { pluginSlot.refreshPlugins(); resized(); }
     bool showLyrics = true;
+    void favouriteChanged();
 private:
     AppContext& ctx;
+public:
+    IconButton favButton;                  // heart right of the title (follows the library)
+private:
+    void placeHeart();
     ArtworkView artwork;
     LyricsView lyricsView;
     SignalPathView signalPath;

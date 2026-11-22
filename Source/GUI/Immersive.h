@@ -87,6 +87,11 @@ private:
     WaveformBar waveform;
     PluginSlot overlaySlot;
     IconButton closeButton, menuButton, prevButton, playButton, nextButton;
+public:
+    IconButton favButton;                  // heart next to the title (follows the library)
+    void favouriteChanged();
+private:
+    void placeHeart();
     std::vector<juce::Colour> palette;
     juce::String paletteKey;
     juce::Image field, blurredArt;

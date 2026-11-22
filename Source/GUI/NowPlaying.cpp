@@ -230,8 +230,11 @@ void LyricsView::paint (juce::Graphics& g)
 
 //==============================================================================
 NowPlayingPage::NowPlayingPage (AppContext& c)
-    : ctx (c), artwork (c, 1024), lyricsView (c), signalPath (c, true), pluginSlot (c, "nowplaying.side")
+    : ctx (c), favButton (style::Icon::HeartOutline, "Ajouter aux favoris / retirer"_t, c),
+      artwork (c, 1024), lyricsView (c), signalPath (c, true), pluginSlot (c, "nowplaying.side")
 {
+    favButton.onClick = [this] { ctx.toggleCurrentFavourite(); };
+    addChildComponent (favButton);
     artwork.cornerRadius = 16.0f;
     addAndMakeVisible (artwork);
     addAndMakeVisible (lyricsView);
@@ -247,7 +250,24 @@ void NowPlayingPage::trackChanged()
     else
         artwork.setArtwork ({}, "NX");
     signalPath.refresh();
+    favouriteChanged();
     repaint();
+}
+
+void NowPlayingPage::favouriteChanged()
+{
+    syncHeart (favButton, ctx.currentTrack());
+    placeHeart();
+}
+
+void NowPlayingPage::placeHeart()
+{
+    // right after the centred title (same font as paint), clamped inside the info area
+    const auto* t = ctx.currentTrack();
+    if (t == nullptr || infoArea.isEmpty()) return;
+    const int w = juce::jmin ((int) style::textWidth (style::font (24.0f, true), t->title), infoArea.getWidth() - 72);
+    const int x = juce::jmin (infoArea.getCentreX() + w / 2 + 8, infoArea.getRight() - 30);
+    favButton.setBounds (x, infoArea.getY() + 2, 28, 28);
 }
 
 void NowPlayingPage::resized()
@@ -262,6 +282,7 @@ void NowPlayingPage::resized()
     artwork.setBounds (left.removeFromTop (art).withSizeKeepingCentre (art, art));
     left.removeFromTop (10);
     infoArea = left.removeFromTop (74);
+    placeHeart();
     left.removeFromTop (12);
     signalPath.setVisible (true);
     signalPath.setBounds (left.removeFromTop (juce::jmin (left.getHeight(), pathH)));
@@ -283,7 +304,7 @@ void NowPlayingPage::paint (juce::Graphics& g)
     {
         g.setColour (t.textCol());
         g.setFont (style::font (24.0f, true));
-        g.drawText (tr->title, r.removeFromTop (32), juce::Justification::centred, true);
+        g.drawText (tr->title, r.removeFromTop (32).withSizeKeepingCentre (infoArea.getWidth() - 72, 32), juce::Justification::centred, true);
         g.setColour (t.textDim());
         g.setFont (style::font (16.0f));
         g.drawText (tr->displayArtist() + (tr->album.isNotEmpty() ? " — "_t + tr->album : juce::String()), r.removeFromTop (22), juce::Justification::centred, true);
