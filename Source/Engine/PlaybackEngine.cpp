@@ -44,6 +44,7 @@ PlaybackEngine::PlaybackEngine (std::unique_ptr<OutputBackend> b)
 {
     planar.assign ((size_t) 8 * maxBlock, 0.0);
     decPlanar.assign ((size_t) 8 * 16384, 0.0);
+    remodHold.assign ((size_t) 8 * (size_t) (transitionFadeMs * 0.001 * 352800.0), 0.0);
     for (int c = 0; c < 8; ++c) planarPtrs[(size_t) c] = planar.data() + (size_t) c * maxBlock;
     rtBytes.assign ((size_t) maxBlock * 2 * 8, 0);
     rtTap.assign ((size_t) maxBlock * 2 * 8, 0.0f);
@@ -596,11 +597,11 @@ bool PlaybackEngine::openItem (int index, double startSeconds, bool flush)
     plan.fileBytes = sacd::isVirtualUri (item.uri) ? 0 : juce::File::isAbsolutePath (item.uri) ? juce::File (item.uri).getSize() : 0;
 
     const bool sameWire = decHavePlan && plan.sameWire (decPlan);
-    if (! flush && ! sameWire) drainConverters();
-
     const bool keepState = ! flush && sameWire && decPlan.conversion == plan.conversion
                            && decPlan.source.sampleRate == plan.source.sampleRate
                            && decPlan.conversionRate == plan.conversionRate;
+    if (! flush && sameWire) releaseHeld (! keepState);   // gapless join: as is; a new modulator: faded out first
+    if (! flush && ! sameWire) drainConverters();          // faded out there, with the converters' tail
     preparePlanConverters (plan, keepState);
 
     if (startSeconds > 0.0)
@@ -659,6 +660,7 @@ void PlaybackEngine::preparePlanConverters (const PlaybackPlan& plan, bool keepS
     if (keepState) return;
     // a DSD output cannot be faded after the modulator: fresh starts fade in in DXD, before it
     remodFadeIn = getEffectiveSettings().transitionFades ? (int) (transitionFadeMs * 0.001 * 352800.0) : 0;
+    remodHeld = 0;                               // a flush drops them; a track change released them before
     dsdConverter.reset();
     resampler.reset();
     pcmToDsd.reset();
@@ -953,8 +955,32 @@ int PlaybackEngine::produceRemodulated (int maxOutFrames)
             for (int c = 0; c < modCh; ++c) dx[(size_t) i * (size_t) modCh + (size_t) c] *= g;
         }
     }
+    // the last 10 ms stay held: (held + new) minus 10 ms go to the modulator, in order
+    const int hold = (int) (remodHold.size() / 8);
+    const int out = remodHeld + nd - hold;
+    if (out <= 0)
+    {
+        std::copy (dx, dx + (size_t) nd * (size_t) modCh, remodHold.data() + (size_t) remodHeld * (size_t) modCh);
+        remodHeld += nd;
+        return consumed;
+    }
+    const int fromHold = juce::jmin (remodHeld, out), fromNew = out - fromHold;
+    modulateOut (remodHold.data(), fromHold);
+    modulateOut (dx, fromNew);
+    const int kept = remodHeld - fromHold;
+    std::copy (remodHold.data() + (size_t) fromHold * (size_t) modCh, remodHold.data() + (size_t) remodHeld * (size_t) modCh, remodHold.data());
+    std::copy (dx + (size_t) fromNew * (size_t) modCh, dx + (size_t) nd * (size_t) modCh, remodHold.data() + (size_t) kept * (size_t) modCh);
+    remodHeld = hold;
+    return consumed;
+}
+
+void PlaybackEngine::modulateOut (const double* dx, int frames) noexcept
+{
+    if (frames <= 0) return;
+    const auto& plan = decPlan;
+    const int modCh = plan.downmix ? 2 : plan.source.numChannels;
     uint8_t* mod = tmpBytes.data() + tmpBytes.size() / 2;                      // second half: modulator output
-    const int bytes = pcmToDsd->process (dx, nd, mod);
+    const int bytes = pcmToDsd->process (dx, frames, mod);
     stats.modulatorLimited.fetch_add (std::exchange (pcmToDsd->limitedFrames, 0), std::memory_order_relaxed);
     stats.modulatorResets.fetch_add (std::exchange (pcmToDsd->loopResets, 0), std::memory_order_relaxed);
     if (plan.channels == modCh && plan.identityRoute()) writeAll (mod, (size_t) bytes * (size_t) modCh);
@@ -963,7 +989,25 @@ int PlaybackEngine::produceRemodulated (int maxOutFrames)
         routeChannels (mod, tmpBytes.data(), bytes, modCh, plan.channels, plan.route, (uint8_t) kDsdIdle);
         writeAll (tmpBytes.data(), (size_t) bytes * (size_t) plan.channels);
     }
-    return consumed;
+}
+
+void PlaybackEngine::releaseHeld (bool fadeOut, double* tail, int tailFrames)
+{
+    if (! decHavePlan || pcmToDsd == nullptr) { remodHeld = 0; return; }
+    const int modCh = decPlan.downmix ? 2 : decPlan.source.numChannels;
+    const int total = remodHeld + tailFrames;
+    if (fadeOut && total > 0 && getEffectiveSettings().transitionFades)
+    {
+        // raised cosine 1 -> 0 over the held 10 ms and the converter's tail after them (the caller modulates the tail)
+        for (int i = 0; i < total; ++i)
+        {
+            const double g = 0.5 + 0.5 * std::cos (juce::MathConstants<double>::pi * (double) (i + 1) / total);
+            double* f = i < remodHeld ? remodHold.data() + (size_t) i * (size_t) modCh : tail + (size_t) (i - remodHeld) * (size_t) modCh;
+            for (int c = 0; c < modCh; ++c) f[c] *= g;
+        }
+    }
+    modulateOut (remodHold.data(), remodHeld);
+    remodHeld = 0;
 }
 
 void PlaybackEngine::drainConverters()
@@ -990,6 +1034,7 @@ void PlaybackEngine::drainConverters()
             nd = resampler->process (in.data(), zeros, dx.data(), resampler->maxOutputFor (zeros));
             if (decPlan.downmix) foldToStereo (dx.data(), nd, srcCh);
         }
+        releaseHeld (true, dx.data(), nd);       // end of the queue or a new plan: the last 10 ms fade out
         const int tail = pcmToDsd->getLatencyInputFrames();
         dx.resize ((size_t) (nd + tail) * (size_t) juce::jmax (srcCh, modCh), 0.0);
         std::fill (dx.begin() + (std::ptrdiff_t) ((size_t) nd * (size_t) modCh), dx.end(), 0.0);
@@ -1753,8 +1798,13 @@ SignalPath PlaybackEngine::getSignalPath() const
                 path.add ("Conversion", "PCM " + formatRate (src.sampleRate) + " -> DXD 352,8 kHz", "Sinc polyphase 64 bits, 160 dB"_t, PathQuality::Enhanced);
             if (activeChain != nullptr && activeChain->isActive())
                 path.add ("DSP", activeChain->names().joinIntoString (" · "_t), "64 bits en DXD, avant le modulateur"_t, PathQuality::Enhanced);
-            path.add ("Modulateur", "DXD -> " + dsdName,
-                      "Sigma-delta 1 bit, ordre "_t + juce::String (eff.sdmOrder <= 5 ? 5 : 7) + ", 64 bits, marge "_t
+            const int active = (int) std::lround (plan.conversionRate / 44100.0);
+            const juce::String xz = plan.xzAuto ? "XZ Automatic : "_t + formatRate (src.sampleRate) + " -> DSD" + juce::String (plan.dsdTarget)
+                                                     + (active < plan.dsdTarget ? ", "_t + dsdName + " (limite du DAC)"_t : juce::String()) + " · "
+                                              : plan.dsdTarget > active ? "DSD"_t + juce::String (plan.dsdTarget) + " demandé, "_t + dsdName + " (limite du DAC) · "_t
+                                                                        : juce::String();
+            path.add ("Modulateur", "DXD -> " + dsdName + (plan.xzAuto ? " · XZ Automatic" : ""),
+                      xz + "Sigma-delta 1 bit, ordre "_t + juce::String (eff.sdmOrder <= 5 ? 5 : 7) + ", 64 bits, marge "_t
                           + juce::String (eff.pcmToDsdHeadroomDb, 0) + " dB, limiteur de crêtes (plafond -0,9 dB SACD)"_t,
                       PathQuality::Enhanced);
             break;

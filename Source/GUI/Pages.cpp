@@ -1814,8 +1814,8 @@ void SettingsPage::buildAudio()
 
     // PCM -> DSD remodulation
     section ("PCM -> DSD"_t);
-    const juce::StringArray dsdTargets { "Désactivé"_t, "DSD64", "DSD128", "DSD256" };
-    const int targetIdx = s.pcmToDsd == 64 ? 1 : s.pcmToDsd == 128 ? 2 : s.pcmToDsd == 256 ? 3 : 0;
+    const juce::StringArray dsdTargets { "Désactivé"_t, "XZ Automatic", "DSD64", "DSD128", "DSD256" };
+    const int targetIdx = s.pcmToDsd == EngineSettings::xzAutomatic ? 1 : s.pcmToDsd == 64 ? 2 : s.pcmToDsd == 128 ? 3 : s.pcmToDsd == 256 ? 4 : 0;
     auto setEngine = [this] (std::function<void (EngineSettings&)> change)
     {
         auto st = ctx.engine().getSettings();
@@ -1826,8 +1826,9 @@ void SettingsPage::buildAudio()
     row ("Convertir le PCM en DSD"_t, makeCombo (dsdTargets, dsdTargets[targetIdx], [setEngine, dsdTargets] (const juce::String& v)
     {
         const int i = dsdTargets.indexOf (v);
-        setEngine ([i] (EngineSettings& st) { st.pcmToDsd = i == 1 ? 64 : i == 2 ? 128 : i == 3 ? 256 : 0; });
-    }), 36, "Modulateur sigma-delta 1 bit en 64 bits flottants (DoP ou DSD natif). Si le DAC n'accepte pas la fréquence choisie, la suivante plus basse ; "
+        setEngine ([i] (EngineSettings& st) { st.pcmToDsd = i == 1 ? EngineSettings::xzAutomatic : i == 2 ? 64 : i == 3 ? 128 : i == 4 ? 256 : 0; });
+    }), 36, "Modulateur sigma-delta 1 bit en 64 bits flottants (DoP ou DSD natif). XZ Automatic : 44,1 kHz -> DSD64, 48 / 88,2 / 176,4 kHz -> DSD128, "
+            "96 kHz et plus -> DSD256. Si le DAC n'accepte pas la fréquence choisie, la suivante plus basse ; "
             "sans DSD, le PCM reste tel quel. AURA DSP / Outils Studio s'appliquent en DXD avant le modulateur."_t);
     row ("Garder la sortie DSD pendant un traitement"_t, makeToggle (s.keepDsdOutput, [setEngine] (bool v) { setEngine ([v] (EngineSettings& st) { st.keepDsdOutput = v; }); }), 36,
          "Source DSD avec AURA DSP / Outils Studio ou mixage 5.1 -> 2.0 : DSD -> DXD 64 bits -> traitement -> modulateur DSD (même ordre et même marge). "

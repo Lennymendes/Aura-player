@@ -59,7 +59,9 @@ struct EngineSettings
     /** 10 ms micro-fades where the PCM stream breaks (start, pause, stop, skip, seek, rate change). Off: strictly
         bit-perfect from the first sample after a break too (the DAC sees the step). Gapless joins are never faded. */
     bool transitionFades = true;
-    /** PCM -> DSD: 0 = off, 64 / 128 / 256 = remodulated to that DSD rate (DoP or native) when the DAC takes it. */
+    /** PCM -> DSD: 0 = off, 64 / 128 / 256 = remodulated to that DSD rate (DoP or native) when the DAC takes it,
+        xzAutomatic = the rate follows the source (see xzAutomaticTarget). */
+    static constexpr int xzAutomatic = -1;
     int pcmToDsd = 0;
     int sdmOrder = 7;                    // sigma-delta order: 5 or 7
     double pcmToDsdHeadroomDb = -3.0;    // PCM 0 dBFS -> SACD 0 dB + this (the limiter caps at -0.9 dB SACD)
@@ -113,6 +115,8 @@ struct PlaybackPlan
     /** PCM -> DSD or DSD -> DXD -> DSD: computed on the decoder thread (its own DSP chain), DSD on the wire. */
     bool remodulates() const noexcept { return conversion == Conversion::PcmToDsd || conversion == Conversion::DsdRemodulate; }
     double conversionRate = 0.0;         // intermediate rate (DSD -> PCM output before an optional resample)
+    int dsdTarget = 0;                   // PCM -> DSD: the DSD rate asked for (64 / 128 / 256), before the DAC's limit
+    bool xzAuto = false;                 // PCM -> DSD: that rate was chosen by XZ Automatic from the source rate
     bool needsRequantize = false;        // the ring holds more precision than the device word: TPDF dither
 
     juce::String reason;                 // why (shown in the Signal Path)
@@ -144,5 +148,12 @@ struct PlaybackPlan
 };
 
 PlaybackPlan makePlan (const StreamFormat& source, const DeviceCapabilities& caps, const EngineSettings& settings);
+/** XZ Automatic: DSD rate for a PCM source rate. 44.1 kHz -> 64; 48 / 88.2 / 176.4 -> 128; 96 / 192 and above -> 256
+    (the engine's ceiling). Other rates: up to 44.1 -> 64, up to 88.2 -> 128, above -> 256. */
+inline int xzAutomaticTarget (double sourceRate) noexcept
+{
+    if (sourceRate == 176400.0) return 128;
+    return sourceRate <= 44100.0 ? 64 : sourceRate <= 88200.0 ? 128 : 256;
+}
 
 } // namespace nx

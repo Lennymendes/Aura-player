@@ -174,10 +174,12 @@ static PlaybackPlan planFollowingSource (const StreamFormat& src, const DeviceCa
 
     // PCM -> DSD: remodulated (64-bit sigma-delta) at the asked DSD rate, or the next lower one the DAC takes
     juce::String dsdNote;
-    if (s.pcmToDsd >= 64 && ! s.freeEdition)
+    if ((s.pcmToDsd >= 64 || s.pcmToDsd == EngineSettings::xzAutomatic) && ! s.freeEdition)
     {
+        const bool xz = s.pcmToDsd == EngineSettings::xzAutomatic;
+        const int target = xz ? xzAutomaticTarget (src.sampleRate) : juce::jmin (256, s.pcmToDsd);
         {   // AURA DSP / Studio Tools, when on, run before the modulator (decoder thread)
-            for (int mult = juce::jmin (256, s.pcmToDsd); mult >= 64; mult /= 2)
+            for (int mult = target; mult >= 64; mult /= 2)
             {
                 const double rate = 2822400.0 * mult / 64;
                 const bool native = caps.nativeDsdRates.contains (rate) && s.dsdMode != DsdMode::DoP;
@@ -188,9 +190,13 @@ static PlaybackPlan planFollowingSource (const StreamFormat& src, const DeviceCa
                 p.ringBitsHint = native ? 1 : 24;
                 p.conversion = PlaybackPlan::Conversion::PcmToDsd;
                 p.conversionRate = rate;
-                p.reason = (s.dspNeedsPcm ? "AURA DSP / Outils Studio en DXD 64 bits -> "_t : juce::String()) + "Modulateur PCM -> DSD"_t + juce::String (mult) + " (sigma-delta 1 bit, ordre "_t + juce::String (s.sdmOrder <= 5 ? 5 : 7)
+                p.dsdTarget = target;
+                p.xzAuto = xz;
+                p.reason = (s.dspNeedsPcm ? "AURA DSP / Outils Studio en DXD 64 bits -> "_t : juce::String())
+                           + (xz ? "XZ Automatic : "_t + formatRate (src.sampleRate) + " -> DSD" + juce::String (target) + " · " : juce::String())
+                           + "Modulateur PCM -> DSD"_t + juce::String (mult) + " (sigma-delta 1 bit, ordre "_t + juce::String (s.sdmOrder <= 5 ? 5 : 7)
                            + ", marge "_t + juce::String (s.pcmToDsdHeadroomDb, 0) + " dB)" + (native ? " en DSD natif"_t : " en DoP "_t + formatRate (p.deviceRate))
-                           + (mult < s.pcmToDsd ? " · "_t + "DSD"_t + juce::String (s.pcmToDsd) + " non accepté par le DAC"_t : juce::String()) + foldNote;
+                           + (mult < target ? " · "_t + "DSD"_t + juce::String (target) + " non accepté par le DAC"_t : juce::String()) + foldNote;
                 return p;
             }
             dsdNote = " · "_t + "PCM -> DSD : le DAC n'accepte pas le DSD (ni natif ni DoP)"_t;

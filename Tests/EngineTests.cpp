@@ -2250,3 +2250,158 @@ NX_TEST_SECTION (121, "Étape 2 : E9DS (de-esser transparent) : bande seule, bit
                  "moteur : DSD64 + E9DS -> DXD 64 bits -> E9DS -> modulateur -> DSD64 DoP, « E9DS » dans le chemin du signal, 0 allocation sur le thread audio"_t);
     }
 }
+
+//==============================================================================
+NX_TEST_SECTION (122, "Étape 3 : XZ Automatic (taux DSD selon la source), repli sur le DAC, fondu de sortie avant changement de taux")
+{
+    using Cv = nx::PlaybackPlan::Conversion;
+    // 1. the table, on a DAC that takes everything up to DSD256 natively
+    {
+        nx::StreamFormat pcm; pcm.kind = nx::SampleKind::PcmInt; pcm.numChannels = 2; pcm.bitsPerSample = 24;
+        nx::DeviceCapabilities all; all.sampleRates = { 44100.0, 88200.0, 176400.0, 352800.0, 705600.0 }; all.outputChannels = 2;
+        all.nativeDsdRates = { 2822400.0, 5644800.0, 11289600.0, 22579200.0 };
+        nx::EngineSettings s;
+        s.pcmToDsd = nx::EngineSettings::xzAutomatic;
+        const std::vector<std::pair<double, int>> table { { 44100.0, 64 }, { 48000.0, 128 }, { 88200.0, 128 }, { 176400.0, 128 },
+                                                          { 96000.0, 256 }, { 192000.0, 256 }, { 352800.0, 256 }, { 384000.0, 256 } };
+        bool ok = true;
+        juce::String got;
+        for (auto [rate, mult] : table)
+        {
+            pcm.sampleRate = rate;
+            const auto p = nx::makePlan (pcm, all, s);
+            const bool right = p.conversion == Cv::PcmToDsd && p.wire == nx::WireFormat::NativeDsd && p.conversionRate == 2822400.0 * mult / 64
+                               && p.xzAuto && p.dsdTarget == mult && p.reason.contains ("XZ Automatic");
+            ok = ok && right;
+            got << " " << nx::formatRate (rate) << "->DSD" << (int) std::lround (p.conversionRate / 44100.0);
+        }
+        t.check (ok, "XZ Automatic : 44,1 -> DSD64 ; 48 / 88,2 / 176,4 -> DSD128 ; 96 / 192 -> DSD256 ; 352,8 / 384 -> DSD256 (plafond du moteur)"_t + " [" + got.trim() + "]");
+
+        // 2. DAC limited to DSD128 (native) / to DoP 352,8 kHz: down to DSD128, the target is kept for the display
+        nx::DeviceCapabilities d128 = all; d128.nativeDsdRates = { 2822400.0, 5644800.0 }; d128.sampleRates = { 44100.0, 88200.0, 176400.0 };
+        nx::DeviceCapabilities dop = all; dop.nativeDsdRates.clear(); dop.sampleRates = { 44100.0, 88200.0, 176400.0, 352800.0 };
+        pcm.sampleRate = 96000.0;
+        const auto n = nx::makePlan (pcm, d128, s);
+        pcm.sampleRate = 192000.0;
+        const auto d = nx::makePlan (pcm, dop, s);
+        pcm.sampleRate = 44100.0;
+        const auto low = nx::makePlan (pcm, d128, s);
+        nx::DeviceCapabilities none = all; none.nativeDsdRates.clear(); none.sampleRates = { 44100.0, 48000.0, 96000.0 };
+        pcm.sampleRate = 96000.0;
+        const auto pcmOnly = nx::makePlan (pcm, none, s);
+        t.check (n.conversionRate == 5644800.0 && n.wire == nx::WireFormat::NativeDsd && n.dsdTarget == 256 && n.reason.contains ("DSD256 non accepté par le DAC")
+                 && d.conversionRate == 5644800.0 && d.wire == nx::WireFormat::DoP && d.deviceRate == 352800.0
+                 && low.conversionRate == 2822400.0 && pcmOnly.wire == nx::WireFormat::Pcm && pcmOnly.conversion == Cv::None,
+                 "DAC limité au DSD128 : 96 kHz -> DSD128 natif, 192 kHz -> DSD128 en DoP 352,8 kHz, 44,1 kHz -> DSD64 ; DAC sans DSD : PCM bit-perfect"_t);
+    }
+
+    // tone amplitude of channel 0 of an interleaved stereo DSD stream, per 1 ms window (1 kHz sine: one period)
+    auto envelope = [] (const std::vector<uint8_t>& dsd, size_t from, size_t to, double rate)
+    {
+        std::vector<double> env;
+        const int win = (int) std::lround (rate / 1000.0);
+        std::vector<double> bits;
+        for (size_t i = from; i + 1 < to; i += 2)
+            for (int b = 7; b >= 0; --b) bits.push_back ((dsd[i] >> b) & 1 ? 1.0 : -1.0);
+        for (size_t w = 0; w + (size_t) win <= bits.size(); w += (size_t) win)
+        {
+            double ss = 0, sc = 0;
+            for (int k = 0; k < win; ++k)
+            {
+                const double ph = 2.0 * juce::MathConstants<double>::pi * k / win;
+                ss += bits[w + (size_t) k] * std::sin (ph);
+                sc += bits[w + (size_t) k] * std::cos (ph);
+            }
+            env.push_back (2.0 * std::sqrt (ss * ss + sc * sc) / win);
+        }
+        return env;
+    };
+    auto sineWav = [&] (const juce::String& name, double rate, double seconds)
+    {
+        auto f = t.tempDir.getChildFile (name);
+        const auto s = sinePcm ((int) (rate * seconds), 2, 24, rate, 1000.0, 0.5);
+        writeWav (f, &s, nullptr, 2, rate, 24, 24, false);
+        return f;
+    };
+
+    // 3. 44,1 kHz then 96 kHz (DSD64 -> DSD256, native): the end of the first track fades out over 10 ms before the change,
+    //    the second one fades in; the modulator never resets; nothing allocated on the audio thread
+    {
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0, 5644800.0, 11289600.0 }; });
+        auto st = rig.engine->getSettings();
+        st.pcmToDsd = nx::EngineSettings::xzAutomatic;
+        st.transitionFades = true;
+        rig.engine->setSettings (st);
+        rig.engine->setQueue ({ EngineRig::item (sineWav ("xz_a.wav", 44100.0, 0.4)), EngineRig::item (sineWav ("xz_b.wav", 96000.0, 0.3)) }, 0, true);
+        size_t split = 0;
+        std::vector<double> rates;
+        nx::SignalPath pathA, pathB;
+        rig.cap->renderFlag = &nxtest_countAllocations;
+        nxtest_allocationCount = 0;
+        rig.runToEnd (1024, 60.0, [&] (int)
+        {
+            const double r = rig.cap->config.sampleRate;
+            if (rates.empty() || rates.back() != r) { rates.push_back (r); if (rates.size() == 2) split = rig.cap->capturedDsd.size(); }
+            if (rates.size() == 1 && pathA.nodes.empty() && rig.cap->capturedDsd.size() > 200000) pathA = rig.engine->getSignalPath();
+            if (rates.size() == 2 && pathB.nodes.empty() && rig.cap->capturedDsd.size() > split + 400000) pathB = rig.engine->getSignalPath();
+        });
+        rig.cap->renderFlag = nullptr;
+        // end of A: the last window above half the tone, then how many windows the fall takes
+        const auto envA = envelope (rig.cap->capturedDsd, 0, split > 0 ? split : rig.cap->capturedDsd.size(), 2822400.0);
+        double full = 0;
+        for (auto v : envA) full = juce::jmax (full, v);
+        int last = -1;
+        for (int i = 0; i < (int) envA.size(); ++i) if (envA[(size_t) i] > 0.1 * full) last = i;
+        int fall = 0;
+        for (int i = last; i >= 0 && envA[(size_t) i] < 0.9 * full; --i) ++fall;
+        auto modNode = [] (const nx::SignalPath& p)
+        {
+            for (auto& n : p.nodes) if (n.stage == "Modulateur") return n.title + " | " + n.detail;
+            return juce::String();
+        };
+        const auto a = modNode (pathA), b = modNode (pathB);
+        t.check (rates.size() == 2 && rates[0] == 2822400.0 && rates[1] == 11289600.0 && rig.cap->opens == 2,
+                 "XZ Automatic à la volée : 44,1 kHz en DSD64 puis 96 kHz en DSD256 (DSD natif), une réouverture du DAC"_t);
+        t.check (fall >= 6 && fall <= 14 && rig.engine->getStats().modulatorResets.load() == 0 && nxtest_allocationCount.load() == 0,
+                 "fin de la piste 44,1 kHz avant le passage en DSD256 : fondu de sortie de 10 ms en DXD (de 90 % à 10 % en "_t + juce::String (fall) + " ms, sans reprise après), "
+                 + "0 réinitialisation du modulateur, 0 allocation sur le thread audio");
+        t.check (a.contains ("DXD -> DSD64 · XZ Automatic") && a.contains ("44,1 kHz -> DSD64") && b.contains ("DXD -> DSD256 · XZ Automatic") && b.contains ("96 kHz -> DSD256"),
+                 "Chemin du signal : « "_t + a.upToFirstOccurrenceOf (" | ", false, false) + " », puis « " + b.upToFirstOccurrenceOf (" | ", false, false) + " »");
+    }
+
+    // 4. DAC limited to DSD128: the display says what was aimed at and what is played
+    {
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0, 5644800.0 }; });
+        auto st = rig.engine->getSettings();
+        st.pcmToDsd = nx::EngineSettings::xzAutomatic;
+        rig.engine->setSettings (st);
+        rig.engine->setQueue ({ EngineRig::item (sineWav ("xz_c.wav", 192000.0, 0.3)) }, 0, true);
+        nx::SignalPath path;
+        rig.runToEnd (1024, 60.0, [&] (int block) { if (block == 20) path = rig.engine->getSignalPath(); });
+        juce::String node;
+        for (auto& n : path.nodes) if (n.stage == "Modulateur") node = n.title + " | " + n.detail;
+        t.check (rig.cap->config.sampleRate == 5644800.0 && node.contains ("DSD128 · XZ Automatic") && node.contains ("192 kHz -> DSD256")
+                 && node.contains ("DSD128 (limite du DAC)"),
+                 "DAC limité au DSD128 : 192 kHz joué en DSD128 sans coupure, chemin du signal « "_t + node.upToFirstOccurrenceOf (" · Sigma", false, false) + " »");
+    }
+
+    // 5. two 44,1 kHz tracks back to back: same DSD64, one opening, no fade at the join (gapless)
+    {
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0, 5644800.0, 11289600.0 }; });
+        auto st = rig.engine->getSettings();
+        st.pcmToDsd = nx::EngineSettings::xzAutomatic;
+        st.transitionFades = true;
+        rig.engine->setSettings (st);
+        rig.engine->setQueue ({ EngineRig::item (sineWav ("xz_d.wav", 44100.0, 0.3)), EngineRig::item (sineWav ("xz_e.wav", 44100.0, 0.3)) }, 0, true);
+        rig.runToEnd (1024);
+        const auto env = envelope (rig.cap->capturedDsd, 0, rig.cap->capturedDsd.size(), 2822400.0);
+        double full = 0;
+        for (auto v : env) full = juce::jmax (full, v);
+        int first = -1, last = -1;
+        for (int i = 0; i < (int) env.size(); ++i) if (env[(size_t) i] > 0.5 * full) { if (first < 0) first = i; last = i; }
+        double dip = full;
+        for (int i = first + 20; i < last - 20; ++i) dip = juce::jmin (dip, env[(size_t) i]);   // the join is at ~300 ms
+        t.check (rig.cap->opens == 1 && last - first >= 590 && dip > 0.9 * full,
+                 "deux pistes 44,1 kHz enchaînées : DSD64 sans réouverture ni fondu à la jonction (creux "_t + juce::String (20.0 * std::log10 (dip / full), 2) + " dB)");
+    }
+}

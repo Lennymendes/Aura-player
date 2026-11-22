@@ -991,7 +991,6 @@
  " natif": " native",
  " (sortie DSD conservée)": " (DSD output kept)",
  "AURA DSP / Outils Studio en DXD 64 bits -> ": "AURA DSP / Studio Tools in 64-bit DXD -> ",
- "Modulateur sigma-delta 1 bit en 64 bits flottants (DoP ou DSD natif). Si le DAC n'accepte pas la fréquence choisie, la suivante plus basse ; sans DSD, le PCM reste tel quel. AURA DSP / Outils Studio s'appliquent en DXD avant le modulateur.": "1-bit sigma-delta modulator in 64-bit floating point (DoP or native DSD). If the DAC does not take the chosen rate, the next lower one; without DSD, PCM stays as it is. AURA DSP / Studio Tools apply in DXD before the modulator.",
  "Garder la sortie DSD pendant un traitement": "Keep the DSD output while processing",
  "Source DSD avec AURA DSP / Outils Studio ou mixage 5.1 -> 2.0 : DSD -> DXD 64 bits -> traitement -> modulateur DSD (même ordre et même marge). Désactivé : sortie DXD (PCM 352,8 kHz).": "DSD source with AURA DSP / Studio Tools or a 5.1 -> 2.0 mix: DSD -> 64-bit DXD -> processing -> DSD modulator (same order and headroom). Off: DXD output (PCM 352.8 kHz).",
  "FIR 64 bits, 150 dB (le DSD d'origine n'est plus transmis tel quel)": "64-bit FIR, 150 dB (the original DSD is no longer sent as is)",
@@ -1022,5 +1021,10 @@
  "6,5 kHz sibilances": "6.5 kHz sibilance",
  "8-10 kHz brillance": "8-10 kHz brilliance",
  "Réduction : ": "Reduction: ",
- "Seuil automatique (part des aigus dans le signal). Sous le seuil, la sortie est identique à l'entrée, au bit près.": "Automatic threshold (share of treble in the signal). Below it, the output is bit-identical to the input."
+ "Seuil automatique (part des aigus dans le signal). Sous le seuil, la sortie est identique à l'entrée, au bit près.": "Automatic threshold (share of treble in the signal). Below it, the output is bit-identical to the input.",
+ "Modulateur sigma-delta 1 bit en 64 bits flottants (DoP ou DSD natif). XZ Automatic : 44,1 kHz -> DSD64, 48 / 88,2 / 176,4 kHz -> DSD128, 96 kHz et plus -> DSD256. Si le DAC n'accepte pas la fréquence choisie, la suivante plus basse ; sans DSD, le PCM reste tel quel. AURA DSP / Outils Studio s'appliquent en DXD avant le modulateur.": "1-bit sigma-delta modulator in 64-bit floating point (DoP or native DSD). XZ Automatic: 44.1 kHz -> DSD64, 48 / 88.2 / 176.4 kHz -> DSD128, 96 kHz and above -> DSD256. If the DAC does not take the chosen rate, the next lower one; without DSD, PCM stays as it is. AURA DSP / Studio Tools apply in DXD before the modulator.",
+ "XZ Automatic : ": "XZ Automatic: ",
+ " (limite du DAC)": " (DAC limit)",
+ " demandé, ": " requested, ",
+ " (limite du DAC) · ": " (DAC limit) · "
 }

@@ -463,7 +463,7 @@ void AppController::loadEngineSettings()
         s.memoryPlayMaxMb = juce::jlimit (64, 8192, (int) v.getProperty ("memoryPlayMaxMb", 1536));
         s.channelMode = (ChannelMode) juce::jlimit (0, 2, (int) v.getProperty ("channelMode", 0));
         s.pcmToDsd = (int) v.getProperty ("pcmToDsd", 0);
-        if (s.pcmToDsd != 64 && s.pcmToDsd != 128 && s.pcmToDsd != 256) s.pcmToDsd = 0;
+        if (s.pcmToDsd != 64 && s.pcmToDsd != 128 && s.pcmToDsd != 256 && s.pcmToDsd != EngineSettings::xzAutomatic) s.pcmToDsd = 0;
         s.sdmOrder = (int) v.getProperty ("sdmOrder", 7) <= 5 ? 5 : 7;
         s.pcmToDsdHeadroomDb = juce::jlimit (-12.0, 0.0, (double) v.getProperty ("pcmToDsdHeadroom", -3.0));
         s.keepDsdOutput = (bool) v.getProperty ("keepDsdOutput", true);

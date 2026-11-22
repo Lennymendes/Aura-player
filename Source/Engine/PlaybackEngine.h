@@ -178,6 +178,8 @@ private:
     void preparePlanConverters (const PlaybackPlan& plan, bool keepState);
     int produce (int writableBytes);
     void drainConverters();
+    void modulateOut (const double* dxd, int frames) noexcept;  // decoder: modulator -> routing -> ring
+    void releaseHeld (bool fadeOut, double* tail = nullptr, int tailFrames = 0);   // decoder: the held last 10 ms go to the modulator
     void writeAll (const void* data, size_t bytes);
 
     //== Message thread ========================================================
@@ -257,6 +259,10 @@ private:
     std::unique_ptr<dsp::PcmToDsd> pcmToDsd;   // PCM -> DSD remodulation (decoder thread, prepared per plan)
     int produceRemodulated (int maxOutFrames);
     int remodFadeIn = 0;                         // decoder: DXD frames still to fade in after a fresh start
+    // decoder, PCM / DSD -> DSD: the last 10 ms of DXD are held back from the modulator until the next track is known,
+    // so they can be faded out before a change of DSD rate / plan (a DSD stream cannot be faded after the modulator)
+    std::vector<double> remodHold;
+    int remodHeld = 0;
     // audio thread: transition gain of the micro-fades (0 = silent, 1 = music as is), and the reset of the DSP
     // memories that is due at the next silent point after a discontinuity (skip, seek, stop, new device format)
     double xfGain = 0.0;
