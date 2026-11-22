@@ -47,7 +47,7 @@ class E9dsProcessor : public DspProcessor
 {
 public:
     static constexpr int maxChannels = 8;
-    explicit E9dsProcessor (std::shared_ptr<E9dsState> s, bool meter = true) : state (std::move (s)), writesMeter (meter) {}
+    explicit E9dsProcessor (std::shared_ptr<E9dsState> s) : state (std::move (s)) {}
 
     juce::String getName() const override
     {
@@ -120,7 +120,8 @@ public:
             }
         }
         audible.store (mix > 0.0, std::memory_order_relaxed);
-        if (writesMeter) state->reductionDb.store (worst * (target > 0.0 ? 1.0 : 0.0), std::memory_order_relaxed);
+        // meter: written by whichever copy runs (audio thread for PCM out, decoder before the DSD modulator: never both)
+        state->reductionDb.store (worst * (target > 0.0 ? 1.0 : 0.0), std::memory_order_relaxed);
     }
 
 private:
@@ -168,7 +169,6 @@ private:
     static inline const double kneeStart = std::pow (10.0, (thresholdDb - knee / 2.0) / 10.0);
 
     std::shared_ptr<E9dsState> state;
-    bool writesMeter = true;
     double fs = 48000.0, average = 0.0, averageFull = 0.0, attack = 0.0, release = 0.0, mixStep = 0.0;
     double designedFocus = -1.0;
     int designedMode = -1;

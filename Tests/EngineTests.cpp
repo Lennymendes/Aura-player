@@ -2234,7 +2234,7 @@ NX_TEST_SECTION (121, "Étape 2 : E9DS (de-esser transparent) : bande seule, bit
         for (const bool dec : { true, false })
         {
             auto chain = std::make_unique<nx::DspChain>();
-            chain->processors.push_back (std::make_unique<nx::E9dsProcessor> (e9, ! dec));
+            chain->processors.push_back (std::make_unique<nx::E9dsProcessor> (e9));
             if (dec) rig.engine->setDecoderDspChain (std::move (chain)); else rig.engine->setDspChain (std::move (chain));
         }
         rig.cap->renderFlag = &nxtest_countAllocations;
@@ -2403,5 +2403,80 @@ NX_TEST_SECTION (122, "Étape 3 : XZ Automatic (taux DSD selon la source), repli
         for (int i = first + 20; i < last - 20; ++i) dip = juce::jmin (dip, env[(size_t) i]);   // the join is at ~300 ms
         t.check (rig.cap->opens == 1 && last - first >= 590 && dip > 0.9 * full,
                  "deux pistes 44,1 kHz enchaînées : DSD64 sans réouverture ni fondu à la jonction (creux "_t + juce::String (20.0 * std::log10 (dip / full), 2) + " dB)");
+    }
+}
+
+//==============================================================================
+NX_TEST_SECTION (123, "E9DS avec la conversion PCM -> DSD (XZ Automatic, DSD128 fixe) : en DXD avant le modulateur")
+{
+    constexpr double dxd = 352800.0;
+    // level of a tone in a stereo DSD capture (channel 0), decoded back to DXD, 0.25 s in the middle of the music
+    auto level = [&] (const std::vector<uint8_t>& dsd, double dsdRate, double freq)
+    {
+        nx::dsp::DsdToPcm back;
+        back.prepare (dsdRate, dxd, 2, 1.0);
+        const int bytes = (int) (dsd.size() / 2);
+        std::vector<double> pcm ((size_t) (back.maxOutputFor (bytes) + 8) * 2);
+        const int got = back.process (dsd.data(), bytes, pcm.data(), back.maxOutputFor (bytes));
+        int start = 0;
+        while (start < got && std::abs (pcm[(size_t) start * 2]) < 0.05) ++start;
+        const int from = start + 70560, len = 88200;                       // 0.2 s in (E9DS settled), 0.25 s long
+        if (from + len > got) return 0.0;
+        return fitSine (pcm.data() + (size_t) from * 2, len, 2, dxd, freq).first;
+    };
+    auto f = t.tempDir.getChildFile ("e9_xz.wav");
+    {
+        const double rate = 44100.0;
+        const int n = (int) (rate * 0.8);
+        std::vector<int32_t> pcm ((size_t) n * 2);
+        for (int i = 0; i < n; ++i)
+        {
+            const double x = 0.15 * std::sin (2.0 * juce::MathConstants<double>::pi * 1000.0 * i / rate)
+                           + 0.3 * std::sin (2.0 * juce::MathConstants<double>::pi * 6500.0 * i / rate);
+            pcm[(size_t) i * 2] = pcm[(size_t) i * 2 + 1] = (int32_t) std::llround (x * 2147483647.0) & ~0xff;
+        }
+        writeWav (f, &pcm, nullptr, 2, rate, 24, 24, false);
+    }
+    // plays the file to the DSD target with E9DS on / off; returns { 1 kHz, 6.5 kHz, DSD rate, Signal Path DSP node, meter }
+    struct Run { double low = 0, high = 0, rate = 0; juce::String dsp; double meter = 0; };
+    auto play = [&] (int target, bool e9On)
+    {
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0, 5644800.0, 11289600.0 }; });
+        auto st = rig.engine->getSettings();
+        st.pcmToDsd = target;
+        st.dspNeedsPcm = e9On;                       // what AppController sets while E9DS is on
+        rig.engine->setSettings (st);
+        auto e9 = std::make_shared<nx::E9dsState>();
+        e9->set (e9On, 6500.0, 6.0, nx::E9dsState::SplitBand);
+        for (const bool dec : { true, false })       // as AppController::rebuildDspChain
+        {
+            auto chain = std::make_unique<nx::DspChain>();
+            chain->processors.push_back (std::make_unique<nx::E9dsProcessor> (e9));
+            if (dec) rig.engine->setDecoderDspChain (std::move (chain)); else rig.engine->setDspChain (std::move (chain));
+        }
+        Run r;
+        rig.engine->setQueue ({ EngineRig::item (f) }, 0, true);
+        rig.runToEnd (1024, 60.0, [&] (int block)
+        {
+            if (block == 300)
+            {
+                for (auto& nd : rig.engine->getSignalPath().nodes) if (nd.stage == "DSP") r.dsp = nd.title;
+                r.meter = e9->reductionDb.load();
+            }
+        }, 1u << 16);
+        r.rate = rig.cap->config.sampleRate;
+        r.low = level (rig.cap->capturedDsd, r.rate, 1000.0);
+        r.high = level (rig.cap->capturedDsd, r.rate, 6500.0);
+        return r;
+    };
+    for (int target : { nx::EngineSettings::xzAutomatic, 128 })
+    {
+        const auto off = play (target, false), on = play (target, true);
+        const double cut = 20.0 * std::log10 (on.high / off.high), low = 20.0 * std::log10 (on.low / off.low);
+        const auto name = target < 0 ? juce::String ("XZ Automatic (DSD64)") : juce::String ("DSD128 fixe"_t);
+        t.check (on.rate == (target < 0 ? 2822400.0 : 5644800.0) && cut < -2.0 && cut > -6.1 && std::abs (low) < 0.1
+                 && on.dsp.contains ("E9DS") && off.dsp.isEmpty() && on.meter > 1.0,
+                 "PCM 44,1 kHz -> "_t + name + " + E9DS : sibilance 6,5 kHz " + juce::String (cut, 2) + " dB, 1 kHz " + juce::String (low, 3)
+                 + " dB, « E9DS » dans le chemin du signal, indicateur de réduction " + juce::String (on.meter, 1) + " dB");
     }
 }

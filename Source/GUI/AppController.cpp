@@ -1089,7 +1089,7 @@ void AppController::rebuildDspChain()
         auto chain = pluginManager.buildDspChain();
         if (chain == nullptr) chain = std::make_unique<DspChain>();
         chain->processors.push_back (std::make_unique<StudioToolsProcessor> (studio));
-        chain->processors.push_back (std::make_unique<E9dsProcessor> (e9dsState, ! forDecoder));
+        chain->processors.push_back (std::make_unique<E9dsProcessor> (e9dsState));
         if (forDecoder) eng->setDecoderDspChain (std::move (chain));
         else eng->setDspChain (std::move (chain));
     }
