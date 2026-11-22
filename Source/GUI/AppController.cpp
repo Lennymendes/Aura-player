@@ -464,6 +464,8 @@ void AppController::loadEngineSettings()
         s.sdmOrder = (int) v.getProperty ("sdmOrder", 7) <= 5 ? 5 : 7;
         s.pcmToDsdHeadroomDb = juce::jlimit (-12.0, 0.0, (double) v.getProperty ("pcmToDsdHeadroom", -3.0));
         s.keepDsdOutput = (bool) v.getProperty ("keepDsdOutput", true);
+        s.rateMode = (RateMode) juce::jlimit (0, 2, (int) v.getProperty ("rateMode", 0));
+        s.transitionFades = (bool) v.getProperty ("transitionFades", true);
         if (const auto* map = v.getProperty ("channelMap", {}).getArray(); map != nullptr && map->size() == 8)
             for (int c = 0; c < 8; ++c) s.channelMap[(size_t) c] = juce::jlimit (0, 7, (int) (*map)[c]);
     }
@@ -482,6 +484,8 @@ void AppController::saveEngineSettings()
     o->setProperty ("sdmOrder", s.sdmOrder);
     o->setProperty ("pcmToDsdHeadroom", s.pcmToDsdHeadroomDb);
     o->setProperty ("keepDsdOutput", s.keepDsdOutput);
+    o->setProperty ("rateMode", (int) s.rateMode);
+    o->setProperty ("transitionFades", s.transitionFades);
     juce::Array<juce::var> map;
     for (auto m : s.channelMap) map.add (m);
     o->setProperty ("channelMap", map);

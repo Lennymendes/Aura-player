@@ -58,7 +58,17 @@ struct DeviceCapabilities
     juce::Array<double> nativeDsdRates; // empty if the backend has no native DSD
     bool exclusiveAvailable = false;
     int outputChannels = 0;           // output channels of the device (0 = unknown: as many as the source)
+    bool wireless = false;            // Bluetooth / AirPlay: a rate change renegotiates the link (pops, drop-outs)
+    double currentRate = 0.0;         // rate the system has set on the device now (0 = unknown)
 };
+
+/** Name heuristic where the system gives no transport type (Windows, Linux): Bluetooth / AirPlay outputs. */
+inline bool looksWireless (const juce::String& deviceName)
+{
+    for (auto* w : { "bluetooth", "bluez", "a2dp", "hands-free", "handsfree", "airpods", "airplay" })
+        if (deviceName.containsIgnoreCase (w)) return true;
+    return false;
+}
 
 class OutputBackend
 {

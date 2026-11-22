@@ -1791,6 +1791,27 @@ void SettingsPage::buildAudio()
          "Filtre polyphase 64 bits, 160 dB. Rapport entier (×2, ×4, ×8) dans la même famille de fréquences. Désactive le bit-perfect."_t);
     row ("Volume numérique : 100 % = bit-perfect"_t, nullptr, 28);
 
+    // Device rate: follow each source (bit-perfect DAC) or stay put (Bluetooth / AirPlay)
+    {
+        const juce::StringArray rateModes { "Auto (suit la source ; fixe en Bluetooth / AirPlay)"_t, "Toujours suivre la source"_t, "Toujours fixe"_t };
+        row ("Fréquence de sortie"_t, makeCombo (rateModes, rateModes[(int) s.rateMode], [this, rateModes] (const juce::String& v)
+        {
+            auto st = ctx.engine().getSettings();
+            st.rateMode = (RateMode) juce::jmax (0, rateModes.indexOf (v));
+            ctx.engine().setSettings (st);
+            ctx.applyEngineSettings();
+        }), 36, "Un DAC filaire suit la fréquence de chaque morceau (bit-perfect). Une sortie Bluetooth ou AirPlay garde la fréquence réglée par le système : "
+                "chaque changement renégocie la liaison (pops, coupures) ; Aura convertit alors en 64 bits."_t);
+        row ("Micro-fondus aux transitions (10 ms)"_t, makeToggle (s.transitionFades, [this] (bool v)
+        {
+            auto st = ctx.engine().getSettings();
+            st.transitionFades = v;
+            ctx.engine().setSettings (st, false);
+            ctx.applyEngineSettings();
+        }), 36, "Supprime les pops au démarrage, à la pause, à l'arrêt, au saut de piste, au déplacement et au changement de fréquence. "
+                "Jamais entre deux morceaux enchaînés sans blanc. Désactivé : bit-perfect strict dès le premier échantillon."_t);
+    }
+
     // PCM -> DSD remodulation
     section ("PCM -> DSD"_t);
     const juce::StringArray dsdTargets { "Désactivé"_t, "DSD64", "DSD128", "DSD256" };

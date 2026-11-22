@@ -181,6 +181,26 @@ bool setNominalRateAndWait (const juce::String& deviceName, double sampleRate, i
 
 unsigned int findDeviceId (const juce::String& deviceName) { return (unsigned int) findDevice (deviceName); }
 
+bool isWireless (const juce::String& deviceName)
+{
+    const auto dev = findDevice (deviceName);
+    if (dev == kAudioObjectUnknown) return false;
+    AudioObjectPropertyAddress addr { kAudioDevicePropertyTransportType, kAudioObjectPropertyScopeGlobal, kMain };
+    UInt32 type = 0, sz = sizeof (type);
+    if (AudioObjectGetPropertyData (dev, &addr, 0, nullptr, &sz, &type) != noErr) return false;
+    return type == kAudioDeviceTransportTypeBluetooth || type == kAudioDeviceTransportTypeBluetoothLE
+        || type == kAudioDeviceTransportTypeAirPlay;
+}
+
+double getCurrentNominalRate (const juce::String& deviceName)
+{
+    const auto dev = findDevice (deviceName);
+    if (dev == kAudioObjectUnknown) return 0.0;
+    AudioObjectPropertyAddress addr { kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeGlobal, kMain };
+    Float64 r = 0; UInt32 sz = sizeof (r);
+    return AudioObjectGetPropertyData (dev, &addr, 0, nullptr, &sz, &r) == noErr ? (double) r : 0.0;
+}
+
 juce::Array<double> getNominalSampleRates (const juce::String& deviceName)
 {
     juce::Array<double> rates;

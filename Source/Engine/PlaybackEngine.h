@@ -162,6 +162,8 @@ public:
     void serviceMessageThread() { timerCallback(); }
     /** Start watchdog: how long a fresh stream may stay silent (no hardware buffer) before recovery. Tests shorten it. */
     juce::uint32 startPatienceMs = 4000;
+    /** Micro-fades at every break of the PCM stream (play, pause, stop, skip, seek, rate change). */
+    static constexpr double transitionFadeMs = 10.0;
     /** True after the exclusive (Hog Mode) stream never clocked and the shared system output took over. */
     bool isOnSharedFallback() const noexcept { return sharedFallback; }
 
@@ -254,6 +256,13 @@ private:
     std::unique_ptr<dsp::Resampler> resampler;
     std::unique_ptr<dsp::PcmToDsd> pcmToDsd;   // PCM -> DSD remodulation (decoder thread, prepared per plan)
     int produceRemodulated (int maxOutFrames);
+    int remodFadeIn = 0;                         // decoder: DXD frames still to fade in after a fresh start
+    // audio thread: transition gain of the micro-fades (0 = silent, 1 = music as is), and the reset of the DSP
+    // memories that is due at the next silent point after a discontinuity (skip, seek, stop, new device format)
+    double xfGain = 0.0;
+    bool xfResetArmed = false;
+    std::atomic<bool> xfSilent { true };         // the last callback ended in silence (stop() waits for it)
+    std::atomic<bool> fadesOn { true };          // EngineSettings::transitionFades, for the audio thread
     std::atomic<DspChain*> pendingDecChain { nullptr };
     SpscRing<DspChain*> retiredDecChains { 16 };
     DspChain* decChain = nullptr;                // decoder thread

@@ -51,6 +51,12 @@ public:
             if (! p->isBypassed()) p->process (ch, numCh, n);
     }
 
+    /** Audio thread, at a silent point (gain 0): forget the previous music (filter memories, crossfeed...). */
+    void reset() noexcept
+    {
+        for (auto& p : processors) p->reset();
+    }
+
     juce::StringArray names() const
     {
         juce::StringArray s;

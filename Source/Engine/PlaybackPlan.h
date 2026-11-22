@@ -37,6 +37,9 @@ enum class FilterShape { LinearPhase, MinimumPhase };
     Stereo = always two channels (the disc's stereo area, otherwise an ITU mix computed in DXD); Multichannel = every
     channel whenever the output has them, even under a 2-channel device profile. */
 enum class ChannelMode { Auto, Stereo, Multichannel };
+/** Device rate: Auto = follows each source on a wired DAC (bit-perfect), stays where the system set it on a wireless
+    output (Bluetooth / AirPlay renegotiate the link on every change: pops); FollowSource / Fixed force one or the other. */
+enum class RateMode { Auto, FollowSource, Fixed };
 
 struct EngineSettings
 {
@@ -52,6 +55,10 @@ struct EngineSettings
     int memoryPlayMaxMb = 1536;          // larger files are read from the disk
     bool dspNeedsPcm = false;            // studio tools on: DSD is converted to PCM so that they can apply (not saved)
     ChannelMode channelMode = ChannelMode::Auto;
+    RateMode rateMode = RateMode::Auto;
+    /** 10 ms micro-fades where the PCM stream breaks (start, pause, stop, skip, seek, rate change). Off: strictly
+        bit-perfect from the first sample after a break too (the DAC sees the step). Gapless joins are never faded. */
+    bool transitionFades = true;
     /** PCM -> DSD: 0 = off, 64 / 128 / 256 = remodulated to that DSD rate (DoP or native) when the DAC takes it. */
     int pcmToDsd = 0;
     int sdmOrder = 7;                    // sigma-delta order: 5 or 7
@@ -91,6 +98,7 @@ struct PlaybackPlan
     int channels = 2;                    // channels sent to the device (mono is doubled)
     bool downmix = false;                // multichannel source on a stereo output: ITU 5.1 -> 2.0 mix in 64 bits (DSD through DXD)
     bool stereoLayer = false;            // SACD image: the disc's own stereo area plays instead of the multichannel one
+    bool fixedRate = false;              // the device stays at the rate the system set (wireless output / Fixed mode)
     /** Device output o plays source channel route[o] (-1: silence). Identity for a plain stereo / multichannel file. */
     std::array<int, 8> route { 0, 1, 2, 3, 4, 5, 6, 7 };
     bool identityRoute() const noexcept

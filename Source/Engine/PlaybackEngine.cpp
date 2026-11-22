@@ -115,6 +115,7 @@ void PlaybackEngine::setSettings (const EngineSettings& s, bool replanCurrent)
         std::lock_guard<std::mutex> l (controlLock);
         settings = s;
     }
+    fadesOn = s.transitionFades;
     if (replanCurrent && state.load() != State::Stopped && currentIndex.load() >= 0)
         requestFlushStart (currentIndex.load(), getPositionSeconds());
 }
@@ -215,6 +216,10 @@ void PlaybackEngine::togglePlayPause()
 void PlaybackEngine::stop()
 {
     state = State::Stopped;
+    // let the audio thread fade the music out (10 ms) before the ring is dropped and the device closed
+    if (deviceRunning && backend->isRealtime())
+        for (const auto t0 = juce::Time::getMillisecondCounter(); ! xfSilent.load() && juce::Time::getMillisecondCounter() - t0 < 40;)
+            juce::Thread::sleep (1);
     {
         std::lock_guard<std::mutex> l (controlLock);
         flushCommand = {};
@@ -652,6 +657,8 @@ bool PlaybackEngine::openItem (int index, double startSeconds, bool flush)
 void PlaybackEngine::preparePlanConverters (const PlaybackPlan& plan, bool keepState)
 {
     if (keepState) return;
+    // a DSD output cannot be faded after the modulator: fresh starts fade in in DXD, before it
+    remodFadeIn = getEffectiveSettings().transitionFades ? (int) (transitionFadeMs * 0.001 * 352800.0) : 0;
     dsdConverter.reset();
     resampler.reset();
     pcmToDsd.reset();
@@ -936,6 +943,16 @@ int PlaybackEngine::produceRemodulated (int maxOutFrames)
         for (int c = 0; c < modCh; ++c)
             for (int i = 0; i < nd; ++i) dx[(size_t) i * (size_t) modCh + (size_t) c] = ptr[(size_t) c][i];
     }
+    if (remodFadeIn > 0)
+    {
+        // fresh start (not a gapless join): 10 ms fade-in in DXD, before the modulator
+        const int total = (int) (transitionFadeMs * 0.001 * 352800.0);
+        for (int i = 0; i < nd && remodFadeIn > 0; ++i, --remodFadeIn)
+        {
+            const double g = 0.5 - 0.5 * std::cos (juce::MathConstants<double>::pi * (double) (total - remodFadeIn) / total);
+            for (int c = 0; c < modCh; ++c) dx[(size_t) i * (size_t) modCh + (size_t) c] *= g;
+        }
+    }
     uint8_t* mod = tmpBytes.data() + tmpBytes.size() / 2;                      // second half: modulator output
     const int bytes = pcmToDsd->process (dx, nd, mod);
     stats.modulatorLimited.fetch_add (std::exchange (pcmToDsd->limitedFrames, 0), std::memory_order_relaxed);
@@ -1171,24 +1188,44 @@ void PlaybackEngine::renderInt (int32_t* const* out, int numCh, int numFrames) n
     const auto& active = planWires[(size_t) (activePlanId.load() & 63)];
     int done = 0;
 
+    const bool pcmWire = active.valid && active.wire == WireFormat::Pcm;
+    const bool fadeable = pcmWire && fadesOn.load (std::memory_order_relaxed);
+    const double fadeLen = juce::jmax (1.0, transitionFadeMs * 0.001 * juce::jmax (1.0, active.rate));
     while (done < numFrames)
     {
-        if (state.load() != State::Playing || reconfigurePlanId.load() != 0 || ! consumeEvents (active))
+        // Micro-fades (PCM only: a DSD stream cannot be scaled). A pause, a stop, a device reconfiguration or a skip /
+        // seek (new generation in the ring) first plays the music still in the ring with the gain going down to 0
+        // over 10 ms; music after any silence comes back up over 10 ms. Gapless joins have no silence: untouched.
+        bool fadingOut = false;
+        if (state.load() != State::Playing || reconfigurePlanId.load() != 0)
+        {
+            if (! fadeable || ! haveCurrent || xfGain <= 0.0) break;
+            fadingOut = true;
+        }
+        else if (flushGen.load (std::memory_order_acquire) != consumerGen && fadeable && haveCurrent && xfGain > 0.0)
+            fadingOut = true;                                   // the old music, before consumeEvents() drops it
+        else if (! consumeEvents (active))
             break;
 
         const int ringCh = active.channels;
         const bool isDop = active.wire == WireFormat::DoP;
         const int unitBytes = isDop ? ringCh * 2 : ringCh * 4;   // DoP: two DSD bytes per channel per frame
 
-        if (! checkPreroll ((size_t) unitBytes, active.rate, numFrames - done))
+        if (! fadingOut && ! checkPreroll ((size_t) unitBytes, active.rate, numFrames - done))
             break;
 
         juce::int64 limit = std::numeric_limits<juce::int64>::max();
         RingEvent next;
-        if (events.peek (&next, 1) == 1 && next.gen == consumerGen) limit = next.startByte - consumedBytes;
+        const bool haveNext = events.peek (&next, 1) == 1;
+        if (haveNext && (next.gen == consumerGen || fadingOut)) limit = next.startByte - consumedBytes;
+        // a natural end of track into another device format (the device will be reopened): fade the last 10 ms
+        double untilSwitch = -1.0;
+        if (fadeable && ! fadingOut && haveNext && next.gen == consumerGen && ! planWires[(size_t) (next.planId & 63)].same (active))
+            untilSwitch = (double) (limit / unitBytes);
 
         int frames = juce::jmin (numFrames - done, maxBlock);
         frames = (int) std::min<juce::int64> (frames, limit / unitBytes);
+        if (fadingOut) frames = juce::jmin (frames, (int) std::ceil (xfGain * fadeLen));
         frames = (int) std::min<juce::int64> (frames, (juce::int64) (ring.readable() / (size_t) unitBytes));
         if (frames <= 0)
         {
@@ -1233,8 +1270,9 @@ void PlaybackEngine::renderInt (int32_t* const* out, int numCh, int numFrames) n
             const double targetGain = isFixedVolume() ? 1.0 : volume.load();
             const bool dspOn = activeChain != nullptr && activeChain->isActive();
             const int exactBits = deviceExactBits.load();
+            const bool ramp = fadeable && (fadingOut || xfGain < 1.0 || (untilSwitch >= 0.0 && untilSwitch < fadeLen + frames));
             const bool process = active.needsRequantize || dspOn || targetGain != 1.0 || smoothedGain != 1.0
-                                 || exactBits < active.ringBits;
+                                 || exactBits < active.ringBits || ramp;
 
             if (! process)
             {
@@ -1251,14 +1289,23 @@ void PlaybackEngine::renderInt (int32_t* const* out, int numCh, int numFrames) n
                     for (int i = 0; i < frames; ++i)
                         planarPtrs[(size_t) c][i] = src[(size_t) i * ringCh + c] * (1.0 / 2147483648.0);
 
-                if (targetGain != 1.0 || smoothedGain != 1.0)
+                if (targetGain != 1.0 || smoothedGain != 1.0 || ramp)
                 {
                     const double coeff = 1.0 - std::exp (-1.0 / (0.010 * juce::jmax (1.0, active.rate)));
+                    const double step = 1.0 / fadeLen;
+                    auto shape = [] (double x) { return 0.5 - 0.5 * std::cos (juce::MathConstants<double>::pi * juce::jlimit (0.0, 1.0, x)); };
                     for (int i = 0; i < frames; ++i)
                     {
                         smoothedGain += (targetGain - smoothedGain) * coeff;
                         if (std::abs (smoothedGain - targetGain) < 1e-9) smoothedGain = targetGain;
-                        for (int c = 0; c < pc; ++c) planarPtrs[(size_t) c][i] *= smoothedGain;
+                        double g = smoothedGain;
+                        if (ramp)
+                        {
+                            xfGain = fadingOut ? juce::jmax (0.0, xfGain - step) : juce::jmin (1.0, xfGain + step);
+                            g *= shape (xfGain);
+                            if (untilSwitch >= 0.0) g *= shape ((untilSwitch - i - 1.0) / fadeLen);
+                        }
+                        for (int c = 0; c < pc; ++c) planarPtrs[(size_t) c][i] *= g;
                     }
                 }
                 if (dspOn) activeChain->process (planarPtrs.data(), pc, frames);
@@ -1282,14 +1329,23 @@ void PlaybackEngine::renderInt (int32_t* const* out, int numCh, int numFrames) n
 
         positionUnits.store (unitsIntoTrack, std::memory_order_relaxed);
         done += frames;
+        if (pcmWire && ! fadingOut) xfResetArmed = true;
+        if (fadingOut && xfGain <= 0.0) break;                  // silent now: the rest of the callback is silence
     }
 
     if (done < numFrames)
     {
+        // Silent point. After a discontinuity (skip, seek, stop, new device format; not a pause) the DSP forgets
+        // the previous music here, at gain 0, so nothing of it rings into what comes next.
+        const bool discontinuity = flushGen.load (std::memory_order_relaxed) != consumerGen || reconfigurePlanId.load() != 0
+                                   || state.load() == State::Stopped;
+        if (discontinuity && xfResetArmed && activeChain != nullptr) { activeChain->reset(); xfResetArmed = false; }
+        xfGain = 0.0;
         int32_t* rest[32];
         for (int c = 0; c < juce::jmin (numCh, 32); ++c) rest[c] = out[c] + done;
         outputSilenceInt (rest, juce::jmin (numCh, 32), numFrames - done);
     }
+    xfSilent.store (done < numFrames, std::memory_order_relaxed);
     stats.framesOut.fetch_add ((juce::uint64) numFrames, std::memory_order_relaxed);
 }
 
@@ -1738,6 +1794,11 @@ SignalPath PlaybackEngine::getSignalPath() const
                       enhancing ? PathQuality::Enhanced : PathQuality::HighQuality);
     }
 
+    if (plan.fixedRate)
+        path.add ("Fréquence"_t, "Fixe : "_t + formatRate (plan.deviceRate),
+                  "Sortie sans fil (Bluetooth / AirPlay) ou mode « Fixe » : la fréquence réglée par le système est gardée, "
+                  "aucune renégociation entre les morceaux"_t,
+                  plan.deviceRate == src.sampleRate ? PathQuality::BitPerfect : PathQuality::Enhanced);
     path.add ("Sortie", status.backendName + " · "_t + status.deviceName,
               status.detail.isNotEmpty() ? status.detail : (formatRate (status.sampleRate) + " · "_t + juce::String (status.deviceBits) + " bits"),
               status.exclusive && status.osMixerBypassed ? PathQuality::BitPerfect : PathQuality::LowQuality);

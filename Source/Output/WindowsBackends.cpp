@@ -54,6 +54,7 @@ public:
         caps.maxBits = c.maxValidBits > 0 ? c.maxValidBits : 24;
         caps.exclusiveAvailable = ! c.sampleRates.empty();
         caps.outputChannels = nxwin::probeExclusive (idFor (name), 6).sampleRates.empty() ? 2 : 6;   // 5.1 endpoint or stereo
+        caps.wireless = looksWireless (name);
         return caps;
     }
 

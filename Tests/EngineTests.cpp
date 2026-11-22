@@ -99,6 +99,9 @@ namespace
             if (configure) configure (*c);
             cap = c.get();
             engine = std::make_unique<nx::PlaybackEngine> (std::move (c));
+            auto st = engine->getSettings();
+            st.transitionFades = false;          // bit-perfect from the first sample (section 120 turns the fades on)
+            engine->setSettings (st);
         }
 
         static nx::PlayableItem item (const juce::File& f)
@@ -1940,5 +1943,175 @@ NX_TEST_SECTION (119, "Sous-étape H : DSD -> DXD 64 bits -> DSP -> modulateur D
                  && rig.engine->getCurrentPlan().conversion == nx::PlaybackPlan::Conversion::DsdRemodulate && std::abs (level - expected) < 0.004,
                  "DSF 6 canaux sur un DAC stéréo DoP : mixage ITU en DXD puis DSD64 en DoP, niveau gauche "_t + juce::String (level, 4)
                  + " (attendu " + juce::String (expected, 4) + ")");
+    }
+}
+
+//==============================================================================
+namespace
+{
+    struct CountingReset final : nx::DspProcessor
+    {
+        juce::String getName() const override { return "Test reset"; }
+        bool prepare (double, int, int) override { return true; }
+        void process (double* const*, int, int) noexcept override {}
+        void reset() noexcept override { ++resets; }
+        int resets = 0;
+    };
+}
+
+NX_TEST_SECTION (120, "Transitions sans pop : micro-fondus de 10 ms, remise à zéro du DSP, fréquence fixe en Bluetooth")
+{
+    // 997 Hz sine at -6 dBFS: never on a zero crossing at a cut, so a hard cut would jump by up to 0.5
+    auto sine = [&] (double rate, double seconds, const juce::String& name, double freq = 997.0)
+    {
+        const int frames = (int) (rate * seconds);
+        std::vector<int32_t> pcm ((size_t) frames * 2);
+        for (int i = 0; i < frames; ++i)
+            pcm[(size_t) i * 2] = pcm[(size_t) i * 2 + 1] = (int32_t) std::lround (0.5 * 8388607.0 * std::sin (2.0 * juce::MathConstants<double>::pi * freq * i / rate)) * 256;
+        auto f = t.tempDir.getChildFile (name);
+        writeWav (f, &pcm, nullptr, 2, (int) rate, 24, 24, false);
+        return f;
+    };
+    // largest step between two consecutive samples of the left channel, and where it happens
+    auto maxJump = [] (const std::vector<int32_t>& got, size_t& at)
+    {
+        double m = 0.0;
+        for (size_t i = 2; i < got.size(); i += 2)
+        {
+            const double d = std::abs ((double) got[i] - (double) got[i - 2]) / 2147483648.0;
+            if (d > m) { m = d; at = i / 2; }
+        }
+        return m;
+    };
+    const double natural = 0.5 * 2.0 * juce::MathConstants<double>::pi * 997.0 / 44100.0;   // a 997 Hz sine's own steepest step
+    const double bound = natural * 1.25 + 0.005;
+
+    auto withFades = [] (EngineRig& r) { auto st = r.engine->getSettings(); st.transitionFades = true; r.engine->setSettings (st); };
+    const auto a = sine (44100.0, 3.0, "xf_a.wav");
+    const auto b = sine (44100.0, 3.0, "xf_b.wav", 613.0);
+
+    // 1. skip in the middle of the music: 10 ms out, silence, 10 ms in; the DSP forgets the old track at gain 0
+    {
+        EngineRig rig;
+        withFades (rig);
+        auto chain = std::make_unique<nx::DspChain>();
+        auto* counter = new CountingReset();
+        chain->processors.emplace_back (counter);
+        rig.engine->setDspChain (std::move (chain));
+        rig.cap->renderFlag = &nxtest_countAllocations;
+        nxtest_allocationCount = 0;
+        rig.engine->setQueue ({ EngineRig::item (a), EngineRig::item (b) }, 0, true);
+        size_t skipAt = 0;
+        rig.runToEnd (256, 60.0, [&] (int block) { if (block == 120) { skipAt = rig.cap->capturedInt.size() / 2; rig.engine->next(); } });
+        rig.cap->renderFlag = nullptr;
+        const auto& got = rig.cap->capturedInt;
+        size_t at = 0;
+        const double jump = maxJump (got, at);
+        // shape of the fade: full level 25 ms before the silence, almost nothing in its last ms
+        size_t silence = skipAt;
+        while (silence < got.size() / 2 && std::abs ((double) got[silence * 2]) / 2147483648.0 > 1e-7) ++silence;
+        double before = 0.0, lastMs = 0.0;
+        for (size_t i = silence - 1500; i < silence - 1000; ++i) before = juce::jmax (before, std::abs ((double) got[i * 2]) / 2147483648.0);
+        for (size_t i = silence - 40; i < silence; ++i) lastMs = juce::jmax (lastMs, std::abs ((double) got[i * 2]) / 2147483648.0);
+        const double fadeMs = (double) (silence - skipAt) / 44.1;
+        t.check (jump < bound && before > 0.45 && lastMs < 0.03 && fadeMs < 30.0 && counter->resets == 1 && nxtest_allocationCount.load() == 0,
+                 "skip en pleine musique : fondu de sortie (plein niveau -> "_t + juce::String (lastMs, 3) + " dans la dernière ms), plus grand saut "
+                 + juce::String (jump, 4) + " (sinus seul : " + juce::String (natural, 4) + "), DSP remis à zéro une fois au gain 0, 0 allocation"_t);
+    }
+
+    // 2. pause / play, 3. seek: same smoothness
+    {
+        EngineRig rig;
+        withFades (rig);
+        rig.engine->setQueue ({ EngineRig::item (a) }, 0, true);
+        rig.runToEnd (256, 60.0, [&] (int block)
+        {
+            if (block == 60) rig.engine->pause();
+            if (block == 90) rig.engine->play();
+            if (block == 150) rig.engine->seek (2.0);
+        });
+        size_t at = 0;
+        const double jump = maxJump (rig.cap->capturedInt, at);
+        t.check (jump < bound, "pause, reprise puis saut à 2 s : aucun saut au-delà de celui du sinus ("_t + juce::String (jump, 4) + ")");
+    }
+
+    // 4. end of a track into another rate (device reopened): the last 10 ms fade out; 5. a gapless join stays untouched
+    {
+        const auto end44 = sine (44100.0, 0.5, "xf_end44.wav");
+        const auto next96 = sine (96000.0, 0.5, "xf_next96.wav");
+        EngineRig rig;
+        withFades (rig);
+        rig.engine->setQueue ({ EngineRig::item (end44), EngineRig::item (next96) }, 0, true);
+        rig.runToEnd (256);
+        size_t at = 0;
+        const double jump = maxJump (rig.cap->capturedInt, at);
+
+        // bit-exactness without DSP (an active DSP always dithers), the DSP resets with one
+        EngineRig gap;
+        withFades (gap);
+        const auto half1 = sine (44100.0, 0.5, "xf_g1.wav"), half2 = sine (44100.0, 0.5, "xf_g2.wav");
+        gap.engine->setQueue ({ EngineRig::item (half1), EngineRig::item (half2) }, 0, true);
+        gap.runToEnd (256);
+        EngineRig gapDsp;
+        withFades (gapDsp);
+        auto chain = std::make_unique<nx::DspChain>();
+        auto* counter = new CountingReset();
+        chain->processors.emplace_back (counter);
+        gapDsp.engine->setDspChain (std::move (chain));
+        gapDsp.engine->setQueue ({ EngineRig::item (half1), EngineRig::item (half2) }, 0, true);
+        gapDsp.runToEnd (256);
+        // around the join (the second half of the first file, the whole second one) every sample is the file's own:
+        // no fade at a gapless join (the very start of playback has its own 10 ms fade-in)
+        const auto& g = gap.cap->capturedInt;
+        size_t first = 0;
+        while (first < g.size() / 2 && g[first * 2] == 0) ++first;
+        const size_t base = first - 1;                                     // file sample 0 is 0
+        const int n = 22050;
+        bool exact = first > 0 && g.size() / 2 >= base + (size_t) (2 * n);
+        for (int i = n / 2; exact && i < n; ++i)
+        {
+            const auto v = (int32_t) std::lround (0.5 * 8388607.0 * std::sin (2.0 * juce::MathConstants<double>::pi * 997.0 * i / 44100.0)) * 256;
+            const auto w = (int32_t) std::lround (0.5 * 8388607.0 * std::sin (2.0 * juce::MathConstants<double>::pi * 997.0 * (i - n / 2) / 44100.0)) * 256;
+            exact = g[(base + (size_t) i) * 2] == v && g[(base + (size_t) (n + i - n / 2)) * 2] == w;
+        }
+        t.check (jump < bound && exact && counter->resets == 0,
+                 "fin de piste vers une autre fréquence : fondu des 10 dernières ms (saut "_t + juce::String (jump, 4)
+                 + ") ; enchaînement gapless au même format : au bit près, sans fondu ni remise à zéro"_t
+                 + " [" + juce::String ((int) exact) + " " + juce::String (counter->resets) + " " + juce::String ((int) first) + " " + juce::String ((int) (g.size() / 2)) + "]");
+    }
+
+    // 6. Bluetooth: the rate the system set stays for the whole queue (one opening), every source converted to it
+    {
+        auto dsf = t.tempDir.getChildFile ("xf_bt.dsf");
+        writeDsf (dsf, dsdSine (2822400.0, 0.4, 2, 1000.0, 0.4), 2, 2822400.0, true);
+        const auto r96 = sine (96000.0, 0.4, "xf_bt96.wav"), r48 = sine (48000.0, 0.4, "xf_bt48.wav"), r44 = sine (44100.0, 0.4, "xf_bt44.wav");
+        auto btCaps = [] (nx::CaptureBackend& c)
+        {
+            c.capabilities.sampleRates = { 44100.0, 48000.0, 96000.0, 176400.0 };
+            c.capabilities.wireless = true;
+            c.capabilities.currentRate = 48000.0;
+        };
+        EngineRig bt (btCaps);
+        nx::SignalPath path;
+        double maxRate = 0.0;
+        bool allPcm = true;
+        bt.engine->setQueue ({ EngineRig::item (r44), EngineRig::item (r96), EngineRig::item (r48), EngineRig::item (dsf) }, 0, true);
+        bt.runToEnd (512, 60.0, [&] (int block)
+        {
+            if (block == 10) path = bt.engine->getSignalPath();
+            maxRate = juce::jmax (maxRate, bt.cap->config.sampleRate);
+            allPcm = allPcm && bt.cap->config.wire == nx::WireFormat::Pcm;
+        });
+        bool node = false;
+        for (auto& nd : path.nodes) node = node || (nd.stage == nx::tr ("Fréquence"_t) && nd.title.contains ("48"));
+        EngineRig wired (btCaps);
+        auto st = wired.engine->getSettings();
+        st.rateMode = nx::RateMode::FollowSource;
+        wired.engine->setSettings (st);
+        wired.engine->setQueue ({ EngineRig::item (r44), EngineRig::item (r96), EngineRig::item (r48) }, 0, true);
+        wired.runToEnd (512);
+        t.check (bt.cap->opens == 1 && maxRate == 48000.0 && allPcm && node && wired.cap->opens == 3,
+                 "Bluetooth (48 kHz réglé par le système) : 44,1 / 96 / 48 kHz et DSD joués à 48 kHz, une seule ouverture ; « Toujours suivre la source » : 3 ouvertures"_t
+                 + " [" + juce::String (bt.cap->opens) + " " + juce::String (maxRate) + " " + juce::String ((int) allPcm) + " " + juce::String ((int) node) + " " + juce::String (wired.cap->opens) + "]");
     }
 }

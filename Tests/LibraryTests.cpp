@@ -598,6 +598,7 @@ NX_TEST_SECTION (206, "NAS : flux HTTP progressif vers le moteur (bit-perfect)")
     auto cap = std::make_unique<nx::CaptureBackend>();
     auto* capture = cap.get();
     nx::PlaybackEngine engine (std::move (cap));
+    { auto st = engine.getSettings(); st.transitionFades = false; engine.setSettings (st); }   // bit-perfect from sample 1
     engine.streamResolver = [&unified] (const nx::PlayableItem& i) { return unified.openStream (i); };
     engine.setQueue ({ unified.toPlayable (tr) }, 0, true);
     const auto t0 = juce::Time::getMillisecondCounter();
@@ -730,6 +731,7 @@ NX_TEST_SECTION (208, "NAS UPnP / DLNA de bout en bout : découverte, navigation
     auto cap = std::make_unique<nx::CaptureBackend>();
     auto* capture = cap.get();
     nx::PlaybackEngine engine (std::move (cap));
+    { auto st = engine.getSettings(); st.transitionFades = false; engine.setSettings (st); }   // bit-perfect from sample 1
     engine.streamResolver = [&unified] (const nx::PlayableItem& i) { return unified.openStream (i); };
     engine.setQueue ({ unified.toPlayable (ordered.front()) }, 0, true);
     const auto t0 = juce::Time::getMillisecondCounter();

@@ -51,8 +51,16 @@ DeviceCapabilities JuceDeviceBackend::probe (const juce::String& name)
         const auto bits = coreaudio::getMaxPhysicalBits (name);
         if (bits > 0) caps.maxBits = bits;
         caps.exclusiveAvailable = true;
+        caps.wireless = coreaudio::isWireless (name);
+        caps.currentRate = coreaudio::getCurrentNominalRate (name);
     }
    #endif
+    if (typeName != "CoreAudio")
+    {
+        caps.wireless = looksWireless (name);
+        caps.currentRate = dev->getCurrentSampleRate();
+        if (caps.currentRate <= 0.0 && caps.sampleRates.size() == 1) caps.currentRate = caps.sampleRates[0];   // a mixer's one rate
+    }
     if (typeName == "ALSA") caps.exclusiveAvailable = name.containsIgnoreCase ("hw:") || ! name.containsIgnoreCase ("default");
     // Through a float API, 24 bits is what can be guaranteed exact.
     caps.maxBits = juce::jmin (caps.maxBits, 24);

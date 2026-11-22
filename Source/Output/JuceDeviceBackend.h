@@ -71,6 +71,10 @@ namespace coreaudio
     juce::Array<double> getNominalSampleRates (const juce::String& deviceName);
     unsigned int findDeviceId (const juce::String& deviceName);   // AudioObjectID, 0 = unknown
     int getMaxPhysicalBits (const juce::String& deviceName);
+    /** Bluetooth, Bluetooth LE or AirPlay transport (kAudioDevicePropertyTransportType). */
+    bool isWireless (const juce::String& deviceName);
+    /** kAudioDevicePropertyNominalSampleRate now (0 = unknown). */
+    double getCurrentNominalRate (const juce::String& deviceName);
 }
 
 /** macOS output: own IOProc (integer stream format, or the driver's Float32 written exactly), Hog Mode, formats

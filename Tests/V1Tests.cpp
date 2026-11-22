@@ -38,6 +38,9 @@ namespace
             if (configure) configure (*c);
             cap = c.get();
             engine = std::make_unique<nx::PlaybackEngine> (std::move (c));
+            auto st = engine->getSettings();
+            st.transitionFades = false;          // bit-perfect from the first sample (section 120 turns the fades on)
+            engine->setSettings (st);
         }
         static nx::PlayableItem item (const juce::File& f)
         {

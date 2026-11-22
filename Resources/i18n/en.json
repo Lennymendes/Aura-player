@@ -996,5 +996,18 @@
  "Source DSD avec AURA DSP / Outils Studio ou mixage 5.1 -> 2.0 : DSD -> DXD 64 bits -> traitement -> modulateur DSD (même ordre et même marge). Désactivé : sortie DXD (PCM 352,8 kHz).": "DSD source with AURA DSP / Studio Tools or a 5.1 -> 2.0 mix: DSD -> 64-bit DXD -> processing -> DSD modulator (same order and headroom). Off: DXD output (PCM 352.8 kHz).",
  "FIR 64 bits, 150 dB (le DSD d'origine n'est plus transmis tel quel)": "64-bit FIR, 150 dB (the original DSD is no longer sent as is)",
  "Sinc polyphase 64 bits, 160 dB": "64-bit polyphase sinc, 160 dB",
- "64 bits en DXD, avant le modulateur": "64-bit in DXD, before the modulator"
+ "64 bits en DXD, avant le modulateur": "64-bit in DXD, before the modulator",
+ "Fréquence fixe (sortie sans fil) : ": "Fixed rate (wireless output): ",
+ "Fréquence fixe : ": "Fixed rate: ",
+ " gardée pour toute la lecture": " kept for the whole playback",
+ "Fréquence": "Rate",
+ "Fixe : ": "Fixed: ",
+ "Sortie sans fil (Bluetooth / AirPlay) ou mode « Fixe » : la fréquence réglée par le système est gardée, aucune renégociation entre les morceaux": "Wireless output (Bluetooth / AirPlay) or \"Fixed\" mode: the rate the system set is kept, no renegotiation between tracks",
+ "Auto (suit la source ; fixe en Bluetooth / AirPlay)": "Auto (follows the source; fixed on Bluetooth / AirPlay)",
+ "Toujours suivre la source": "Always follow the source",
+ "Toujours fixe": "Always fixed",
+ "Fréquence de sortie": "Output rate",
+ "Un DAC filaire suit la fréquence de chaque morceau (bit-perfect). Une sortie Bluetooth ou AirPlay garde la fréquence réglée par le système : chaque changement renégocie la liaison (pops, coupures) ; Aura convertit alors en 64 bits.": "A wired DAC follows each track's rate (bit-perfect). A Bluetooth or AirPlay output keeps the rate the system set: every change renegotiates the link (pops, drop-outs); Aura then converts in 64 bits.",
+ "Micro-fondus aux transitions (10 ms)": "Micro-fades at transitions (10 ms)",
+ "Supprime les pops au démarrage, à la pause, à l'arrêt, au saut de piste, au déplacement et au changement de fréquence. Jamais entre deux morceaux enchaînés sans blanc. Désactivé : bit-perfect strict dès le premier échantillon.": "Removes pops at start, pause, stop, track skip, seek and rate change. Never between two gapless tracks. Off: strictly bit-perfect from the very first sample."
 }

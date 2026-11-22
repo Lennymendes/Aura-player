@@ -34,7 +34,34 @@ namespace
     }
 }
 
+static PlaybackPlan planFollowingSource (const StreamFormat& src, const DeviceCapabilities& caps, const EngineSettings& s);
+
 PlaybackPlan makePlan (const StreamFormat& src, const DeviceCapabilities& caps, const EngineSettings& s)
+{
+    const bool fixed = caps.currentRate > 0.0
+                       && (s.rateMode == RateMode::Fixed || (s.rateMode == RateMode::Auto && caps.wireless));
+    if (! fixed) return planFollowingSource (src, caps, s);
+    // One rate for the whole session and no DSD on the wire (no DoP through Bluetooth or a mixer): every source is
+    // converted to it in 64 bits, the device is never reopened between tracks.
+    auto c = caps;
+    c.sampleRates = { caps.currentRate };
+    c.nativeDsdRates.clear();
+    auto t = s;
+    t.dopAllowed = false;
+    t.pcmToDsd = 0;
+    t.keepDsdOutput = false;
+    t.upsampleToDxd = false;
+    auto p = planFollowingSource (src, c, t);
+    p.fixedRate = true;
+    // one wire for every track (a 24-bit file and a converted one alike: 24 bits fit losslessly in 32), so the
+    // device is never reopened between tracks
+    p.ringBitsHint = 32;
+    p.reason += " · "_t + (caps.wireless ? "Fréquence fixe (sortie sans fil) : "_t : "Fréquence fixe : "_t)
+                + formatRate (caps.currentRate) + " gardée pour toute la lecture"_t;
+    return p;
+}
+
+static PlaybackPlan planFollowingSource (const StreamFormat& src, const DeviceCapabilities& caps, const EngineSettings& s)
 {
     PlaybackPlan p;
     p.source = src;
