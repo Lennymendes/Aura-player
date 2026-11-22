@@ -2,6 +2,7 @@
 // Brique 3 & 4: themes (CSS, hot reload, import / export), JS UI plug-ins, C DSP plug-ins, and the
 // whole interface rendered off-screen (screenshots of every page).
 #include "TestFramework.h"
+#include "../Source/DSP/E9ds.h"
 #include "../Source/Core/Diagnostics.h"
 #include "FakeUpnp.h"
 #include <set>
@@ -1027,6 +1028,33 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
                  + juce::String ((int) flat) + juce::String ((int) copied) + juce::String ((int) loaded) + juce::String ((int) headroom) + "]");
         t.check (chipShown && bypassed && backOn && fromChip && ! app.studioTools().anyActive(),
                  "en-tête : témoin Bit-Perfect, EQ casque contourné / réactivé d'un clic, ouvre AURA DSP"_t);
+        {
+            // E9DS: row of AURA DSP, its own view (focus presets, amount, mode), remembered; DSD converted while it is on
+            main->player.studioButton.onClick();
+            dsp.e9ds.triggerClick();
+            settle (60);
+            dsp.e9Sib.triggerClick();
+            dsp.e9Hf.triggerClick();
+            settle (60);
+            dsp.e9Amount.setValue (-4.5, juce::sendNotificationSync);
+            dsp.e9Bril.triggerClick();
+            settle (60);
+            const auto& e = app.e9ds();
+            const auto saved = app.settings().get ("e9ds");
+            const bool on = dsp.getView() == nx::AuraDspPanel::View::E9ds && e.enabled.load() && dsp.e9Focus.isVisible() && ! dsp.getGraph().isVisible()
+                            && e.mode.load() == nx::E9dsState::DynamicHf && std::abs (e.amountDb.load() - 4.5) < 1e-9 && e.focusHz.load() == 9000.0
+                            && (bool) saved.getProperty ("enabled", false) && (double) saved.getProperty ("focus", 0.0) == 9000.0
+                            && app.engine().getSettings().dspNeedsPcm;
+            settle (100);
+            shoot ("46d_aura_dsp_e9ds");
+            dsp.e9Split.triggerClick();
+            dsp.e9ds.triggerClick();
+            settle (60);
+            const bool off = ! e.enabled.load() && ! app.engine().getSettings().dspNeedsPcm && ! (bool) app.settings().get ("e9ds").getProperty ("enabled", true);
+            dsp.close();
+            t.check (on && off, "AURA DSP · E9DS : vue dédiée (Brillance 9 kHz, -4,5 dB, Dynamic HF), réglages gardés, DSD converti tant qu'il est actif, éteint sans reconstruire la chaîne"_t
+                     + " [" + juce::String ((int) on) + juce::String ((int) off) + "]");
+        }
         {
             // no third-party product name anywhere in the interface (French and English dictionaries, sources);
             // the names are assembled here so that this file stays free of them too

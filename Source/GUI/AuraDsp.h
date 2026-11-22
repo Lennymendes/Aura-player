@@ -78,7 +78,7 @@ public:
     void mouseMove (const juce::MouseEvent&) override { repaint(); }
     bool keyPressed (const juce::KeyPress& k) override { if (k == juce::KeyPress::escapeKey) { close(); return true; } return false; }
 
-    enum class View { Headphone, Parametric };
+    enum class View { Headphone, Parametric, E9ds };
     void setView (View v);
     View getView() const noexcept { return view; }
 
@@ -94,7 +94,10 @@ public:
     /** Headphone view, once a profile is loaded: adds the parametric EQ on top (its own bands, the profile untouched). */
     juce::TextButton addPeqButton;
     juce::ComboBox userPresets;
-    juce::ToggleButton headroom, upsample, crossfeed, hpEq, peq, phase;
+    juce::ToggleButton headroom, upsample, crossfeed, hpEq, peq, phase, e9ds;
+    /** E9DS view: Focus 4-12 kHz (presets 6.5 / 9 kHz), Amount 0 to -6 dB, Split-Band / Dynamic HF. */
+    juce::Slider e9Focus, e9Amount;
+    juce::TextButton e9Split, e9Hf, e9Sib, e9Bril;
 
     static constexpr int rowH = 54;
 
@@ -123,7 +126,10 @@ private:
     View view = View::Headphone;
     std::vector<std::pair<juce::Rectangle<int>, int>> monitorSegs;
     bool saveQueued = false;
+    int e9Ticks = 0;
     juce::Rectangle<int> left, right;
+    juce::Rectangle<int> e9Meter;
+    void e9Changed (bool persist);
 };
 
 } // namespace nx

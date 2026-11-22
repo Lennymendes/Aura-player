@@ -21,6 +21,7 @@ class DownloadManager;
 class ArtistInfoService;
 class RemoteServer;
 struct StudioToolsState;
+struct E9dsState;
 class TrackAnalyzer;
 struct TrackAnalysis;
 class LicenseManager;
@@ -72,6 +73,7 @@ public:
     virtual ArtistInfoService& artistInfo() = 0;
     virtual RemoteServer& remote() = 0;
     virtual StudioToolsState& studioTools() = 0;
+    virtual E9dsState& e9ds() = 0;
     /** Background scan of the current track (waveform, Peak / RMS / DR); broadcasts a change when one finishes. */
     virtual TrackAnalyzer& trackAnalyzer() = 0;
     /** The current track's analysis (null while scanning, or for streams). */
@@ -134,6 +136,8 @@ public:
     virtual void setHeadphoneEq (int presetIndex, bool bypass) = 0;
     /** Parametric EQ (7 bands): applied at once (live, while dragging); `persist` also saves it in settings.json. */
     virtual void setParametricEq (const hpeq::ParametricBands& bands, bool enabled, bool persist) = 0;
+    /** E9DS (de-esser): applied at once without rebuilding the chain (the switch ramps in / out), and remembered. */
+    virtual void setE9ds (bool enabled, double focusHz, double amountDb, int mode) = 0;
     /** User presets of the parametric EQ, kept in settings.json ("peqPresets"). */
     virtual juce::StringArray getParametricPresetNames() = 0;
     virtual void saveParametricPreset (const juce::String& name) = 0;

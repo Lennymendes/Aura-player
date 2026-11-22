@@ -1009,5 +1009,18 @@
  "Fréquence de sortie": "Output rate",
  "Un DAC filaire suit la fréquence de chaque morceau (bit-perfect). Une sortie Bluetooth ou AirPlay garde la fréquence réglée par le système : chaque changement renégocie la liaison (pops, coupures) ; Aura convertit alors en 64 bits.": "A wired DAC follows each track's rate (bit-perfect). A Bluetooth or AirPlay output keeps the rate the system set: every change renegotiates the link (pops, drop-outs); Aura then converts in 64 bits.",
  "Micro-fondus aux transitions (10 ms)": "Micro-fades at transitions (10 ms)",
- "Supprime les pops au démarrage, à la pause, à l'arrêt, au saut de piste, au déplacement et au changement de fréquence. Jamais entre deux morceaux enchaînés sans blanc. Désactivé : bit-perfect strict dès le premier échantillon.": "Removes pops at start, pause, stop, track skip, seek and rate change. Never between two gapless tracks. Off: strictly bit-perfect from the very first sample."
+ "Supprime les pops au démarrage, à la pause, à l'arrêt, au saut de piste, au déplacement et au changement de fréquence. Jamais entre deux morceaux enchaînés sans blanc. Désactivé : bit-perfect strict dès le premier échantillon.": "Removes pops at start, pause, stop, track skip, seek and rate change. Never between two gapless tracks. Off: strictly bit-perfect from the very first sample.",
+ "E9DS": "E9DS",
+ "Sibilances 6,5 kHz": "Sibilance 6.5 kHz",
+ "Brillance 9 kHz": "Brilliance 9 kHz",
+ "Cloche dynamique sur la bande : seules les sibilances baissent, le reste ne bouge pas.": "Dynamic bell on the band: only the sibilance goes down, nothing else moves.",
+ "Plateau doux au-dessus de la fréquence, seulement quand les aigus dépassent le seuil.": "Gentle shelf above the frequency, only when the treble goes over the threshold.",
+ "De-esser transparent, sibilances et aigus durs": "Transparent de-esser, sibilance and harsh treble",
+ "E9DS · DE-ESSER / ADOUCISSEUR D'AIGUS": "E9DS · DE-ESSER / TREBLE SOFTENER",
+ "Fréquence (Focus)": "Frequency (Focus)",
+ "Quantité (Amount) : atténuation maximale": "Amount: maximum attenuation",
+ "6,5 kHz sibilances": "6.5 kHz sibilance",
+ "8-10 kHz brillance": "8-10 kHz brilliance",
+ "Réduction : ": "Reduction: ",
+ "Seuil automatique (part des aigus dans le signal). Sous le seuil, la sortie est identique à l'entrée, au bit près.": "Automatic threshold (share of treble in the signal). Below it, the output is bit-identical to the input."
 }

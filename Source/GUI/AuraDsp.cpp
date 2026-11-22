@@ -1,6 +1,7 @@
 // Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "AuraDsp.h"
 #include "../DSP/StudioTools.h"
+#include "../DSP/E9ds.h"
 
 namespace nx
 {
@@ -267,8 +268,8 @@ void BandStrip::paint (juce::Graphics& g)
 //==============================================================================
 namespace
 {
-    enum Row { Source, Headroom, Conversion, Crossfeed, HeadphoneEq, ParametricEq, Polarity, numRows };
-    const char* const rowTitles[] = { "Source", "Gestion du headroom", "Conversion de fréquence", "Crossfeed", "Égaliseur casque", "Égaliseur paramétrique", "Polarité" };
+    enum Row { Source, Headroom, Conversion, Crossfeed, HeadphoneEq, ParametricEq, Polarity, E9ds, numRows };
+    const char* const rowTitles[] = { "Source", "Gestion du headroom", "Conversion de fréquence", "Crossfeed", "Égaliseur casque", "Égaliseur paramétrique", "Polarité", "E9DS" };
 }
 
 AuraDspPanel::AuraDspPanel (AppContext& c)
@@ -279,7 +280,7 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
     setWantsKeyboardFocus (true);
     addAndMakeVisible (closeButton);
     closeButton.onClick = [this] { close(); };
-    for (auto* t : { &headroom, &upsample, &crossfeed, &hpEq, &peq, &phase }) addAndMakeVisible (t);
+    for (auto* t : { &headroom, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds }) addAndMakeVisible (t);
     headroom.onClick = [this]
     {
         auto& s = ctx.studioTools();
@@ -308,6 +309,41 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
         ctx.setParametricEq (ctx.studioTools().parametricBands(), peq.getToggleState(), true);
         setView (View::Parametric);
     };
+    e9ds.onClick = [this] { e9Changed (true); setView (View::E9ds); };
+    for (auto* sl : { &e9Focus, &e9Amount })
+    {
+        sl->setSliderStyle (juce::Slider::LinearHorizontal);
+        sl->setTextBoxStyle (juce::Slider::TextBoxRight, false, 78, 22);
+        sl->setTextBoxIsEditable (true);
+        sl->onValueChange = [this] { e9Changed (false); };
+        sl->onDragEnd = [this] { e9Changed (true); };
+        const auto& t = ctx.theme();
+        sl->setColour (juce::Slider::trackColourId, t.accent());
+        sl->setColour (juce::Slider::backgroundColourId, t.textCol().withAlpha (0.14f));
+        sl->setColour (juce::Slider::thumbColourId, t.textCol());
+        sl->setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+        sl->setColour (juce::Slider::textBoxBackgroundColourId, t.textCol().withAlpha (0.06f));
+        sl->setColour (juce::Slider::textBoxTextColourId, t.textCol());
+        addChildComponent (sl);
+    }
+    e9Focus.setRange (E9dsState::minFocus, E9dsState::maxFocus, 10.0);
+    e9Focus.textFromValueFunction = [] (double v) { return juce::String (v / 1000.0, 2).replaceCharacter ('.', ',') + " kHz"; };
+    e9Focus.valueFromTextFunction = [] (const juce::String& t) { const double v = t.replaceCharacter (',', '.').getDoubleValue(); return v < 100.0 ? v * 1000.0 : v; };
+    e9Amount.setRange (-E9dsState::maxAmountDb, 0.0, 0.1);
+    e9Amount.textFromValueFunction = [] (double v) { return juce::String (v, 1).replaceCharacter ('.', ',') + " dB"; };
+    e9Amount.valueFromTextFunction = [] (const juce::String& t) { return -std::abs (t.replaceCharacter (',', '.').getDoubleValue()); };
+    e9Amount.setDoubleClickReturnValue (true, -3.0);
+    e9Split.setButtonText ("Split-Band");
+    e9Hf.setButtonText ("Dynamic HF");
+    e9Sib.setButtonText ("Sibilances 6,5 kHz"_t);
+    e9Bril.setButtonText ("Brillance 9 kHz"_t);
+    e9Split.setTooltip ("Cloche dynamique sur la bande : seules les sibilances baissent, le reste ne bouge pas."_t);
+    e9Hf.setTooltip ("Plateau doux au-dessus de la fréquence, seulement quand les aigus dépassent le seuil."_t);
+    e9Split.onClick = [this] { ctx.e9ds().mode = E9dsState::SplitBand; e9Changed (true); };
+    e9Hf.onClick = [this] { ctx.e9ds().mode = E9dsState::DynamicHf; e9Changed (true); };
+    e9Sib.onClick = [this] { e9Focus.setValue (6500.0, juce::dontSendNotification); e9Changed (true); };
+    e9Bril.onClick = [this] { e9Focus.setValue (9000.0, juce::dontSendNotification); e9Changed (true); };
+    for (auto* b : { &e9Split, &e9Hf, &e9Sib, &e9Bril }) addChildComponent (b);
 
     search.setTextToShowWhenEmpty ("Rechercher un casque (ex: HD 650, Momentum M2, Focal...)"_t, ctx.theme().textDim());
     search.setFont (style::font (13.5f));
@@ -401,6 +437,7 @@ void AuraDspPanel::close()
 void AuraDspPanel::timerCallback()
 {
     if (saveQueued) bandsChanged (ctx.studioTools().parametricBands(), true);
+    if (view == View::E9ds && ++e9Ticks % 8 != 0) { repaint (e9Meter); return; }
     syncControls();
     repaint();
 }
@@ -425,6 +462,12 @@ void AuraDspPanel::syncControls()
     hpEq.setToggleState (s.eqActive(), juce::dontSendNotification);
     peq.setToggleState (s.peqActive(), juce::dontSendNotification);
     phase.setToggleState (s.invertPhase.load(), juce::dontSendNotification);
+    const auto& e = ctx.e9ds();
+    e9ds.setToggleState (e.enabled.load(), juce::dontSendNotification);
+    if (! e9Focus.isMouseButtonDown()) e9Focus.setValue (e.focusHz.load(), juce::dontSendNotification);
+    if (! e9Amount.isMouseButtonDown()) e9Amount.setValue (-e.amountDb.load(), juce::dontSendNotification);
+    e9Split.setToggleState (e.mode.load() == E9dsState::SplitBand, juce::dontSendNotification);
+    e9Hf.setToggleState (e.mode.load() == E9dsState::DynamicHf, juce::dontSendNotification);
     addPeqButton.setButtonText (s.peqActive() ? "EQ paramétrique ›"_t : "+ EQ paramétrique"_t);
     if (const bool show = view == View::Headphone && s.eqActive(); show != addPeqButton.isVisible()) { addPeqButton.setVisible (show); resized(); }
     const auto b = s.parametricBands();
@@ -437,16 +480,28 @@ void AuraDspPanel::syncControls()
     }
 }
 
+void AuraDspPanel::e9Changed (bool persist)
+{
+    auto& e = ctx.e9ds();
+    if (persist) ctx.setE9ds (e9ds.getToggleState(), e9Focus.getValue(), -e9Amount.getValue(), e.mode.load());
+    else e.set (e9ds.getToggleState(), e9Focus.getValue(), -e9Amount.getValue(), e.mode.load());     // live while dragging
+    syncControls();
+    repaint();
+}
+
 void AuraDspPanel::setView (View v)
 {
     view = v;
-    const bool p = v == View::Parametric;
-    search.setVisible (! p);
-    list.setVisible (! p);
-    addPeqButton.setVisible (! p && ctx.studioTools().eqActive());
+    const bool p = v == View::Parametric, h = v == View::Headphone, e = v == View::E9ds;
+    search.setVisible (h);
+    list.setVisible (h);
+    graph.setVisible (! e);
+    for (auto* c : std::initializer_list<juce::Component*> { &e9Focus, &e9Amount, &e9Split, &e9Hf, &e9Sib, &e9Bril }) c->setVisible (e);
+    addPeqButton.setVisible (h && ctx.studioTools().eqActive());
     graph.editable = p;
     for (auto* b : bands) b->setVisible (p);
     for (auto* c : std::initializer_list<juce::Component*> { &resetButton, &copyButton, &saveButton, &userPresets }) c->setVisible (p);
+    startTimerHz (e ? 15 : 2);       // E9DS: the reduction meter
     resized();
     repaint();
 }
@@ -560,13 +615,32 @@ void AuraDspPanel::resized()
     closeButton.setBounds (p.removeFromTop (40).removeFromRight (36).withSizeKeepingCentre (32, 32));
     p.removeFromTop (12);
     left = p.removeFromLeft (juce::jmin (340, p.getWidth() / 3));
-    juce::ToggleButton* toggles[] = { nullptr, &headroom, &upsample, &crossfeed, &hpEq, &peq, &phase };
+    juce::ToggleButton* toggles[] = { nullptr, &headroom, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds };
     for (int r = 1; r < numRows; ++r) toggles[r]->setBounds (rowBounds (r).removeFromRight (52).withSizeKeepingCentre (48, 28));
     p.removeFromLeft (22);
     right = p;
     auto rr = right;
     rr.removeFromTop (24);                                  // view title
-    if (view == View::Headphone)
+    if (view == View::E9ds)
+    {
+        rr.removeFromTop (10);
+        auto modes = rr.removeFromTop (34).removeFromLeft (320);
+        e9Split.setBounds (modes.removeFromLeft (156));
+        modes.removeFromLeft (8);
+        e9Hf.setBounds (modes);
+        rr.removeFromTop (40);                              // "Fréquence" label
+        e9Focus.setBounds (rr.removeFromTop (32));
+        rr.removeFromTop (22);                              // markers 6.5 / 8-10 kHz
+        auto pre = rr.removeFromTop (30).removeFromLeft (360);
+        e9Sib.setBounds (pre.removeFromLeft (176));
+        pre.removeFromLeft (8);
+        e9Bril.setBounds (pre);
+        rr.removeFromTop (40);                              // "Quantité" label
+        e9Amount.setBounds (rr.removeFromTop (32));
+        rr.removeFromTop (44);                              // meter label
+        e9Meter = rr.removeFromTop (18);
+    }
+    else if (view == View::Headphone)
     {
         auto top = rr.removeFromTop (34);
         if (addPeqButton.isVisible()) { addPeqButton.setBounds (top.removeFromRight (190)); top.removeFromRight (8); }
@@ -600,6 +674,7 @@ void AuraDspPanel::mouseUp (const juce::MouseEvent& e)
     if (! panelBounds().contains (e.getPosition())) { close(); return; }
     if (rowBounds (HeadphoneEq).withTrimmedRight (60).contains (e.getPosition())) { setView (View::Headphone); return; }
     if (rowBounds (ParametricEq).withTrimmedRight (60).contains (e.getPosition())) { setView (View::Parametric); return; }
+    if (rowBounds (E9ds).withTrimmedRight (60).contains (e.getPosition())) { setView (View::E9ds); return; }
     for (auto& [r, i] : monitorSegs) if (r.contains (e.getPosition())) { chooseMonitor (i); return; }
 }
 
@@ -634,8 +709,8 @@ void AuraDspPanel::paint (juce::Graphics& g)
     auto drawRow = [&] (int i, bool on, const juce::String& detail)
     {
         auto row = rowBounds (i);
-        const bool selected = (i == HeadphoneEq && view == View::Headphone) || (i == ParametricEq && view == View::Parametric);
-        if (selected || ((i == HeadphoneEq || i == ParametricEq) && row.contains (mouse)))
+        const bool selected = (i == HeadphoneEq && view == View::Headphone) || (i == ParametricEq && view == View::Parametric) || (i == E9ds && view == View::E9ds);
+        if (selected || ((i == HeadphoneEq || i == ParametricEq || i == E9ds) && row.contains (mouse)))
         {
             g.setColour (selected ? style::neutral().withAlpha (0.08f) : style::neutral().withAlpha (0.04f));
             g.fillRoundedRectangle (row.toFloat().reduced (0.0f, 3.0f), 10.0f);
@@ -675,6 +750,13 @@ void AuraDspPanel::paint (juce::Graphics& g)
         drawRow (ParametricEq, s.peqActive(), moved > 0 ? juce::String (moved) + " bande(s) réglée(s) sur 7"_t : juce::String ("7 bandes à plat (0 dB)"_t));
     }
     drawRow (Polarity, s.invertPhase.load(), "Inversion de polarité absolue (Ø)"_t);
+    {
+        const auto& e = ctx.e9ds();
+        const juce::String khz = juce::String (e.focusHz.load() / 1000.0, 1).replaceCharacter ('.', ',');
+        drawRow (E9ds, e.enabled.load(), e.enabled.load() ? juce::String (e.mode.load() == E9dsState::DynamicHf ? "Dynamic HF" : "Split-Band") + "  ·  " + khz + " kHz  ·  max -"
+                                                              + juce::String (e.amountDb.load(), 1).replaceCharacter ('.', ',') + " dB"
+                                                        : juce::String ("De-esser transparent, sibilances et aigus durs"_t));
+    }
 
     monitorSegs.clear();
     {
@@ -698,7 +780,46 @@ void AuraDspPanel::paint (juce::Graphics& g)
     // right: title of the view
     g.setColour (t.textDim());
     g.setFont (style::font (12.0f, true));
-    g.drawText (view == View::Headphone ? "PROFILS CASQUE"_t : "ÉGALISEUR PARAMÉTRIQUE · 7 BANDES"_t, right.withHeight (20), juce::Justification::centredLeft);
+    g.drawText (view == View::Headphone ? "PROFILS CASQUE"_t : view == View::E9ds ? "E9DS · DE-ESSER / ADOUCISSEUR D'AIGUS"_t : "ÉGALISEUR PARAMÉTRIQUE · 7 BANDES"_t,
+                right.withHeight (20), juce::Justification::centredLeft);
+    if (view == View::E9ds)
+    {
+        const auto& e = ctx.e9ds();
+        auto label = [&] (juce::Component& under, const juce::String& text)
+        {
+            g.setColour (t.textCol());
+            g.setFont (style::font (13.5f, true));
+            g.drawText (text, under.getBounds().translated (0, -30).withHeight (24), juce::Justification::bottomLeft);
+        };
+        label (e9Focus, "Fréquence (Focus)"_t);
+        label (e9Amount, "Quantité (Amount) : atténuation maximale"_t);
+        // markers under the focus slider: sibilance 6.5 kHz, harshness / brilliance 8-10 kHz
+        const auto track = e9Focus.getBounds().withTrimmedRight (86).reduced (10, 0);
+        auto xOf = [&] (double hz) { return (float) track.getX() + (float) ((hz - E9dsState::minFocus) / (E9dsState::maxFocus - E9dsState::minFocus)) * (float) track.getWidth(); };
+        const float y = (float) e9Focus.getBottom() + 2.0f;
+        g.setColour (t.accent().withAlpha (0.25f));
+        g.fillRoundedRectangle (xOf (8000.0), y, xOf (10000.0) - xOf (8000.0), 5.0f, 2.5f);
+        g.setColour (t.accent());
+        g.fillRect (xOf (6500.0) - 1.0f, y - 2.0f, 2.0f, 9.0f);
+        g.setColour (t.textDim());
+        g.setFont (style::font (11.0f));
+        g.drawText ("6,5 kHz sibilances"_t, juce::Rectangle<float> (xOf (6500.0) - 80.0f, y + 6.0f, 160.0f, 14.0f), juce::Justification::centred);
+        g.drawText ("8-10 kHz brillance"_t, juce::Rectangle<float> (xOf (9000.0) - 80.0f, y + 6.0f, 160.0f, 14.0f), juce::Justification::centred);
+        // gain reduction meter (0 ... -6 dB)
+        const double gr = e.enabled.load() ? e.reductionDb.load() : 0.0;
+        g.setColour (t.textCol());
+        g.setFont (style::font (13.5f, true));
+        g.drawText ("Réduction : "_t + juce::String (gr >= 0.05 ? -gr : 0.0, 1).replaceCharacter ('.', ',') + " dB", e9Meter.translated (0, -30).withHeight (24), juce::Justification::bottomLeft);
+        auto bar = e9Meter.toFloat();
+        g.setColour (style::neutral().withAlpha (0.08f));
+        g.fillRoundedRectangle (bar, 6.0f);
+        g.setColour (t.accent());
+        g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * (float) juce::jlimit (0.0, 1.0, gr / E9dsState::maxAmountDb)), 6.0f);
+        g.setColour (t.textDim());
+        g.setFont (style::font (12.0f));
+        g.drawFittedText ("Seuil automatique (part des aigus dans le signal). Sous le seuil, la sortie est identique à l'entrée, au bit près."_t,
+                          e9Meter.translated (0, 28).withHeight (40), juce::Justification::topLeft, 2);
+    }
     if (view == View::Parametric)
         g.drawText ("Poignées : glisser = fréquence / gain, molette = Q"_t, right.withHeight (20), juce::Justification::centredRight);
 }

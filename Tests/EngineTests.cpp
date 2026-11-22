@@ -10,6 +10,7 @@
 #include "../Source/DSP/Resampler.h"
 #include "../Source/DSP/FilterDesign.h"
 #include "../Source/DSP/PcmToDsd.h"
+#include "../Source/DSP/E9ds.h"
 #include "../Source/Engine/DeviceProfiles.h"
 #include "../Source/Audio/LoopingDecoder.h"
 #include <complex>
@@ -2113,5 +2114,139 @@ NX_TEST_SECTION (120, "Transitions sans pop : micro-fondus de 10 ms, remise à z
         t.check (bt.cap->opens == 1 && maxRate == 48000.0 && allPcm && node && wired.cap->opens == 3,
                  "Bluetooth (48 kHz réglé par le système) : 44,1 / 96 / 48 kHz et DSD joués à 48 kHz, une seule ouverture ; « Toujours suivre la source » : 3 ouvertures"_t
                  + " [" + juce::String (bt.cap->opens) + " " + juce::String (maxRate) + " " + juce::String ((int) allPcm) + " " + juce::String ((int) node) + " " + juce::String (wired.cap->opens) + "]");
+    }
+}
+
+//==============================================================================
+NX_TEST_SECTION (121, "Étape 2 : E9DS (de-esser transparent) : bande seule, bit-identique sous le seuil, sans clic, 0 allocation")
+{
+    constexpr double pi = 3.14159265358979323846;
+    auto tone = [&] (std::vector<double>& v, double rate, std::initializer_list<std::pair<double, double>> parts)
+    {
+        for (size_t i = 0; i < v.size(); ++i)
+        {
+            double s = 0.0;
+            for (auto& [f, a] : parts) s += a * std::sin (2.0 * pi * f * (double) i / rate);
+            v[i] = s;
+        }
+    };
+    // runs a stereo signal (L = R) through a fresh processor; returns L
+    auto run = [&] (nx::E9dsState::Mode mode, double focus, double amount, double rate, std::vector<double> x, bool count = false)
+    {
+        auto st = std::make_shared<nx::E9dsState>();
+        st->set (true, focus, amount, mode);
+        nx::E9dsProcessor p (st);
+        p.prepare (rate, 2, 4096);
+        auto r = x;
+        if (count) { nxtest_allocationCount = 0; nxtest_countAllocations = true; }
+        for (size_t i = 0; i < x.size(); i += 512)
+        {
+            double* ch[2] = { x.data() + i, r.data() + i };
+            p.process (ch, 2, (int) std::min<size_t> (512, x.size() - i));
+        }
+        nxtest_countAllocations = false;
+        return x;
+    };
+    const double fs = 48000.0;
+    const int n = 48000;
+    const int tail = 24000;                                         // settled half
+    auto amp = [&] (const std::vector<double>& v, double f) { return fitSine (v.data() + tail, n - tail, 1, fs, f).first; };
+    auto db = [] (double a, double b) { return 20.0 * std::log10 (a / b); };
+
+    // 1. below the threshold (music with little treble): bit-identical, both modes
+    {
+        std::vector<double> x ((size_t) n);
+        tone (x, fs, { { 220.0, 0.4 }, { 1000.0, 0.2 }, { 3000.0, 0.05 }, { 7000.0, 0.01 } });
+        bool same = true;
+        juce::String where;
+        for (auto m : { nx::E9dsState::SplitBand, nx::E9dsState::DynamicHf })
+        {
+            const auto y = run (m, 6500.0, 6.0, fs, x);
+            int first = -1, count = 0;
+            for (size_t i = 0; i < x.size(); ++i) if (y[i] != x[i]) { if (first < 0) first = (int) i; ++count; }
+            same = same && count == 0;
+            where << " " << (int) m << ":" << first << "/" << count;
+        }
+        t.check (same, "sous le seuil (aigus à -32 dB du signal) : sortie identique à l'entrée au bit près, Split-Band et Dynamic HF"_t + (same ? juce::String() : where));
+    }
+    // 2. Split-Band: a loud sibilant at 6.5 kHz is cut, capped at Amount; the 1 kHz under it does not move
+    {
+        std::vector<double> x ((size_t) n);
+        tone (x, fs, { { 1000.0, 0.2 }, { 6500.0, 0.4 } });
+        const auto y6 = run (nx::E9dsState::SplitBand, 6500.0, 6.0, fs, x, true);
+        const long allocs = nxtest_allocationCount.load();
+        const auto y3 = run (nx::E9dsState::SplitBand, 6500.0, 3.0, fs, x);
+        const double cut6 = db (amp (y6, 6500.0), 0.4), cut3 = db (amp (y3, 6500.0), 0.4), low = db (amp (y6, 1000.0), 0.2);
+        t.check (cut6 < -2.0 && cut6 >= -6.01 && std::abs (cut3 + 3.0) < 0.05 && std::abs (low) < 0.05 && allocs == 0,
+                 "Split-Band 6,5 kHz : sibilance "_t + juce::String (cut6, 2) + " dB (plafond -6), Amount -3 -> " + juce::String (cut3, 2)
+                 + " dB ; 1 kHz dessous : " + juce::String (low, 3) + " dB ; 0 allocation dans process()");
+    }
+    // 3. Dynamic HF: harsh 12 kHz softened, 1 kHz kept within 0.1 dB
+    {
+        std::vector<double> x ((size_t) n);
+        tone (x, fs, { { 1000.0, 0.2 }, { 12000.0, 0.4 } });
+        const auto y = run (nx::E9dsState::DynamicHf, 6500.0, 6.0, fs, x);
+        const double hf = db (amp (y, 12000.0), 0.4), low = db (amp (y, 1000.0), 0.2);
+        t.check (hf < -2.0 && hf >= -6.01 && std::abs (low) < 0.1,
+                 "Dynamic HF au-dessus de 6,5 kHz : 12 kHz "_t + juce::String (hf, 2) + " dB, 1 kHz " + juce::String (low, 3) + " dB");
+    }
+    // 4. switching off (and on) while it is cutting, at 352.8 kHz: a 20 ms ramp, no step in the output
+    {
+        const double hr = 352800.0;
+        std::vector<double> x ((size_t) hr), r;
+        tone (x, hr, { { 6500.0, 0.4 } });
+        r = x;
+        auto st = std::make_shared<nx::E9dsState>();
+        st->set (true, 6500.0, 6.0, nx::E9dsState::SplitBand);
+        nx::E9dsProcessor p (st);
+        p.prepare (hr, 2, 4096);
+        auto out = x;
+        double maxStep = 0.0, maxStepIn = 0.0;
+        bool bypassedAfter = false;
+        for (size_t i = 0; i + 1024 <= x.size(); i += 1024)
+        {
+            if (i == 100 * 1024) st->enabled = false;
+            if (i == 260 * 1024) st->enabled = true;
+            if (i == 250 * 1024) bypassedAfter = p.isBypassed();
+            if (p.isBypassed()) continue;
+            double* ch[2] = { out.data() + i, r.data() + i };
+            p.process (ch, 2, 1024);
+        }
+        for (size_t i = 1; i < x.size(); ++i)
+        {
+            maxStep = std::max (maxStep, std::abs (out[i] - out[i - 1]));
+            maxStepIn = std::max (maxStepIn, std::abs (x[i] - x[i - 1]));
+        }
+        t.check (maxStep <= maxStepIn * 1.001 && bypassedAfter,
+                 "E9DS coupé / remis pendant une réduction (352,8 kHz) : rampe de 20 ms, pas de saut (pas max "_t + juce::String (maxStep / maxStepIn, 4)
+                 + " x celui du signal), puis contourné");
+    }
+    // 5. engine: a DSD64 source with E9DS on stays DSD (remodulated), Signal Path shows E9DS, 0 allocation
+    {
+        auto dsf = t.tempDir.getChildFile ("e9ds.dsf");
+        writeDsf (dsf, dsdSine (2822400.0, 1.0, 2, 1000.0, 0.4), 2, 2822400.0, true);
+        EngineRig rig ([] (nx::CaptureBackend& cap) { cap.capabilities.sampleRates = { 44100.0, 176400.0 }; });
+        auto st = rig.engine->getSettings();
+        st.dspNeedsPcm = true;
+        rig.engine->setSettings (st);
+        auto e9 = std::make_shared<nx::E9dsState>();
+        e9->set (true, 6500.0, 6.0, nx::E9dsState::SplitBand);
+        for (const bool dec : { true, false })
+        {
+            auto chain = std::make_unique<nx::DspChain>();
+            chain->processors.push_back (std::make_unique<nx::E9dsProcessor> (e9, ! dec));
+            if (dec) rig.engine->setDecoderDspChain (std::move (chain)); else rig.engine->setDspChain (std::move (chain));
+        }
+        rig.cap->renderFlag = &nxtest_countAllocations;
+        nxtest_allocationCount = 0;
+        nx::SignalPath path;
+        rig.engine->setQueue ({ EngineRig::item (dsf) }, 0, true);
+        rig.runToEnd (2048, 60.0, [&] (int block) { if (block == 40) path = rig.engine->getSignalPath(); }, 1u << 16);
+        rig.cap->renderFlag = nullptr;
+        bool node = false;
+        for (auto& nd : path.nodes) node |= nd.stage == "DSP" && nd.title.contains ("E9DS");
+        t.check (rig.cap->config.wire == nx::WireFormat::DoP && rig.engine->getCurrentPlan().conversion == nx::PlaybackPlan::Conversion::DsdRemodulate
+                 && node && nxtest_allocationCount.load() == 0,
+                 "moteur : DSD64 + E9DS -> DXD 64 bits -> E9DS -> modulateur -> DSD64 DoP, « E9DS » dans le chemin du signal, 0 allocation sur le thread audio"_t);
     }
 }

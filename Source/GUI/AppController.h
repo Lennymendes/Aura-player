@@ -10,6 +10,7 @@
 #include "../Core/Links.h"
 
 #include "AppContext.h"
+#include "../DSP/E9ds.h"
 #include "Waveform.h"
 #include "../Core/Perf.h"
 #include <random>
@@ -70,6 +71,7 @@ public:
     ArtistInfoService& artistInfo() override   { return *artistInfoService; }
     RemoteServer& remote() override            { return *remoteServer; }
     StudioToolsState& studioTools() override   { return *studio; }
+    E9dsState& e9ds() override                 { return *e9dsState; }
     TrackAnalyzer& trackAnalyzer() override    { return *trackScan; }
     std::shared_ptr<const TrackAnalysis> currentAnalysis() override { return analysisPath.isNotEmpty() ? trackScan->get (analysisPath) : nullptr; }
 
@@ -123,6 +125,8 @@ public:
     void applyStudioTools() override;
     void setHeadphoneEq (int presetIndex, bool bypass) override;
     void setParametricEq (const hpeq::ParametricBands& bands, bool enabled, bool persist) override;
+    void setE9ds (bool enabled, double focusHz, double amountDb, int mode) override;
+    void updateDspNeedsPcm();
     juce::StringArray getParametricPresetNames() override;
     void saveParametricPreset (const juce::String& name) override;
     bool loadParametricPreset (const juce::String& name) override;
@@ -206,6 +210,7 @@ private:
     std::set<juce::String> remoteHttpArt;       // online covers handed to the phone: the only URLs /api/art will fetch
     juce::String remoteArtKey (const juce::String& key);
     std::shared_ptr<StudioToolsState> studio = std::make_shared<StudioToolsState>();
+    std::shared_ptr<E9dsState> e9dsState = std::make_shared<E9dsState>();
     std::unique_ptr<TrackAnalyzer> trackScan = std::make_unique<TrackAnalyzer>();   // outlives the windows (listeners)
     juce::String analysisPath;                     // local file of the current track
     SleepBlocker sleepBlocker;

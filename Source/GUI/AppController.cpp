@@ -179,8 +179,11 @@ AppController::AppController (Options options)
         studio->setEq (index, (bool) eq.getProperty ("bypass", false));
         const auto peq = appSettings.get ("parametricEq");
         studio->setParametric (bandsFromVar (peq.getProperty ("bands", {})), (bool) peq.getProperty ("enabled", false));
+        const auto e9 = appSettings.get ("e9ds");
+        e9dsState->set ((bool) e9.getProperty ("enabled", false), (double) e9.getProperty ("focus", 6500.0),
+                        (double) e9.getProperty ("amount", 6.0), (int) e9.getProperty ("mode", 0));
     }
-    if (studio->anyActive()) applyStudioTools(); else rebuildDspChain();
+    if (studio->anyActive() || e9dsState->enabled.load()) applyStudioTools(); else rebuildDspChain();
 
     // Engine notifications (message thread)
     eng->onTrackChanged = [this] { onTrackChanged(); };
@@ -1082,6 +1085,7 @@ void AppController::rebuildDspChain()
         auto chain = pluginManager.buildDspChain();
         if (chain == nullptr) chain = std::make_unique<DspChain>();
         chain->processors.push_back (std::make_unique<StudioToolsProcessor> (studio));
+        chain->processors.push_back (std::make_unique<E9dsProcessor> (e9dsState, ! forDecoder));
         if (forDecoder) eng->setDecoderDspChain (std::move (chain));
         else eng->setDspChain (std::move (chain));
     }
@@ -1090,9 +1094,14 @@ void AppController::rebuildDspChain()
 void AppController::applyStudioTools()
 {
     rebuildDspChain();
+    updateDspNeedsPcm();
+}
+
+void AppController::updateDspNeedsPcm()
+{
     // DSD cannot be processed as 1-bit data: while a tool is on, DSD tracks are converted to PCM (DXD).
     auto s = eng->getSettings();
-    const bool need = studio->anyActive();
+    const bool need = studio->anyActive() || e9dsState->enabled.load();
     if (s.dspNeedsPcm != need)
     {
         s.dspNeedsPcm = need;
@@ -1103,6 +1112,18 @@ void AppController::applyStudioTools()
         eng->setSettings (s, affectsCurrent);
     }
     if (auto* m = getMainComponent()) m->stateChanged();
+}
+
+void AppController::setE9ds (bool enabled, double focusHz, double amountDb, int mode)
+{
+    e9dsState->set (enabled, focusHz, amountDb, mode);
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("enabled", e9dsState->enabled.load());
+    o->setProperty ("focus", e9dsState->focusHz.load());
+    o->setProperty ("amount", e9dsState->amountDb.load());
+    o->setProperty ("mode", e9dsState->mode.load());
+    appSettings.set ("e9ds", juce::var (o));
+    updateDspNeedsPcm();          // the processors read the atomics: no rebuild, so switching off fades out
 }
 
 void AppController::setHeadphoneEq (int presetIndex, bool bypass)
