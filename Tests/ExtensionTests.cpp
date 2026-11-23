@@ -519,9 +519,10 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
             settle (100);
         }
         b->triggerClick();
-        settle (150);
-        auto* p = nx::InfoButton::lastPopover();
-        return p != nullptr && p->findParentComponentOfClass<juce::CallOutBox>() != nullptr && p->getHeight() > 120;
+        auto opened = [] { auto* p = nx::InfoButton::lastPopover(); return p != nullptr && p->findParentComponentOfClass<juce::CallOutBox>() != nullptr && p->getHeight() > 120; };
+        for (int i = 0; i < 20 && ! opened(); ++i) settle (50);               // slow CI machines: up to 1 s
+        settle (100);
+        return opened();
     };
 
     app.navigate ({ nx::PageId::Home });
@@ -1285,7 +1286,11 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
             const bool e9Info = openInfo ("e9ds");
             shoot ("46e_aura_dsp_explication_e9ds");
             closePopover();
-            t.check (infos && e9Info, "AURA DSP : « + » sur Headroom, Conversion DXD, Crossfeed, Égaliseur casque, E9DS ; fenêtre E9DS en 3 points"_t);
+            juce::String missingInfo;
+            for (auto* id : { "headroom", "truepeak", "dxd", "crossfeed", "hpeq", "e9ds" })
+                if (dsp.infoFor (id) == nullptr || ! shownInMain (dsp.infoFor (id))) missingInfo << id << " ";
+            t.check (infos && e9Info && missingInfo.isEmpty(), "AURA DSP : « + » sur Headroom, Auto-Headroom, Conversion DXD, Crossfeed, Égaliseur casque, E9DS ; fenêtre E9DS en 3 points"_t
+                     + " [" + juce::String ((int) e9Info) + " " + missingInfo + juce::String (main->getWidth()) + "x" + juce::String (main->getHeight()) + "]");
             dsp.e9Split.triggerClick();
             dsp.e9ds.triggerClick();
             settle (60);
