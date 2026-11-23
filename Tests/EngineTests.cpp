@@ -12,6 +12,7 @@
 #include "../Source/DSP/PcmToDsd.h"
 #include "../Source/DSP/E9ds.h"
 #include "../Source/DSP/TruePeak.h"
+#include "../Source/DSP/SmartComfort.h"
 #include "../Source/GUI/Waveform.h"
 #include "../Source/Library/Library.h"
 #include "../Source/Engine/DeviceProfiles.h"
@@ -2663,5 +2664,187 @@ NX_TEST_SECTION (124, "Auto-Headroom True Peak : mesure BS.1770-4, atténuation 
         const auto& got = rig.cap->capturedDsd;
         const bool same = got.size() >= ref.size() && std::equal (ref.begin(), ref.end(), got.begin());
         t.check (same && att == 0.0 && node.contains ("DSD"), "source DSD native (TP +3,0) : flux 1 bit intact, True Peak affiché seulement ("_t + node + ")");
+    }
+}
+
+NX_TEST_SECTION (125, "Smart Ear Comfort : profil de mastering (DR, aigus 6-10 kHz), E9DS dosé par piste, bit-perfect sur le reste, 0 allocation")
+{
+    constexpr double pi = juce::MathConstants<double>::pi;
+    using nx::comfort::classify;
+    using P = nx::comfort::Profile;
+    // 1. the profile and the dose
+    {
+        const auto a = classify (6, -14.0), b = classify (8, -18.0), c = classify (9, -10.0), d = classify (8, -19.0), e = classify (12, -10.0),
+                   f = classify (2, 0.0), g = classify (0, -10.0), h = classify (6, std::numeric_limits<double>::quiet_NaN());
+        t.check (a.profile == P::Bright && std::abs (a.doseDb - 3.5) < 1e-9 && b.profile == P::Bright && b.doseDb == 1.5 && c.profile == P::Balanced && c.doseDb == 0.0
+                     && d.profile == P::Balanced && e.profile == P::Dynamic && e.doseDb == 0.0 && f.doseDb == 6.0 && g.profile == P::Undetermined && g.doseDb == 0.0 && h.profile == P::Unknown,
+                 "profil : brillant / compressé (DR <= 8 et aigus >= -18 dB, dose -1,5 à -6 dB), équilibré, dynamique (DR >= 12), indéterminé (sans DR), inconnu"_t);
+    }
+    // 2. the analysis measures it: a loud steady master with strong 8 kHz, a quiet dynamic recording with bursts at 200 Hz
+    auto bright = t.tempDir.getChildFile ("sec_bright.wav"), dyn = t.tempDir.getChildFile ("sec_dynamic.wav");
+    const int n = 96000;
+    std::vector<int32_t> bPcm ((size_t) n * 2), dPcm ((size_t) n * 2);
+    for (int i = 0; i < n; ++i)
+    {
+        const double x = 0.2 * std::sin (2.0 * pi * 1000.0 * i / 48000.0) + 0.35 * std::sin (2.0 * pi * 8000.0 * i / 48000.0);
+        const double y = ((i % 48000) < 2400 ? 0.9 : 0.01) * std::sin (2.0 * pi * 200.0 * i / 48000.0);
+        bPcm[(size_t) i * 2] = bPcm[(size_t) i * 2 + 1] = (int32_t) ((uint32_t) std::llround (x * 8388607.0) << 8);
+        dPcm[(size_t) i * 2] = dPcm[(size_t) i * 2 + 1] = (int32_t) ((uint32_t) std::llround (y * 8388607.0) << 8);
+    }
+    writeWav (bright, &bPcm, nullptr, 2, 48000, 24, 24, false);
+    writeWav (dyn, &dPcm, nullptr, 2, 48000, 24, 24, false);
+    const auto ab = nx::TrackAnalyzer::analyse (bright, 400, [] { return false; });
+    const auto ad = nx::TrackAnalyzer::analyse (dyn, 400, [] { return false; });
+    const bool measured = ab != nullptr && ad != nullptr;
+    t.check (measured && classify (ab->dr, ab->hfShareDb).profile == P::Bright && classify (ad->dr, ad->hfShareDb).profile == P::Dynamic
+                 && std::abs (ab->hfShareDb + 3.7) < 1.0 && ad->hfShareDb < -40.0,
+             "analyse : master brillant DR"_t + (measured ? juce::String (ab->dr) + ", aigus " + juce::String (ab->hfShareDb, 1) + " dB ; enregistrement dynamique DR"
+                                                              + juce::String (ad->dr) + ", aigus " + juce::String (ad->hfShareDb, 1) + " dB" : juce::String ("?")));
+    if (! measured) return;
+    {
+        nx::Library lib;
+        juce::String err;
+        lib.openInMemory (t.tempDir.getChildFile ("sec_lib"), err);
+        nx::TrackInfo tr;
+        tr.source = "local"; tr.externalId = tr.uri = "/music/b.flac"; tr.title = "B"; tr.fileSize = 10; tr.modified = 1;
+        lib.upsert (tr);
+        lib.setProfile (tr.externalId, 6, -12.5);
+        lib.upsert (tr);
+        const auto kept = lib.getProfile (tr.externalId);
+        tr.fileSize = 11;
+        lib.upsert (tr);
+        t.check (kept.has_value() && kept->first == 6 && kept->second == -12.5 && ! lib.getProfile (tr.externalId).has_value(),
+                 "base : colonnes dr / hf_share gardées au rescan, effacées quand le fichier change"_t);
+    }
+
+    // 3. engine, PCM to the DAC: the bright master then the dynamic recording, gapless, E9DS in both chains as in the app
+    struct Run { std::vector<int32_t> got; std::vector<uint8_t> dsd; double rate = 0; juce::String node, dsp; long allocs = 0; };
+    auto play = [&] (bool on, bool known, int liveAt, bool manual, std::function<void (nx::CaptureBackend&)> cfg = {}, std::function<void (nx::EngineSettings&)> more = {})
+    {
+        EngineRig rig (cfg);
+        auto st = rig.engine->getSettings();
+        st.smartComfort = on;
+        if (more) more (st);
+        rig.engine->setSettings (st);
+        auto e9 = std::make_shared<nx::E9dsState>();
+        if (manual) e9->set (true, 6500.0, 1.0, nx::E9dsState::SplitBand);
+        for (const bool dec : { true, false })
+        {
+            auto chain = std::make_unique<nx::DspChain>();
+            chain->processors.push_back (std::make_unique<nx::E9dsProcessor> (e9));
+            if (dec) rig.engine->setDecoderDspChain (std::move (chain)); else rig.engine->setDspChain (std::move (chain));
+        }
+        auto a = EngineRig::item (bright), b = EngineRig::item (dyn);
+        if (known) { a.dr = ab->dr; a.hfShareDb = ab->hfShareDb; }
+        b.dr = ad->dr; b.hfShareDb = ad->hfShareDb;
+        rig.cap->renderFlag = &nxtest_countAllocations;
+        nxtest_allocationCount = 0;
+        Run r;
+        rig.engine->setQueue ({ a, b }, 0, true);
+        rig.runToEnd (1024, 60.0, [&] (int block)
+        {
+            if (block == 20)
+                for (auto& nd : rig.engine->getSignalPath().nodes)
+                {
+                    if (nd.stage == "Confort") r.node = nd.title + " | " + nd.detail;
+                    if (nd.stage == "DSP") r.dsp = nd.title;
+                }
+            if (block == liveAt) rig.engine->setTrackProfile (0, ab->dr, ab->hfShareDb);
+        }, 1u << 16);
+        rig.cap->renderFlag = nullptr;
+        r.allocs = nxtest_allocationCount.load();
+        r.got = rig.cap->capturedInt;
+        r.dsd = rig.cap->capturedDsd;
+        r.rate = rig.cap->config.sampleRate;
+        return r;
+    };
+    auto amp = [] (const std::vector<int32_t>& v, int from, int len, double rate, double freq)
+    {
+        if ((size_t) (from + len) * 2 > v.size()) return 0.0;
+        std::vector<double> x ((size_t) len);
+        for (int i = 0; i < len; ++i) x[(size_t) i] = v[(size_t) (from + i) * 2] * (1.0 / 2147483648.0);
+        return fitSine (x.data(), len, 1, rate, freq).first;
+    };
+    auto db = [] (double a, double b) { return 20.0 * std::log10 (juce::jmax (1e-12, a) / juce::jmax (1e-12, b)); };
+    auto sameFrom = [&] (const std::vector<int32_t>& got, size_t from, size_t to)
+    {
+        if (got.size() < to) return false;
+        for (size_t i = from; i < to; ++i) if (got[i] != (i < bPcm.size() ? bPcm[i] : dPcm[i - bPcm.size()])) return false;
+        return true;
+    };
+    const size_t end = bPcm.size() + dPcm.size();
+    {
+        const auto off = play (false, true, -1, false), on = play (true, true, -1, false);
+        const double hi = db (amp (on.got, 24000, 48000, 48000.0, 8000.0), 0.35), lo = db (amp (on.got, 24000, 48000, 48000.0, 1000.0), 0.2);
+        t.check (sameFrom (off.got, 0, end) && off.node.isEmpty(), "désactivé : les deux pistes arrivent au DAC bit à bit"_t);
+        t.check (hi < -0.5 && std::abs (lo) < 0.3 && sameFrom (on.got, bPcm.size() + 14400, end) && on.allocs == 0,
+                 "actif : master brillant adouci (8 kHz "_t + juce::String (hi, 2) + " dB, 1 kHz " + juce::String (lo, 2)
+                     + " dB), enregistrement dynamique suivant bit à bit (gapless), 0 allocation sur le thread audio");
+        t.check (on.node.contains ("Master brillant") && on.node.contains ("E9DS auto") && on.dsp.contains ("Smart Ear Comfort"),
+                 "Chemin du signal : "_t + on.node + " ; DSP : " + on.dsp);
+        // manual E9DS wins: its own setting, never the automatic one
+        const auto man = play (true, true, -1, true);
+        t.check (man.dsp.contains ("Split-Band 6,5 kHz") && ! man.dsp.contains ("auto"), "E9DS réglé à la main prioritaire : "_t + man.dsp);
+        // the analysis arrives during playback: untouched before, softened after (20 ms ramp)
+        const auto live = play (true, false, 12, false);
+        const double before = db (amp (live.got, 1000, 8000, 48000.0, 8000.0), 0.35), after = db (amp (live.got, 48000, 40000, 48000.0, 8000.0), 0.35);
+        t.check (std::abs (before) < 0.05 && after < -0.5 && live.allocs == 0,
+                 "profil arrivé en cours de lecture : 8 kHz "_t + juce::String (before, 2) + " dB avant, " + juce::String (after, 2) + " dB après");
+    }
+    // 4. PCM -> DSD128: applied in the decoder's chain, before the modulator
+    {
+        auto dsdCaps = [] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0, 5644800.0, 11289600.0 }; };
+        auto toDsd = [] (nx::EngineSettings& st) { st.pcmToDsd = 128; };
+        auto level = [&] (const std::vector<uint8_t>& dsd, double dsdRate, double freq)
+        {
+            constexpr double dxd = 352800.0;
+            nx::dsp::DsdToPcm back;
+            back.prepare (dsdRate, dxd, 2, 1.0);
+            const int bytes = (int) (dsd.size() / 2);
+            std::vector<double> pcm ((size_t) (back.maxOutputFor (bytes) + 8) * 2);
+            const int got = back.process (dsd.data(), bytes, pcm.data(), back.maxOutputFor (bytes));
+            int start = 0;
+            while (start < got && std::abs (pcm[(size_t) start * 2]) < 0.05) ++start;
+            const int from = start + 70560, len = 176400;
+            if (from + len > got) return 0.0;
+            return fitSine (pcm.data() + (size_t) from * 2, len, 2, dxd, freq).first;
+        };
+        const auto off = play (false, true, -1, false, dsdCaps, toDsd), on = play (true, true, -1, false, dsdCaps, toDsd);
+        const double hi = db (level (on.dsd, on.rate, 8000.0), level (off.dsd, off.rate, 8000.0)), lo = db (level (on.dsd, on.rate, 1000.0), level (off.dsd, off.rate, 1000.0));
+        t.check (on.rate > 5000000.0 && hi < -0.5 && std::abs (lo) < 0.3 && on.allocs == 0,
+                 "PCM -> DSD128 : adouci en DXD avant le modulateur (8 kHz "_t + juce::String (hi, 2) + " dB, 1 kHz " + juce::String (lo, 2) + " dB), 0 allocation");
+    }
+    // 5. a native DSD source is never touched
+    {
+        auto dsf = t.tempDir.getChildFile ("sec_native.dsf");
+        writeDsf (dsf, dsdSine (2822400.0, 0.5, 2, 8000.0, 0.4), 2, 2822400.0, true);
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0 }; });
+        auto st = rig.engine->getSettings();
+        st.smartComfort = true;
+        rig.engine->setSettings (st);
+        auto e9 = std::make_shared<nx::E9dsState>();
+        for (const bool dec : { true, false })
+        {
+            auto chain = std::make_unique<nx::DspChain>();
+            chain->processors.push_back (std::make_unique<nx::E9dsProcessor> (e9));
+            if (dec) rig.engine->setDecoderDspChain (std::move (chain)); else rig.engine->setDspChain (std::move (chain));
+        }
+        auto it = EngineRig::item (dsf);
+        it.dr = 4; it.hfShareDb = -3.0;
+        rig.engine->setQueue ({ it }, 0, true);
+        juce::String node;
+        double dose = -1.0;
+        rig.runToEnd (1024, 60.0, [&] (int block)
+        {
+            if (block == 8)
+            {
+                for (auto& nd : rig.engine->getSignalPath().nodes) if (nd.stage == "Confort") node = nd.detail;
+                dose = rig.engine->getComfortDoseDb();
+            }
+        });
+        const auto ref = decodeAllDsd (dsf);
+        const auto& got = rig.cap->capturedDsd;
+        t.check (got.size() >= ref.size() && std::equal (ref.begin(), ref.end(), got.begin()) && dose == 0.0 && node.contains ("DSD"),
+                 "source DSD native (profil brillant) : flux 1 bit intact, profil affiché seulement ("_t + node + ")");
     }
 }

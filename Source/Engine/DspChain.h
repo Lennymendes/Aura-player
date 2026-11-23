@@ -22,6 +22,9 @@ public:
     virtual void process (double* const* channels, int numChannels, int numFrames) noexcept = 0;
     virtual void reset() noexcept {}
     virtual bool isBypassed() const noexcept { return false; }
+    /** Smart Ear Comfort: dB of automatic de-essing for the track this chain processes now (0 = none). Called by the
+        thread that owns the chain, just before process(). */
+    virtual void setTrackComfort (double) noexcept {}
 };
 
 class DspChain
@@ -50,6 +53,8 @@ public:
         for (auto& p : processors)
             if (! p->isBypassed()) p->process (ch, numCh, n);
     }
+
+    void setTrackComfort (double db) noexcept { for (auto& p : processors) p->setTrackComfort (db); }
 
     /** Audio thread, at a silent point (gain 0): forget the previous music (filter memories, crossfeed...). */
     void reset() noexcept

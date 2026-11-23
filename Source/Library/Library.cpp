@@ -128,6 +128,8 @@ bool Library::createSchema (juce::String& error)
     // Fields edited by hand (bits: 1 album, 2 album artist, 4 year, 8 cover): a rescan never overwrites them.
     db.exec ("ALTER TABLE tracks ADD COLUMN locked INTEGER DEFAULT 0");   // fails harmlessly when the column exists
     db.exec ("ALTER TABLE tracks ADD COLUMN true_peak REAL");             // Auto-Headroom: measured True Peak (dBTP), NULL = not yet
+    db.exec ("ALTER TABLE tracks ADD COLUMN dr INTEGER");                 // Smart Ear Comfort: DR and 6-10 kHz share, NULL = not yet
+    db.exec ("ALTER TABLE tracks ADD COLUMN hf_share REAL");
     loadOfflineIndex();
 
     // Full-text search (FTS5) when this SQLite has it; LIKE otherwise.
@@ -162,6 +164,23 @@ void Library::setTruePeak (const juce::String& path, double truePeakDb)
     u.step();
 }
 
+std::optional<std::pair<int, double>> Library::getProfile (const juce::String& path)
+{
+    std::lock_guard<std::recursive_mutex> l (db.getMutex());
+    SqliteStatement q (db, "SELECT dr, hf_share FROM tracks WHERE source = 'local' AND external_id = ?1 AND dr IS NOT NULL AND hf_share IS NOT NULL");
+    q.bind (1, path);
+    if (q.step()) return std::make_pair ((int) q.getInt64 (0), q.getDouble (1));
+    return std::nullopt;
+}
+
+void Library::setProfile (const juce::String& path, int dr, double hfShareDb)
+{
+    std::lock_guard<std::recursive_mutex> l (db.getMutex());
+    SqliteStatement u (db, "UPDATE tracks SET dr = ?2, hf_share = ?3 WHERE source = 'local' AND external_id = ?1");
+    u.bind (1, path).bind (2, dr).bind (3, hfShareDb);
+    u.step();
+}
+
 juce::int64 Library::upsert (TrackInfo& t)
 {
     std::lock_guard<std::recursive_mutex> l (db.getMutex());
@@ -180,7 +199,9 @@ juce::int64 Library::upsert (TrackInfo& t)
             lossy = excluded.lossy, file_size = excluded.file_size, mtime = excluded.mtime,
             artwork = CASE WHEN tracks.locked & 8 THEN tracks.artwork ELSE excluded.artwork END,
             lyrics_path = excluded.lyrics_path, credits = excluded.credits,
-            true_peak = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.true_peak ELSE NULL END
+            true_peak = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.true_peak ELSE NULL END,
+            dr = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.dr ELSE NULL END,
+            hf_share = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.hf_share ELSE NULL END
     )SQL");
     s.bind (1, t.source).bind (2, t.externalId).bind (3, t.uri).bind (4, t.title).bind (5, t.artist).bind (6, t.albumArtist)
      .bind (7, t.album).bind (8, t.genre).bind (9, t.composer).bind (10, t.year).bind (11, t.trackNumber).bind (12, t.discNumber)

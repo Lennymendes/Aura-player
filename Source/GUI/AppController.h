@@ -127,6 +127,7 @@ public:
     void setParametricEq (const hpeq::ParametricBands& bands, bool enabled, bool persist) override;
     void setE9ds (bool enabled, double focusHz, double amountDb, int mode) override;
     void setAutoTruePeak (bool on, double ceilingDb) override;
+    void setSmartComfort (bool on) override;
     void updateDspNeedsPcm();
     juce::StringArray getParametricPresetNames() override;
     void saveParametricPreset (const juce::String& name) override;

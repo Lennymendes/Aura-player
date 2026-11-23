@@ -105,6 +105,9 @@ public:
     /** Auto-Headroom: the measured True Peak (dBTP) of a local file, kept until the file changes (size / date). */
     std::optional<double> getTruePeak (const juce::String& path);
     void setTruePeak (const juce::String& path, double truePeakDb);
+    /** Smart Ear Comfort: DR and share of the 6-10 kHz energy (dB) of a local file, kept until the file changes. */
+    std::optional<std::pair<int, double>> getProfile (const juce::String& path);
+    void setProfile (const juce::String& path, int dr, double hfShareDb);
     std::vector<TrackInfo> getTracks (const juce::String& orderBy = "title", int limit = 5000, const juce::String& sourceFilter = {});
     std::vector<TrackInfo> getAlbumTracks (const juce::String& artist, const juce::String& album);
     std::vector<TrackInfo> getArtistTracks (const juce::String& artist);

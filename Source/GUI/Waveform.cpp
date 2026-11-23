@@ -16,7 +16,7 @@ namespace
     struct Accumulator
     {
         Accumulator (int numChannels, int numBins, juce::int64 totalFrames, double rate)
-            : ch (numChannels), bins (numBins), total (juce::jmax ((juce::int64) 1, totalFrames)),
+            : sampleRate (rate), ch (numChannels), bins (numBins), total (juce::jmax ((juce::int64) 1, totalFrames)),
               blockLen (juce::jmax ((juce::int64) 1, (juce::int64) (3.0 * rate))),
               blockSum ((size_t) numChannels, 0.0), blockPeak ((size_t) numChannels, 0.0), blockRms ((size_t) numChannels), blockPeaks ((size_t) numChannels)
         {
@@ -37,6 +37,14 @@ namespace
         void add (const double* x, int frames)
         {
             tp.add (x, frames);
+            for (int i = 0; i < frames; ++i)
+            {
+                double m = 0.0;
+                for (int c = 0; c < ch; ++c) m += x[(size_t) i * (size_t) ch + (size_t) c];
+                const double b = band (m);
+                eAll += m * m;
+                eBand += b * b;
+            }
             for (int i = 0; i < frames; ++i, ++frame)
             {
                 while (frame >= binEnd && bin < bins - 1) binEnd = boundary (++bin);
@@ -79,6 +87,7 @@ namespace
                 out->rms[b] = binCount[b] > 0 ? (float) std::sqrt (binSum[b] / (double) binCount[b]) : 0.0f;
             out->peakDb = toDb (peak);
             out->truePeakDb = tp.dbtp();
+            out->hfShareDb = eAll > 1e-20 && eBand > 0.0 ? 10.0 * std::log10 (eBand / eAll) : -200.0;
             out->rmsDb = frame > 0 ? toDb (std::sqrt (sumSq / ((double) frame * ch))) : -200.0;
 
             // DR (TT Dynamic Range meter): per channel, 3 s blocks; RMS of the loudest 20 % of the blocks
@@ -105,6 +114,7 @@ namespace
             return out;
         }
 
+        double sampleRate;
         int ch, bins;
         juce::int64 total, blockLen, blockPos = 0, frame = 0, binEnd = 0;
         int bin = 0;
@@ -114,6 +124,18 @@ namespace
         std::vector<std::vector<double>> blockRms, blockPeaks;
         std::shared_ptr<TrackAnalysis> out;
         truepeak::Meter tp { ch };
+        // 6-10 kHz band of the mono sum: 2nd-order Butterworth high-pass 6 kHz then low-pass 10 kHz (RBJ)
+        struct Biquad { double b0, b1, b2, a1, a2, z1 = 0, z2 = 0;
+                        double run (double v) { const double y = b0 * v + z1; z1 = b1 * v - a1 * y + z2; z2 = b2 * v - a2 * y; return y; } };
+        static Biquad design (double f, double fs, bool high)
+        {
+            const double w = 2.0 * juce::MathConstants<double>::pi * std::min (f, 0.45 * fs) / fs, cw = std::cos (w), a = std::sin (w) / std::sqrt (2.0), a0 = 1.0 + a;
+            const double k = high ? (1.0 + cw) / 2.0 : (1.0 - cw) / 2.0;
+            return { k / a0, (high ? -2.0 * k : 2.0 * k) / a0, k / a0, -2.0 * cw / a0, (1.0 - a) / a0 };
+        }
+        Biquad hp = design (6000.0, sampleRate, true), lp = design (10000.0, sampleRate, false);
+        double band (double v) { return lp.run (hp.run (v)); }
+        double eAll = 0.0, eBand = 0.0;
     };
 }
 

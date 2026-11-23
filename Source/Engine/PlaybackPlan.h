@@ -63,6 +63,8 @@ struct EngineSettings
         by exactly the excess, before any conversion / DSP / modulator; a clean track keeps 0 dB (bit-perfect). Off by default. */
     bool autoTruePeak = false;
     double truePeakCeilingDb = -1.0;     // -1,0 or -0,5 dBTP
+    /** Smart Ear Comfort: automatic E9DS on bright / compressed masters (PCM sources), nothing on the others. Off by default. */
+    bool smartComfort = false;
     /** PCM -> DSD: 0 = off, 64 / 128 / 256 = remodulated to that DSD rate (DoP or native) when the DAC takes it,
         xzAutomatic = the rate follows the source (see xzAutomaticTarget). */
     static constexpr int xzAutomatic = -1;

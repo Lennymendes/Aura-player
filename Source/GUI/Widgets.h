@@ -32,7 +32,7 @@ private:
 
 /** Explanation of an advanced feature (the "+" buttons of AURA DSP and Settings › Audio), translated. */
 struct Explainer { juce::String title, what, gain, limits; };
-/** Ids: e9ds, dxd, crossfeed, headroom, truepeak, hpeq, rate, fades, pcmdsd, keepdsd. Empty title for an unknown id. */
+/** Ids: e9ds, dxd, crossfeed, headroom, truepeak, smart, hpeq, rate, fades, pcmdsd, keepdsd. Empty title for an unknown id. */
 Explainer explainer (const juce::String& id);
 juce::StringArray explainerIds();
 

@@ -140,6 +140,8 @@ public:
     virtual void setE9ds (bool enabled, double focusHz, double amountDb, int mode) = 0;
     /** Auto-Headroom True Peak (AURA DSP / Gestion du headroom): on / off and ceiling (-1,0 or -0,5 dBTP); saved. */
     virtual void setAutoTruePeak (bool on, double ceilingDb) = 0;
+    /** Smart Ear Comfort (AURA DSP): automatic E9DS dose per track from its mastering profile; saved. */
+    virtual void setSmartComfort (bool on) = 0;
     /** User presets of the parametric EQ, kept in settings.json ("peqPresets"). */
     virtual juce::StringArray getParametricPresetNames() = 0;
     virtual void saveParametricPreset (const juce::String& name) = 0;

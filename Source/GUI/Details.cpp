@@ -1,6 +1,7 @@
 // Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "Details.h"
 #include "Waveform.h"
+#include "../DSP/SmartComfort.h"
 #include "../Library/TagReader.h"
 #include <set>
 
@@ -27,7 +28,7 @@ namespace
     }
 }
 
-std::vector<DetailSection> trackDetails (const TrackInfo& t, double truePeakDb, double ceilingDb)
+std::vector<DetailSection> trackDetails (const TrackInfo& t, double truePeakDb, double ceilingDb, int dr, double hfShareDb, bool smartComfort)
 {
     std::vector<DetailSection> out;
     auto add = [] (DetailSection& s, const juce::String& label, const juce::String& value) { if (value.isNotEmpty()) s.rows.push_back ({ label, value }); };
@@ -65,6 +66,15 @@ std::vector<DetailSection> trackDetails (const TrackInfo& t, double truePeakDb, 
         else if (truePeakDb > ceilingDb) ah = num (ceilingDb - truePeakDb) + " dB (" + "plafond "_t + num (ceilingDb) + " dBTP)";
         else ah = "0 dB, sous le plafond de "_t + num (ceilingDb) + " dBTP";
         add (audio, "Auto-Headroom", ah);
+        const auto r = comfort::classify (dr, hfShareDb);
+        add (audio, "Profil de mastering"_t, r.profile == comfort::Profile::Unknown      ? juce::String ("Non mesuré"_t)
+                                           : r.profile == comfort::Profile::Undetermined ? comfort::profileName (r.profile)
+                                                                                          : comfort::profileName (r.profile) + " (" + comfort::measures (dr, hfShareDb) + ")");
+        add (audio, "Smart Ear Comfort", ! smartComfort ? "Désactivé"_t
+                                         : t.isDsd ? "Source DSD : affichage seulement"_t
+                                         : r.profile == comfort::Profile::Unknown ? "En attente de la mesure"_t
+                                         : r.doseDb > 0.0 ? "E9DS auto Dynamic HF 8 kHz, max -"_t + juce::String (r.doseDb, 1).replaceCharacter ('.', ',') + " dB"
+                                                          : juce::String ("Aucun traitement automatique"_t));
     }
     out.push_back (std::move (audio));
 
@@ -206,10 +216,17 @@ void DetailsSheet::open (const std::vector<TrackInfo>& t, const juce::String& al
         double tp = std::numeric_limits<double>::quiet_NaN();
         if (t0.source == "local")
             if (const auto v = ctx.library().getTruePeak (t0.externalId)) tp = *v;
-        if (! std::isfinite (tp))
-            if (const auto a = ctx.trackAnalyzer().get (t0.source == "local" ? t0.externalId : t0.uri)) tp = a->truePeakDb;
+        int dr = 0;
+        double hf = std::numeric_limits<double>::quiet_NaN();
+        if (t0.source == "local")
+            if (const auto p = ctx.library().getProfile (t0.externalId)) { dr = p->first; hf = p->second; }
+        if (const auto a = ctx.trackAnalyzer().get (t0.source == "local" ? t0.externalId : t0.uri))
+        {
+            if (! std::isfinite (tp)) tp = a->truePeakDb;
+            if (dr <= 0) { dr = a->dr; hf = a->hfShareDb; }
+        }
         const auto st = ctx.engine().getSettings();
-        sections = trackDetails (t0, tp, st.autoTruePeak ? st.truePeakCeilingDb : std::numeric_limits<double>::quiet_NaN());
+        sections = trackDetails (t0, tp, st.autoTruePeak ? st.truePeakCeilingDb : std::numeric_limits<double>::quiet_NaN(), dr, hf, st.smartComfort);
     }
     else
     {

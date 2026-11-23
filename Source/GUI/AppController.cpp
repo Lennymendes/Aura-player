@@ -477,6 +477,7 @@ void AppController::loadEngineSettings()
         s.transitionFades = (bool) v.getProperty ("transitionFades", true);
         s.autoTruePeak = (bool) v.getProperty ("autoTruePeak", false);
         s.truePeakCeilingDb = (double) v.getProperty ("truePeakCeiling", -1.0) > -0.75 ? -0.5 : -1.0;
+        s.smartComfort = (bool) v.getProperty ("smartComfort", false);
         if (const auto* map = v.getProperty ("channelMap", {}).getArray(); map != nullptr && map->size() == 8)
             for (int c = 0; c < 8; ++c) s.channelMap[(size_t) c] = juce::jlimit (0, 7, (int) (*map)[c]);
     }
@@ -499,6 +500,7 @@ void AppController::saveEngineSettings()
     o->setProperty ("transitionFades", s.transitionFades);
     o->setProperty ("autoTruePeak", s.autoTruePeak);
     o->setProperty ("truePeakCeiling", s.truePeakCeilingDb);
+    o->setProperty ("smartComfort", s.smartComfort);
     juce::Array<juce::var> map;
     for (auto m : s.channelMap) map.add (m);
     o->setProperty ("channelMap", map);
@@ -1134,6 +1136,15 @@ void AppController::setAutoTruePeak (bool on, double ceilingDb)
     if (auto* m = getMainComponent()) m->stateChanged();
 }
 
+void AppController::setSmartComfort (bool on)
+{
+    auto s = eng->getSettings();
+    s.smartComfort = on;
+    eng->setSettings (s, false);                          // live: each chain picks the dose up at its next block
+    saveEngineSettings();
+    if (auto* m = getMainComponent()) m->stateChanged();
+}
+
 juce::String AppController::localPathOf (const TrackInfo& t)
 {
     return t.source == "local" ? t.externalId : lib.getOfflineCopy (t);
@@ -1143,7 +1154,10 @@ PlayableItem AppController::playable (const TrackInfo& t)
 {
     auto item = unified->toPlayable (t);
     if (t.source == "local")
+    {
         if (const auto tp = lib.getTruePeak (t.externalId)) item.truePeakDb = *tp;
+        if (const auto p = lib.getProfile (t.externalId)) { item.dr = p->first; item.hfShareDb = p->second; }
+    }
     return item;
 }
 
@@ -1154,14 +1168,15 @@ void AppController::changeListenerCallback (juce::ChangeBroadcaster*)
     auto measured = [&] (int index) -> bool          // true when the track's True Peak is known (now or before)
     {
         if (index < 0 || index >= (int) q.size() || index >= (int) queueTracks.size()) return true;
-        if (std::isfinite (q[(size_t) index].truePeakDb)) return true;
+        if (std::isfinite (q[(size_t) index].truePeakDb) && q[(size_t) index].dr > 0) return true;
         const auto& t = queueTracks[(size_t) index];
         const auto path = localPathOf (t);
         if (path.isEmpty()) return true;                 // stream: nothing to measure
         const auto a = trackScan->get (path);
         if (a == nullptr) return false;
-        if (t.source == "local") lib.setTruePeak (path, a->truePeakDb);
+        if (t.source == "local") { lib.setTruePeak (path, a->truePeakDb); lib.setProfile (path, a->dr, a->hfShareDb); }
         eng->setTrackTruePeak (index, a->truePeakDb);
+        eng->setTrackProfile (index, a->dr, a->hfShareDb);
         return true;
     };
     const int cur = eng->getCurrentIndex();

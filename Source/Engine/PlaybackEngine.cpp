@@ -1,6 +1,7 @@
 // Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "PlaybackEngine.h"
 #include "../DSP/TruePeak.h"
+#include "../DSP/SmartComfort.h"
 #include <algorithm>
 #include "../Audio/SacdIso.h"
 #include "../Core/AudioLog.h"
@@ -120,6 +121,7 @@ void PlaybackEngine::setSettings (const EngineSettings& s, bool replanCurrent)
     fadesOn = s.transitionFades;
     tpCeiling = s.truePeakCeilingDb;
     tpAuto = s.autoTruePeak;
+    smartOn = s.smartComfort;
     if (replanCurrent && state.load() != State::Stopped && currentIndex.load() >= 0)
         requestFlushStart (currentIndex.load(), getPositionSeconds());
 }
@@ -169,6 +171,7 @@ void PlaybackEngine::setQueue (std::vector<PlayableItem> items, int startIndex, 
 {
     queue = std::move (items);
     liveTpIndex = -1;                        // a measurement of the old queue never lands on the new one
+    liveComfortIndex = -1;
     const int first = queue.empty() ? 0 : juce::jlimit (0, (int) queue.size() - 1, startIndex);
     {
         std::lock_guard<std::mutex> l (controlLock);
@@ -640,6 +643,10 @@ bool PlaybackEngine::openItem (int index, double startSeconds, bool flush)
     RingEvent e { RingEvent::Track, bytesWritten, decoderGen, index, planId, startSeconds };
     e.truePeakDb = pcmSource ? item.truePeakDb : std::numeric_limits<double>::quiet_NaN();
     e.truePeakInAudio = pcmSource && plan.conversion == PlaybackPlan::Conversion::None;
+    e.pcmSource = pcmSource;
+    e.comfortDb = comfort::classify (item.dr, item.hfShareDb).doseDb;
+    decPcmSource = pcmSource;
+    decComfortDb = e.comfortDb;
     events.write (&e, 1);
 
     // A-B loop on this track: wrap the decoder (positions in its units, the start is moved inside the loop).
@@ -946,6 +953,7 @@ int PlaybackEngine::produceRemodulated (int maxOutFrames)
     }
     if (nd <= 0) return consumed;
     if (plan.downmix) foldToStereo (dx, nd, srcCh);
+    if (decChain != nullptr) decChain->setTrackComfort (comfortFor (decIndex, decPcmSource, decComfortDb));
     if (decoderDspOn())
     {
         // planar, in place, then back to interleaved
@@ -1328,6 +1336,7 @@ void PlaybackEngine::renderInt (int32_t* const* out, int numCh, int numFrames) n
             const auto* src = reinterpret_cast<const int32_t*> (rtBytes.data());
             const double targetGain = (isFixedVolume() ? 1.0 : volume.load())
                                       * (currentEvent.truePeakInAudio ? tpGainFor (currentEvent.itemIndex, currentEvent.truePeakDb) : 1.0);
+            if (activeChain != nullptr) activeChain->setTrackComfort (comfortFor (currentEvent.itemIndex, currentEvent.pcmSource, currentEvent.comfortDb));
             const bool dspOn = activeChain != nullptr && activeChain->isActive();
             const int exactBits = deviceExactBits.load();
             const bool ramp = fadeable && (fadingOut || xfGain < 1.0 || (untilSwitch >= 0.0 && untilSwitch < fadeLen + frames));
@@ -1779,6 +1788,30 @@ void PlaybackEngine::setTrackTruePeak (int index, double tpDb)
     liveTpIndex.store (index, std::memory_order_release);
 }
 
+double PlaybackEngine::comfortFor (int itemIndex, bool pcmSource, double eventDb) const noexcept
+{
+    if (! pcmSource || ! smartOn.load (std::memory_order_relaxed)) return 0.0;
+    return liveComfortIndex.load (std::memory_order_acquire) == itemIndex ? liveComfortDb.load (std::memory_order_relaxed) : eventDb;
+}
+
+void PlaybackEngine::setTrackProfile (int index, int dr, double hf)
+{
+    {
+        std::lock_guard<std::mutex> l (controlLock);
+        if (index >= 0 && index < (int) decoderQueue.size()) { decoderQueue[(size_t) index].dr = dr; decoderQueue[(size_t) index].hfShareDb = hf; }
+    }
+    if (index >= 0 && index < (int) queue.size()) { queue[(size_t) index].dr = dr; queue[(size_t) index].hfShareDb = hf; }
+    liveComfortDb.store (comfort::classify (dr, hf).doseDb, std::memory_order_relaxed);
+    liveComfortIndex.store (index, std::memory_order_release);
+}
+
+double PlaybackEngine::getComfortDoseDb() const
+{
+    const int idx = currentIndex.load();
+    if (! smartOn.load() || idx < 0 || idx >= (int) queue.size() || getCurrentPlan().source.isDsd()) return 0.0;
+    return comfort::classify (queue[(size_t) idx].dr, queue[(size_t) idx].hfShareDb).doseDb;
+}
+
 double PlaybackEngine::getTruePeakAttenuationDb() const
 {
     const int idx = currentIndex.load();
@@ -1825,6 +1858,21 @@ SignalPath PlaybackEngine::getSignalPath() const
             path.add ("Headroom", "Auto-Headroom : "_t + num (-a, false) + " dB", measured + " > " + plafond + ", 64 bits avant toute conversion"_t, PathQuality::HighQuality);
         else
             path.add ("Headroom", "Auto-Headroom : 0 dB"_t, measured + (std::isfinite (tp) ? juce::String::fromUTF8 (" \xe2\x89\xa4 ") + plafond + ", aucune atténuation"_t : juce::String()), PathQuality::BitPerfect);
+    }
+
+    if (smartOn.load())
+    {
+        const auto r = comfort::classify (item.dr, item.hfShareDb);
+        const juce::String what = r.profile == comfort::Profile::Unknown || r.profile == comfort::Profile::Undetermined ? juce::String() : comfort::measures (item.dr, item.hfShareDb) + " : ";
+        if (r.profile == comfort::Profile::Unknown)
+            path.add ("Confort", "Smart Ear Comfort", comfort::profileName (r.profile), PathQuality::BitPerfect);
+        else if (src.isDsd())
+            path.add ("Confort", "Smart Ear Comfort : "_t + comfort::profileName (r.profile), what + "source DSD, affichage seulement"_t, PathQuality::BitPerfect);
+        else if (r.doseDb > 0.0)
+            path.add ("Confort", "Smart Ear Comfort : "_t + comfort::profileName (r.profile),
+                      what + "E9DS auto Dynamic HF 8 kHz, max -"_t + juce::String (r.doseDb, 1).replaceCharacter ('.', ',') + " dB (64 bits)", PathQuality::Enhanced);
+        else
+            path.add ("Confort", "Smart Ear Comfort : "_t + comfort::profileName (r.profile), what + "aucun traitement automatique"_t, PathQuality::BitPerfect);
     }
 
     if (plan.downmix)

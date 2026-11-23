@@ -14,9 +14,11 @@ struct DetailRow { juce::String label, value; };
 struct DetailSection { juce::String title; std::vector<DetailRow> rows; };
 
 /** One track: Morceau / Audio / Fichier / Étiquettes (read from the file when it is local and present) / Crédits. */
-/** truePeakDb: measured True Peak (NaN = not measured); ceilingDb: Auto-Headroom ceiling (NaN = Auto-Headroom off). */
+/** truePeakDb: measured True Peak (NaN = not measured); ceilingDb: Auto-Headroom ceiling (NaN = Auto-Headroom off);
+    dr / hfShareDb: the analysis for the mastering profile (0 / NaN = not measured), smartComfort: Smart Ear Comfort on. */
 std::vector<DetailSection> trackDetails (const TrackInfo& track, double truePeakDb = std::numeric_limits<double>::quiet_NaN(),
-                                         double ceilingDb = std::numeric_limits<double>::quiet_NaN());
+                                         double ceilingDb = std::numeric_limits<double>::quiet_NaN(),
+                                         int dr = 0, double hfShareDb = std::numeric_limits<double>::quiet_NaN(), bool smartComfort = false);
 /** An album: summary (formats, duration, total size) then one line per track. */
 std::vector<DetailSection> albumDetails (const std::vector<TrackInfo>& tracks, const juce::String& albumTitle);
 /** Plain text, for the "Copier" button and bug reports. */

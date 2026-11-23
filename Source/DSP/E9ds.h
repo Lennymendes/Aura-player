@@ -15,6 +15,7 @@
 #pragma once
 
 #include "../Engine/DspChain.h"
+#include "SmartComfort.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -51,11 +52,18 @@ public:
 
     juce::String getName() const override
     {
+        if (! state->enabled.load() && comfort.load (std::memory_order_relaxed) > 0.0)
+            return "E9DS auto (Smart Ear Comfort) Dynamic HF 8,0 kHz, max -" + juce::String (comfort.load(), 1).replaceCharacter ('.', ',') + " dB";
         const juce::String f = juce::String (state->focusHz.load() / 1000.0, 1).replaceCharacter ('.', ',');
         return "E9DS " + juce::String (state->mode.load() == E9dsState::DynamicHf ? "Dynamic HF " : "Split-Band ") + f + " kHz";
     }
     juce::String getDescription() const override { return "De-esser / adoucisseur d'aigus transparent (64 bits)"; }
-    bool isBypassed() const noexcept override { return ! state->enabled.load() && ! audible.load (std::memory_order_relaxed); }
+    bool isBypassed() const noexcept override
+    {
+        return ! state->enabled.load() && comfort.load (std::memory_order_relaxed) <= 0.0 && ! audible.load (std::memory_order_relaxed);
+    }
+    /** Smart Ear Comfort: automatic dose of this chain's current track; the manual setting always wins. */
+    void setTrackComfort (double db) noexcept override { comfort.store (db > 0.0 ? db : 0.0, std::memory_order_relaxed); }
 
     bool prepare (double sampleRate, int, int) override
     {
@@ -82,11 +90,13 @@ public:
     {
         const int nc = std::min (numChannels, maxChannels);
         if (! audible.load (std::memory_order_relaxed)) { det = {}; app = {}; hp1 = {}; eBand = eFull = grSmooth = 0.0; mix = 0.0; }   // waking up
-        const double focus = state->focusHz.load();
-        const int m = state->mode.load();
+        const bool manual = state->enabled.load();
+        const double autoDb = comfort.load (std::memory_order_relaxed);
+        const double focus = manual ? state->focusHz.load() : comfort::focusHz;
+        const int m = manual ? state->mode.load() : (int) E9dsState::DynamicHf;
         if (focus != designedFocus || m != designedMode) design (focus, m);
-        const double target = state->enabled.load() ? 1.0 : 0.0;
-        const double capDb = state->amountDb.load();
+        const double target = manual || autoDb > 0.0 ? 1.0 : 0.0;
+        const double capDb = manual ? state->amountDb.load() : std::max (autoDb, 0.0);
         const double inv = 1.0 / nc;
         double worst = 0.0;
         for (int i = 0; i < numFrames; ++i)
@@ -178,6 +188,7 @@ private:
     std::array<OnePoleHp, maxChannels> hp1;
     double eBand = 0.0, eFull = 0.0, grSmooth = 0.0, mix = 0.0;
     std::atomic<bool> audible { false };
+    std::atomic<double> comfort { 0.0 };     // Smart Ear Comfort dose (written by the chain's own thread)
 };
 
 } // namespace nx

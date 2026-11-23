@@ -40,6 +40,8 @@ struct PlayableItem
     juce::String sourceName;             // "Fichiers locaux", "Qobuz", "NAS (UPnP)"...
     double durationHint = 0.0;
     double truePeakDb = std::numeric_limits<double>::quiet_NaN();   // measured True Peak (dBTP), NaN = not yet
+    int dr = 0;                                                     // Smart Ear Comfort: analysis (0 = not yet)
+    double hfShareDb = std::numeric_limits<double>::quiet_NaN();
     /** Optional: custom stream opener (authenticated streams, caches...). Called on the decoder thread. */
     std::function<std::unique_ptr<juce::InputStream>()> openStream;
 };
@@ -136,6 +138,10 @@ public:
     /** Auto-Headroom True Peak: the measurement of a queued track arrived (message thread). It applies at once to the
         track being played (10 ms glide) and to the next ones from their first sample. */
     void setTrackTruePeak (int queueIndex, double truePeakDb);
+    /** Smart Ear Comfort: the analysis (DR, 6-10 kHz share) of a queued track arrived (message thread); like the True Peak. */
+    void setTrackProfile (int queueIndex, int dr, double hfShareDb);
+    /** Smart Ear Comfort dose (dB of automatic E9DS) of the current track; 0 when off, DSD, or dynamic / balanced. */
+    double getComfortDoseDb() const;
     /** dB of attenuation the Auto-Headroom applies to the current track (0 = none; PCM sources only). */
     double getTruePeakAttenuationDb() const;
 
@@ -220,6 +226,8 @@ private:
         double startSeconds = 0.0;
         double truePeakDb = std::numeric_limits<double>::quiet_NaN();
         bool truePeakInAudio = false;    // the audio thread applies the Auto-Headroom (PCM as is to the ring)
+        bool pcmSource = false;
+        double comfortDb = 0.0;          // Smart Ear Comfort dose of the track (PCM sources)
     };
 
     bool consumeEvents (const PlanWire& active) noexcept;   // audio thread
@@ -327,6 +335,12 @@ private:
     std::atomic<double> tpCeiling { -1.0 };
     std::atomic<int> liveTpIndex { -1 };
     std::atomic<double> liveTpDb { 0.0 };
+    std::atomic<bool> smartOn { false };
+    std::atomic<int> liveComfortIndex { -1 };
+    std::atomic<double> liveComfortDb { 0.0 };
+    double comfortFor (int itemIndex, bool pcmSource, double eventDb) const noexcept;
+    double decComfortDb = 0.0;
+    bool decPcmSource = false;
     double tpGainFor (int itemIndex, double eventTpDb) const noexcept;
     // decoder thread: the Auto-Headroom of the track being decoded (conversions: before the resampler / modulator)
     void applyDecoderTruePeak (double* interleaved, int frames, int channels, double rate) noexcept;

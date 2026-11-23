@@ -972,7 +972,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         }
         for (auto* head : { "CE QUE ÇA FAIT", "GAIN RÉEL À L'ÉCOUTE", "COMPROMIS / LIMITES" })
             if (! english.hasProperty (juce::Identifier (juce::String::fromUTF8 (head)))) { translated = false; untranslated << head << " "; }
-        t.check (complete && translated, "explications « + » : 10 fiches (ce que ça fait, gain à l'écoute, compromis), toutes traduites en anglais"_t
+        t.check (complete && translated, "explications « + » : 11 fiches (ce que ça fait, gain à l'écoute, compromis), toutes traduites en anglais"_t
                  + (untranslated.isNotEmpty() ? " [" + untranslated + "]" : juce::String()));
     }
     app.plugins().setUiPluginEnabled ("nx.analog-vu", true);
@@ -1172,6 +1172,43 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
                          && ! app.engine().getSettings().autoTruePeak,
                      "AURA DSP : Auto-Headroom True Peak (désactivé par défaut, plafond -1,0 / -0,5 dBTP enregistré, « + »), mesure enregistrée en base, fiche Informations : "_t
                          + tpRow + " / " + ahRow + " [" + juce::String ((int) offFirst) + juce::String ((int) on) + juce::String ((int) half) + juce::String ((int) plus)
+                         + juce::String ((int) stored.has_value()) + "]");
+        }
+        {
+            // Smart Ear Comfort: its row (switch, "+"), saved, the profile in the Informations sheet
+            const bool offFirst = ! app.engine().getSettings().smartComfort && ! dsp.smart.getToggleState();
+            dsp.smart.triggerClick();
+            settle (80);
+            const bool on = app.engine().getSettings().smartComfort && (bool) app.settings().get ("engine").getProperty ("smartComfort", false);
+            bool plus = false;
+            for (auto* c : dsp.getChildren()) if (auto* ib = dynamic_cast<nx::InfoButton*> (c)) plus = plus || ib->id == "smart";
+            {
+                // capture with a bright, compressed profile on the current track (the test files are too short for a DR)
+                const int ci = app.engine().getCurrentIndex();
+                const auto q = app.engine().getQueue();
+                const bool has = ci >= 0 && ci < (int) q.size();
+                if (has) app.engine().setTrackProfile (ci, 5, -9.0);
+                main->auraDsp.repaint();
+                settle (120);
+                shoot ("46f_aura_dsp_smart_ear_comfort");
+                if (has) app.engine().setTrackProfile (ci, q[(size_t) ci].dr, q[(size_t) ci].hfShareDb);
+            }
+            const auto albumTracks = app.library().getAlbumTracks ("Zeyn", "Neon Roads");
+            const auto played = albumTracks.size() > 2 ? albumTracks[2] : albumTracks.front();
+            const auto stored = app.library().getProfile (played.externalId);
+            app.showDetails (std::vector<nx::TrackInfo> { played }, {});
+            settle (100);
+            juce::String profRow, smartRow;
+            for (auto& sec : main->getDetailsSheet().getSections())
+                for (auto& r : sec.rows) { if (r.label == "Profil de mastering"_t) profRow = r.value; if (r.label == "Smart Ear Comfort") smartRow = r.value; }
+            main->getDetailsSheet().close();
+            dsp.smart.triggerClick();
+            settle (80);
+            if (stored) profRow << " {" << stored->first << ", " << stored->second << "}";
+            t.check (offFirst && on && plus && stored.has_value() && ! profRow.startsWith ("Non mesuré"_t) && smartRow.isNotEmpty() && smartRow != "En attente de la mesure"_t && smartRow != "Désactivé"_t
+                         && ! app.engine().getSettings().smartComfort,
+                     "AURA DSP : Smart Ear Comfort (désactivé par défaut, enregistré, « + »), profil enregistré en base, fiche Informations : "_t
+                         + profRow + " / " + smartRow + " [" + juce::String ((int) offFirst) + juce::String ((int) on) + juce::String ((int) plus)
                          + juce::String ((int) stored.has_value()) + "]");
         }
         {

@@ -1020,7 +1020,7 @@ namespace nx
 //==============================================================================
 // "+" explanations (AURA DSP, Settings › Audio)
 //==============================================================================
-juce::StringArray explainerIds() { return { "e9ds", "dxd", "crossfeed", "headroom", "truepeak", "hpeq", "rate", "fades", "pcmdsd", "keepdsd" }; }
+juce::StringArray explainerIds() { return { "e9ds", "dxd", "crossfeed", "headroom", "truepeak", "smart", "hpeq", "rate", "fades", "pcmdsd", "keepdsd" }; }
 
 Explainer explainer (const juce::String& id)
 {
@@ -1049,6 +1049,11 @@ Explainer explainer (const juce::String& id)
                  "Mesure en tâche de fond le vrai pic de chaque morceau entre les échantillons (True Peak, ITU-R BS.1770-4, suréchantillonné ×4). Si ce pic dépasse le plafond (-1,0 ou -0,5 dBTP), le morceau est baissé de l'écart exact, avant toute conversion, égaliseur ou modulateur DSD."_t,
                  "Plus de saturation sur les masters modernes qui frôlent 0 dBFS mais dépassent 0 dBTP : reconstruction du DAC, suréchantillonnage DXD et modulation DSD restent propres. Un morceau déjà sous le plafond garde 0 dB : sa dynamique et le bit-perfect sont intacts."_t,
                  "Un morceau baissé n'est plus bit-perfect (gain 64 bits + dither). À la première écoute, l'atténuation arrive dès la fin de la mesure (glissement de 10 ms) ; ensuite elle est connue dès le premier échantillon. Source DSD : True Peak affiché seulement. Flux réseau non mesurés."_t };
+    if (id == "smart")
+        return { "Smart Ear Comfort",
+                 "Lit le profil de mastering de chaque morceau mesuré en tâche de fond (dynamique DR, part d'énergie entre 6 et 10 kHz). Sur un master brillant et compressé (DR 8 ou moins, aigus forts), E9DS s'active tout seul en Dynamic HF 8 kHz, dosé de -1,5 à -6 dB selon le morceau ; sur les autres, rien."_t,
+                 "Une playlist variée s'écoute sans retoucher le DSP : moins de fatigue sur les masters modernes durs, et les enregistrements dynamiques passent intacts, en bit-perfect s'il n'y a pas d'autre traitement."_t,
+                 "Un morceau traité n'est plus bit-perfect. E9DS réglé à la main reste prioritaire. Source DSD : profil affiché seulement. À la première écoute, l'adaptation arrive à la fin de la mesure (rampe de 20 ms) ; des cymbales très présentes peuvent compter comme des aigus forts, d'où la condition sur le DR."_t };
     if (id == "hpeq")
         return { "Égaliseur casque"_t,
                  "Corrige la courbe de réponse d'un casque mesuré pour la rapprocher d'une cible neutre (profils intégrés, 64 bits)."_t,

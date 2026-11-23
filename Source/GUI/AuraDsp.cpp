@@ -2,6 +2,7 @@
 #include "AuraDsp.h"
 #include <limits>
 #include "../DSP/StudioTools.h"
+#include "../DSP/SmartComfort.h"
 #include "../DSP/E9ds.h"
 
 namespace nx
@@ -269,8 +270,8 @@ void BandStrip::paint (juce::Graphics& g)
 //==============================================================================
 namespace
 {
-    enum Row { Source, Headroom, TruePeak, Conversion, Crossfeed, HeadphoneEq, ParametricEq, Polarity, E9ds, numRows };
-    const char* const rowTitles[] = { "Source", "Gestion du headroom", "Auto-Headroom", "Conversion de fréquence", "Crossfeed", "Égaliseur casque", "Égaliseur paramétrique", "Polarité", "E9DS" };
+    enum Row { Source, Headroom, TruePeak, Conversion, Crossfeed, HeadphoneEq, ParametricEq, Polarity, E9ds, Smart, numRows };
+    const char* const rowTitles[] = { "Source", "Gestion du headroom", "Auto-Headroom", "Conversion de fréquence", "Crossfeed", "Égaliseur casque", "Égaliseur paramétrique", "Polarité", "E9DS", "Smart Ear Comfort" };
 }
 
 AuraDspPanel::AuraDspPanel (AppContext& c)
@@ -281,7 +282,7 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
     setWantsKeyboardFocus (true);
     addAndMakeVisible (closeButton);
     closeButton.onClick = [this] { close(); };
-    for (auto* t : { &headroom, &truePeak, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds }) addAndMakeVisible (t);
+    for (auto* t : { &headroom, &truePeak, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds, &smart }) addAndMakeVisible (t);
     headroom.onClick = [this]
     {
         auto& s = ctx.studioTools();
@@ -289,6 +290,8 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
         ctx.setHeadphoneEq (s.eqPreset.load(), s.eqBypass.load());     // preamp worked out again (and saved)
         repaint();
     };
+    smart.onClick = [this] { ctx.setSmartComfort (smart.getToggleState()); repaint(); };
+    smart.setTooltip ("Smart Ear Comfort : E9DS dosé automatiquement sur les masters brillants et compressés, rien sur les autres"_t);
     truePeak.onClick = [this] { ctx.setAutoTruePeak (truePeak.getToggleState(), ctx.engine().getSettings().truePeakCeilingDb); repaint(); };
     tpCeiling.setTooltip ("Plafond de sécurité : -1,0 dBTP (recommandé) ou -0,5 dBTP"_t);
     truePeak.setTooltip ("Auto-Headroom True Peak : baisse seulement les morceaux dont le True Peak dépasse le plafond"_t);
@@ -323,7 +326,7 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
     };
     e9ds.onClick = [this] { e9Changed (true); setView (View::E9ds); };
     for (auto [row, id] : std::initializer_list<std::pair<int, const char*>> { { Headroom, "headroom" }, { TruePeak, "truepeak" }, { Conversion, "dxd" }, { Crossfeed, "crossfeed" },
-                                                                            { HeadphoneEq, "hpeq" }, { E9ds, "e9ds" } })
+                                                                            { HeadphoneEq, "hpeq" }, { E9ds, "e9ds" }, { Smart, "smart" } })
     {
         infos.emplace_back (row, std::make_unique<InfoButton> (ctx, id));
         addAndMakeVisible (*infos.back().second);
@@ -477,6 +480,7 @@ void AuraDspPanel::syncControls()
     headroom.setToggleState (s.autoHeadroom.load(), juce::dontSendNotification);
     upsample.setToggleState (ctx.engine().getSettings().upsampleToDxd, juce::dontSendNotification);
     truePeak.setToggleState (ctx.engine().getSettings().autoTruePeak, juce::dontSendNotification);
+    smart.setToggleState (ctx.engine().getSettings().smartComfort, juce::dontSendNotification);
     tpCeiling.setButtonText (ctx.engine().getSettings().truePeakCeilingDb < -0.75 ? "-1,0 dBTP" : "-0,5 dBTP");
     crossfeed.setToggleState (s.crossfeed.load(), juce::dontSendNotification);
     hpEq.setToggleState (s.eqActive(), juce::dontSendNotification);
@@ -635,7 +639,7 @@ void AuraDspPanel::resized()
     closeButton.setBounds (p.removeFromTop (40).removeFromRight (36).withSizeKeepingCentre (32, 32));
     p.removeFromTop (12);
     left = p.removeFromLeft (juce::jmin (340, p.getWidth() / 3));
-    juce::ToggleButton* toggles[] = { nullptr, &headroom, &truePeak, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds };
+    juce::ToggleButton* toggles[] = { nullptr, &headroom, &truePeak, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds, &smart };
     for (int r = 1; r < numRows; ++r) toggles[r]->setBounds (rowBounds (r).removeFromRight (52).withSizeKeepingCentre (48, 28));
     tpCeiling.setBounds (rowBounds (TruePeak).withTrimmedRight (56).removeFromRight (78).withSizeKeepingCentre (78, 26));
     for (auto& [r, b] : infos)
@@ -798,9 +802,28 @@ void AuraDspPanel::paint (juce::Graphics& g)
     {
         const auto& e = ctx.e9ds();
         const juce::String khz = juce::String (e.focusHz.load() / 1000.0, 1).replaceCharacter ('.', ',');
-        drawRow (E9ds, e.enabled.load(), e.enabled.load() ? juce::String (e.mode.load() == E9dsState::DynamicHf ? "Dynamic HF" : "Split-Band") + "  ·  " + khz + " kHz  ·  max -"
-                                                              + juce::String (e.amountDb.load(), 1).replaceCharacter ('.', ',') + " dB"
-                                                        : juce::String ("De-esser transparent, sibilances et aigus durs"_t));
+        const double dose = ctx.engine().getComfortDoseDb();
+        const auto num = [] (double v) { return juce::String (v, 1).replaceCharacter ('.', ','); };
+        drawRow (E9ds, e.enabled.load() || dose > 0.0,
+                 e.enabled.load() ? juce::String (e.mode.load() == E9dsState::DynamicHf ? "Dynamic HF" : "Split-Band") + "  ·  " + khz + " kHz  ·  max -" + num (e.amountDb.load()) + " dB"
+                 : dose > 0.0     ? "Auto  ·  Dynamic HF 8 kHz  ·  max -"_t + num (dose) + " dB"
+                                  : juce::String ("De-esser transparent, sibilances et aigus durs"_t));
+        // Smart Ear Comfort: the profile of the track being played and what it gets
+        const auto st = ctx.engine().getSettings();
+        const auto& q = ctx.engine().getQueue();
+        const int ci = ctx.engine().getCurrentIndex();
+        const auto r = ci >= 0 && ci < (int) q.size() ? comfort::classify (q[(size_t) ci].dr, q[(size_t) ci].hfShareDb) : comfort::Result();
+        const auto arrow = juce::String::fromUTF8 (" \xe2\x86\x92 ");
+        const juce::String shortName = r.profile == comfort::Profile::Bright ? "Master brillant"_t : r.profile == comfort::Profile::Dynamic ? "Dynamique"_t
+                                     : r.profile == comfort::Profile::Undetermined ? "Indéterminé"_t : "Équilibré"_t;
+        juce::String detail;
+        if (! st.smartComfort) detail = "Désactivé"_t;
+        else if (ci < 0) detail = "Adapte E9DS au profil de chaque morceau"_t;
+        else if (r.profile == comfort::Profile::Unknown) detail = "Profil en cours de mesure"_t;
+        else if (ctx.engine().getCurrentPlan().source.isDsd()) detail = shortName + " (DR" + juce::String (q[(size_t) ci].dr) + ")" + arrow + "DSD : affichage"_t;
+        else if (e.enabled.load()) detail = shortName + arrow + "E9DS manuel prioritaire"_t;
+        else detail = shortName + " (DR" + juce::String (q[(size_t) ci].dr) + ")" + arrow + (dose > 0.0 ? "E9DS -" + num (dose) + " dB" : juce::String ("bit-perfect"));
+        drawRow (Smart, st.smartComfort && dose > 0.0 && ! e.enabled.load(), detail);
     }
 
     monitorSegs.clear();
