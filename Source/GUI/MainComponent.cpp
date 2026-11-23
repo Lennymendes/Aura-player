@@ -196,7 +196,7 @@ MainComponent::MainComponent (AppContext& c)
       remoteButton (style::Icon::Phone, "Aura Remote : piloter depuis le téléphone (QR code)"_t, c),
       settingsButton (style::Icon::Settings, "Réglages (Cmd/Ctrl + ,)"_t, c),
       streamerButton (style::Icon::Bolt, "Mode Streamer / Gaming : interface au repos (OBS, jeu), audio inchangé"_t, c),
-      audioStatus (c), auraDsp (c),
+      audioStatus (c), auraDsp (c), artworkViewer (c), detailsSheet (c),
       ctx (c), listing (c), nowPlaying (c), sourcePage (c), marketplace (c), queue (c), toast (c),
       settingsWindow (c), immersive (c), onboarding (c)
 {
@@ -234,6 +234,8 @@ MainComponent::MainComponent (AppContext& c)
     addChildComponent (immersive);
     addChildComponent (settingsWindow);
     addChildComponent (auraDsp);
+    addChildComponent (artworkViewer);
+    addChildComponent (detailsSheet);
     addChildComponent (onboarding);
     addChildComponent (toast);
     settingsWindow.onClose = [this] { grabKeyboardFocus(); };
@@ -380,6 +382,7 @@ void MainComponent::resized()
     auto r = getLocalBounds().reduced (margin);
 
     const auto density = ctx.layout.getProperty ("playerDensity", "comfortable").toString();
+    player.setUiScale (playerScale());
     const int playerH = playerHeight();
     auto position = ctx.layout.getProperty ("playerPosition", t.text ("--nx-player-position", "bottom")).toString();
     if (density == "integrated")
@@ -419,7 +422,7 @@ void MainComponent::resized()
     if (queueVisible) r.removeFromRight (margin);
 
     for (auto* p : std::initializer_list<juce::Component*> { &listing, &nowPlaying, &sourcePage, &marketplace }) p->setBounds (r);
-    for (auto* o : std::initializer_list<juce::Component*> { &settingsWindow, &auraDsp, &immersive, &onboarding }) o->setBounds (getLocalBounds());
+    for (auto* o : std::initializer_list<juce::Component*> { &settingsWindow, &auraDsp, &immersive, &onboarding, &artworkViewer, &detailsSheet }) o->setBounds (getLocalBounds());
     placeToast();
 }
 
@@ -427,7 +430,14 @@ int MainComponent::playerHeight() const
 {
     const auto density = ctx.layout.getProperty ("playerDensity", "comfortable").toString();
     const int base = (int) ctx.theme().number ("--nx-player-height", 84.0f);
-    return density == "compact" ? juce::jmax (60, base - 18) : density == "integrated" ? juce::jmax (56, base - 24) : base;
+    const int h = density == "compact" ? juce::jmax (60, base - 18) : density == "integrated" ? juce::jmax (56, base - 24) : base;
+    return juce::roundToInt ((float) h * playerScale());
+}
+
+float MainComponent::playerScale() const
+{
+    constexpr float from = 1600.0f, to = 2560.0f, maxScale = 104.0f / 84.0f;
+    return 1.0f + juce::jlimit (0.0f, 1.0f, ((float) getWidth() - from) / (to - from)) * (maxScale - 1.0f);
 }
 
 void MainComponent::placeToast()
@@ -918,7 +928,9 @@ bool MainComponent::keyPressed (const juce::KeyPress& k)
     auto& e = ctx.engine();
     if (k == juce::KeyPress::escapeKey)
     {
-        if (auraDsp.isVisible()) auraDsp.close();
+        if (artworkViewer.isVisible()) artworkViewer.close();
+        else if (detailsSheet.isVisible()) detailsSheet.close();
+        else if (auraDsp.isVisible()) auraDsp.close();
         else if (settingsWindow.isVisible()) settingsWindow.close();
         else if (immersive.isVisible()) setImmersive (false);
         grabKeyboardFocus();                                         // leave the search field

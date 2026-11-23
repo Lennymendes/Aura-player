@@ -99,10 +99,19 @@ void ListingPage::refresh()
 }
 
 ListingPage::ListingPage (AppContext& c) : ScrollPage (c), grid (c), list (c), pills (c), heroArt (c, 640),
-                                           editButton (style::Icon::Edit, "Modifier l'album (nom, artiste, année, pochette)"_t, c)
+                                           editButton (style::Icon::Edit, "Modifier l'album (nom, artiste, année, pochette)"_t, c),
+                                           infoButton (style::Icon::Info, "Informations détaillées (format, étiquettes, fichiers)"_t, c)
 {
     contentComp.addChildComponent (viewBar);
     contentComp.addChildComponent (editButton);
+    contentComp.addChildComponent (infoButton);
+    infoButton.onClick = [this]
+    {
+        auto tracks = heroTracks.empty() ? ctx.library().getAlbumTracks (heroArtist, title) : heroTracks;
+        ctx.showDetails (tracks, title);
+    };
+    heroArt.setOnClick ([this] { ctx.showArtwork (heroArtwork, title, heroArtist); });
+    heroArt.setTooltip ("Afficher la pochette en grand"_t);
     editButton.onClick = [this]
     {
         AlbumInfo a;
@@ -116,6 +125,7 @@ ListingPage::ListingPage (AppContext& c) : ScrollPage (c), grid (c), list (c), p
     // the header spans the whole title area and takes the clicks: the controls drawn over it must sit above it
     viewBar.toFront (false);
     editButton.toFront (false);
+    infoButton.toFront (false);
     contentComp.addChildComponent (pills);
     contentComp.addChildComponent (artistHeader);
     pills.onSelect = [this] (const juce::String& id) { ctx.navigate ({ PageId::Library, id }); };
@@ -197,6 +207,7 @@ void ListingPage::layoutContent (int width)
     shuffleAll.setVisible (hasPlayRow());
     viewBar.setVisible (showViewBar && ! hero && artistName.isEmpty());
     editButton.setVisible (hero);
+    infoButton.setVisible (hero);
     editButton.pro = ! ctx.isPremium();
     bool remote = false;
     for (auto& t : heroTracks) remote = remote || DownloadManager::canDownload (t);
@@ -226,6 +237,7 @@ void ListingPage::layoutContent (int width)
         shuffleAll.setBounds (pad + art + 160, y + art - 44, 130, 38);
         downloadAll.setBounds (pad + art + 302, y + art - 44, 140, 38);
         editButton.setBounds (pad + art + (downloadAll.isVisible() ? 454 : 302), y + art - 44, 38, 38);
+        infoButton.setBounds (editButton.getRight() + 6, y + art - 44, 38, 38);
         y += art + 28;
     }
     else

@@ -12,6 +12,7 @@ class DeviceChip : public juce::Component
 public:
     explicit DeviceChip (AppContext& c) : ctx (c) { setRepaintsOnMouseActivity (true); setMouseCursor (juce::MouseCursor::PointingHandCursor); }
     void paint (juce::Graphics&) override;
+    float uiScale = 1.0f;                     // wide screens: PlayerBar::setUiScale
     void mouseUp (const juce::MouseEvent&) override { showMenu(); }
     void showMenu();
     /** The profile entries of the menu (tests): name + whether it is the active one. */
@@ -57,6 +58,11 @@ public:
     std::function<void()> onToggleLyrics, onToggleQueue, onShowSignalPath, onOpenNowPlaying, onImmersive;
     bool shuffle = false, repeat = false;
 
+    /** Wide screens: 1.0 up to 1600 px, then up to 104 / 84 (MainComponent::playerScale): spacing, texts and icons follow the bar. */
+    void setUiScale (float s);
+    float getUiScale() const noexcept { return uiScale; }
+    ArtworkView& getArtwork() noexcept { return artwork; }
+
     IconButton lyricsButton, queueButton, studioButton, immersiveButton;
     DeviceChip deviceChip;
     IconButton favButton;                     // heart of the track being played (follows the library: syncTransportButtons)
@@ -70,6 +76,7 @@ private:
     IconButton prevButton, playButton, nextButton, miniButton, volumeButton, waveButton;
     SeekBar seek;
     LoopButton loopButton;
+    float uiScale = 1.0f;
     double pendingLoopA = -1.0;
     void syncLoop();
     QualityBadge badge;

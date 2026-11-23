@@ -23,6 +23,7 @@ public:
     bool one = false;             // small "1" on the icon (repeat one)
     bool pro = false;             // "PRO" pill: a Premium feature in Aura Free
     bool primary = false;         // big round play button
+    float glyph = 0.62f;          // icon size relative to the button (the player bar enlarges it on wide screens)
     void paintButton (juce::Graphics& g, bool hi, bool down) override;
 private:
     style::Icon icon;
@@ -53,7 +54,7 @@ private:
 /** Heart of the track being played (Now Playing, immersive view): filled accent when it is a favourite. */
 void syncHeart (IconButton& heart, const TrackInfo* track);
 
-class ArtworkView : public juce::Component, private juce::ChangeListener
+class ArtworkView : public juce::Component, public juce::SettableTooltipClient, private juce::ChangeListener
 {
 public:
     ArtworkView (AppContext& c, int pixelSize);
@@ -62,7 +63,13 @@ public:
     void paint (juce::Graphics&) override;
     float cornerRadius = 10.0f;
     bool shadow = true;
+    /** Set: the artwork is clickable (hand cursor), e.g. to show it full size. */
+    void setOnClick (std::function<void()> f) { onClick = std::move (f); setMouseCursor (onClick ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor); }
+    void mouseUp (const juce::MouseEvent& e) override { if (onClick && e.mouseWasClicked() && ! e.mods.isPopupMenu() && getLocalBounds().contains (e.getPosition())) onClick(); }
+    const juce::String& getKey() const noexcept { return key; }
+    void click() { if (onClick) onClick(); }                    // tests
 private:
+    std::function<void()> onClick;
     void changeListenerCallback (juce::ChangeBroadcaster*) override { repaint(); }
     AppContext& ctx;
     int size;
@@ -76,6 +83,7 @@ class QualityBadge : public juce::Component
 public:
     explicit QualityBadge (AppContext& c) : ctx (c) { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
     void update (const juce::String& text, PathQuality q) { label = text; quality = q; repaint(); }
+    float uiScale = 1.0f;                      // wide screens (PlayerBar::setUiScale)
     const juce::String& getLabel() const noexcept { return label; }
     void paint (juce::Graphics&) override;
     void mouseUp (const juce::MouseEvent&) override { if (onClick) onClick(); }

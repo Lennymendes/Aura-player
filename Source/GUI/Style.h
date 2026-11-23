@@ -104,7 +104,7 @@ inline juce::String formatTime (double seconds)
 enum class Icon { Play, Pause, Next, Previous, Shuffle, Repeat, Volume, VolumeMute, Lyrics, Queue, Mini, Home, Search, Clock,
                   Album, Artist, Song, Playlist, Folder, Network, Cloud, Settings, Heart, Plus, Close, Expand, Signal, Theme, Plugin,
                   ChevronLeft, ChevronRight, SidebarToggle, Grid, Download, Trash,
-                  Phone, Studio, Fullscreen, Lock, FolderPlus, HeartOutline, Check, Globe, Waveform, ChevronDown, Library, Edit, List, GridView, Bolt, Headphones, Discord };
+                  Phone, Studio, Fullscreen, Lock, FolderPlus, HeartOutline, Check, Globe, Waveform, ChevronDown, Library, Edit, List, GridView, Bolt, Headphones, Discord, Info };
 
 inline juce::Path iconPath (Icon icon)
 {
@@ -192,6 +192,7 @@ inline juce::Path iconPath (Icon icon)
         case Icon::Library:  p.addRoundedRectangle (3.5f, 4, 4, 16, 1); p.addRoundedRectangle (9.5f, 4, 4, 16, 1); p.startNewSubPath (16, 5); p.lineTo (20.5f, 19.5f); break;
         case Icon::Headphones: p.startNewSubPath (4.5f, 15); p.addCentredArc (12, 13, 7.5f, 8.5f, 0, -juce::MathConstants<float>::halfPi, juce::MathConstants<float>::halfPi);
                                p.addRoundedRectangle (3.5f, 13.5f, 4, 7, 1.6f); p.addRoundedRectangle (16.5f, 13.5f, 4, 7, 1.6f); break;
+        case Icon::Info:     p.addEllipse (3.5f, 3.5f, 17.0f, 17.0f); p.startNewSubPath (12, 11); p.lineTo (12, 16.5f); p.startNewSubPath (12, 7.7f); p.lineTo (12, 8.0f); break;
         case Icon::Discord:  p.addRoundedRectangle (3.5f, 6, 17, 13, 5.5f); p.addEllipse (8, 11, 2.6f, 2.8f); p.addEllipse (13.4f, 11, 2.6f, 2.8f);
                              p.startNewSubPath (7, 6.5f); p.lineTo (9, 4.5f); p.startNewSubPath (17, 6.5f); p.lineTo (15, 4.5f); break;
     }

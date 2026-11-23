@@ -27,7 +27,7 @@ void IconButton::paintButton (juce::Graphics& g, bool hi, bool down)
         g.setColour (style::neutral().withAlpha (down ? 0.14f : 0.08f));
         g.fillEllipse (r.withSizeKeepingCentre (d, d));
     }
-    const float s = juce::jmin (r.getWidth(), r.getHeight()) * 0.62f;
+    const float s = juce::jmin (r.getWidth(), r.getHeight()) * glyph;
     style::drawIcon (g, icon, r.withSizeKeepingCentre (s, s),
                      ! isEnabled() ? t.textCol().withAlpha (0.28f) : active ? t.accent() : (hi ? t.textCol() : t.textCol().withAlpha (0.82f)));
     if (pro) style::drawProBadge (g, { r.getRight(), r.getY() }, t.accent(), t.bg());
@@ -106,7 +106,7 @@ void QualityBadge::paint (juce::Graphics& g)
     auto icon = r.removeFromLeft (r.getHeight()).reduced (r.getHeight() * 0.22f);
     style::drawIcon (g, style::Icon::Signal, icon, c);
     g.setColour (c);
-    g.setFont (style::font (12.0f, true));
+    g.setFont (style::font (12.0f * uiScale, true));
     g.drawText (label, r.withTrimmedRight (8.0f), juce::Justification::centredLeft);
 }
 
@@ -748,6 +748,7 @@ void TrackList::mouseUp (const juce::MouseEvent& e)
     m.addItem ("Ajouter à la file d'attente"_t, [this, track] { ctx.enqueue ({ track }); });
     m.addItem ("Voir l'album"_t, [this, track] { ctx.navigate ({ PageId::AlbumDetail, track.albumArtist.isNotEmpty() ? track.albumArtist : track.artist, track.album }); });
     m.addItem ("Voir l'artiste"_t, [this, track] { ctx.navigate ({ PageId::ArtistDetail, track.displayArtist() }); });
+    m.addItem ("Informations…"_t, [this, track] { ctx.showDetails ({ track }); });
     if (track.id > 0)
         m.addItem (track.favourite ? "Retirer des favoris"_t : "Ajouter aux favoris"_t, [this, i]
         {

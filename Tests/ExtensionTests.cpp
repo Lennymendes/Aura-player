@@ -545,6 +545,105 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     app.settings().set ("albumView", "grid");
     app.navigate ({ nx::PageId::AlbumDetail, "Zeyn", "Neon Roads" });
     t.check (shoot ("03_album") > 60, "Détail d'album"_t);
+    {
+        // Patch 21 V2 bloc 2: the player bar grows with wide windows, nothing overflows or overlaps
+        const auto w0 = main->getWidth(), h0 = main->getHeight();
+        const int widths[] = { 1280, 1600, 1920, 2560, 3200 };
+        int heights[5] = {};
+        bool fits = true;
+        juce::String why;
+        for (int i = 0; i < 5; ++i)
+        {
+            main->setSize (widths[i], 1000);
+            settle (60);
+            auto& pl = main->getPlayer();
+            heights[i] = pl.getHeight();
+            const auto bar = pl.getLocalBounds();
+            for (auto* c : std::initializer_list<juce::Component*> { &pl.lyricsButton, &pl.queueButton, &pl.studioButton, &pl.immersiveButton, &pl.deviceChip, &pl.favButton, &pl.shuffleButton, &pl.repeatButton })
+                if (! bar.contains (c->getBounds())) { fits = false; why << widths[i] << ":" << c->getBounds().toString() << " "; }
+            if (pl.studioButton.getX() < pl.queueButton.getRight() - 1 - 0 && pl.lyricsButton.getRight() > pl.queueButton.getX() + 1) { fits = false; why << "overlap@" << widths[i] << " "; }
+            if (pl.lyricsButton.getX() < pl.deviceChip.getX() && pl.lyricsButton.getBounds().intersects (pl.deviceChip.getBounds())) { fits = false; why << "chip@" << widths[i] << " "; }
+        }
+        t.check (heights[0] == 84 && heights[1] == 84 && heights[2] > 84 && heights[2] < heights[3] && heights[3] == 104 && heights[4] == 104 && fits,
+                 "barre de lecture : 84 px jusqu'à 1600 px, puis 104 px à 2560 px (1280 / 1600 / 1920 / 2560 / 3200 : "_t
+                 + juce::String (heights[0]) + " / " + juce::String (heights[1]) + " / " + juce::String (heights[2]) + " / " + juce::String (heights[3]) + " / " + juce::String (heights[4])
+                 + "), aucun contrôle ne déborde ni ne se chevauche " + why);
+        main->setSize (2560, 1000);
+        settle (150);
+        shoot ("03e_barre_2560");
+        main->setSize (1366, 800);
+        settle (150);
+        shoot ("03f_barre_1366");
+        main->setSize (w0, h0);
+        settle (100);
+    }
+    {
+        // album cover full size: click on the cover, closes with a click, the button or Esc
+        auto& listing = main->getListing();
+        auto& viewer = main->getArtworkViewer();
+        listing.getHeroArt().click();
+        settle (150);
+        const auto ib = viewer.getImageBounds();
+        const bool opened = viewer.isVisible() && ib.getWidth() == ib.getHeight() && ib.getWidth() >= juce::jmin (viewer.getWidth(), viewer.getHeight()) * 6 / 10
+                            && viewer.getLocalBounds().contains (ib);
+        shoot ("03b_pochette_grand");
+        main->keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+        const bool escClosed = ! viewer.isVisible();
+        listing.getHeroArt().click();
+        viewer.closeButton.triggerClick();
+        settle (60);
+        const bool buttonClosed = ! viewer.isVisible();
+        listing.getHeroArt().click();
+        const juce::MouseEvent click (juce::Desktop::getInstance().getMainMouseSource(), juce::Point<float> (40, 40), juce::ModifierKeys(), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                      &viewer, &viewer, juce::Time::getCurrentTime(), juce::Point<float> (40, 40), juce::Time::getCurrentTime(), 1, false);
+        viewer.mouseUp (click);
+        const bool clickClosed = ! viewer.isVisible();
+        t.check (opened && escClosed && buttonClosed && clickClosed,
+                 "pochette d'album en grand : carrée, "_t + juce::String (ib.getWidth()) + " px, se ferme à Échap, au bouton et au clic ["
+                 + juce::String ((int) opened) + juce::String ((int) escClosed) + juce::String ((int) buttonClosed) + juce::String ((int) clickClosed) + "]");
+    }
+    {
+        // detailed metadata: the track and album sheets, from the album page
+        const auto albumTracks = app.library().getAlbumTracks ("Zeyn", "Neon Roads");
+        auto& sheet = main->getDetailsSheet();
+        main->getListing().infoButton.triggerClick();
+        settle (150);
+        const bool albumOpen = sheet.isVisible() && sheet.getSections().size() == 2 && sheet.getSections()[1].rows.size() == albumTracks.size()
+                               && sheet.getText().contains ("Neon Roads");
+        shoot ("03d_informations_album");
+        main->keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+        const bool albumEsc = ! sheet.isVisible();
+        const auto track = albumTracks.size() > 2 ? albumTracks[2] : albumTracks.front();
+        app.showDetails (std::vector<nx::TrackInfo> { track }, {});
+        settle (150);
+        auto find = [&] (const juce::String& section, const juce::String& label)
+        {
+            for (auto& sec : sheet.getSections())
+                if (sec.title.startsWith (section))
+                    for (auto& r : sec.rows) if (r.label == label) return r.value;
+            return juce::String();
+        };
+        const bool fields = find ("Audio", "Fréquence d'échantillonnage"_t) == nx::formatRate (track.sampleRate) && find ("Audio", "Profondeur"_t) == juce::String (track.bitsPerSample) + " bits"
+                            && find ("Audio", "Format"_t) == track.codec && find ("Audio", "Débit moyen"_t).endsWith ("kb/s") && find ("Fichier", "Chemin"_t) == track.externalId
+                            && find ("Fichier", "Taille"_t).isNotEmpty() && find ("Morceau", "Titre"_t) == track.title;
+        bool tagsRead = false;
+        for (auto& sec : sheet.getSections()) if (sec.title.startsWith ("Étiquettes")) tagsRead = ! sec.rows.empty();
+        const bool copy = sheet.getText().contains (track.externalId) && sheet.getText().contains ("[Audio]");
+        shoot ("03c_informations_morceau");
+        sheet.close();
+        t.check (albumOpen && albumEsc && fields && tagsRead && copy,
+                 "fiche Informations : album (résumé + "_t + juce::String ((int) albumTracks.size()) + " morceaux), morceau (format, fréquence, profondeur, débit, chemin, taille, étiquettes du fichier), texte copiable ["
+                 + juce::String ((int) albumOpen) + juce::String ((int) albumEsc) + juce::String ((int) fields) + juce::String ((int) tagsRead) + juce::String ((int) copy) + "]");
+        // a track that is not in a readable file (NAS / stream): the library's values and a clear note
+        auto remote = track;
+        remote.source = "upnp:test";
+        remote.externalId = "0$42";
+        remote.uri = "http://nas.local/track.flac";
+        const auto secs = nx::trackDetails (remote);
+        bool note = false;
+        for (auto& sec : secs) if (sec.title.startsWith ("Étiquettes")) for (auto& r : sec.rows) note = note || r.value.contains ("Source réseau");
+        t.check (note && secs.size() >= 4, "fiche Informations d'un morceau du NAS : valeurs de la bibliothèque et note sur les étiquettes non lisibles"_t);
+    }
 
     const auto tracks = app.library().getAlbumTracks ("Zeyn", "Neon Roads");
     app.playTracks (tracks, 2);
@@ -553,6 +652,22 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     settle (300);
     t.check (app.currentTrack() != nullptr && app.currentTrack()->title.contains ("Night"), "lecture lancée depuis l'interface : "_t + (app.currentTrack() ? app.currentTrack()->title : juce::String()));
     t.check (shoot ("04_en_cours_paroles") > 60, "En cours : pochette, paroles synchronisées, chemin du signal"_t);
+    {
+        // Now Playing: the cover opens full size, the (i) opens the track sheet
+        auto& np = main->getNowPlaying();
+        auto& viewer = main->getArtworkViewer();
+        np.getArtwork().click();
+        settle (100);
+        const bool cover = viewer.isVisible() && np.getArtwork().getKey() == app.currentTrack()->artworkKey;
+        viewer.closeButton.triggerClick();
+        settle (60);
+        np.infoButton.triggerClick();
+        settle (100);
+        const bool sheet = main->getDetailsSheet().isVisible() && main->getDetailsSheet().getText().contains (app.currentTrack()->title);
+        main->keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+        t.check (cover && sheet && shownInMain (&np.infoButton) && np.infoButton.getX() > np.favButton.getX(),
+                 "En cours : clic sur la pochette = grand format, « i » à côté du cœur = fiche du morceau ["_t + juce::String ((int) cover) + juce::String ((int) sheet) + "]");
+    }
     {
         // Patch 21 V2: heart next to the title in Now Playing, in step with the player bar, the library and the lists
         auto& np = main->getNowPlaying();

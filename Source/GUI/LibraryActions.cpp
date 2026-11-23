@@ -170,6 +170,7 @@ void showAlbumMenu (AppContext& ctx, const std::vector<AlbumInfo>& albums, juce:
     juce::PopupMenu m;
     if (single) m.addSectionHeader (first.title + " — "_t + first.artist);
     if (single) m.addItem ("Modifier l'album…"_t, [app, first] { editAlbum (*app, first); });
+    if (single) m.addItem ("Informations…"_t, [app, first] { app->showDetails (app->library().getAlbumTracks (first.artist, first.title), first.title); });
     else m.addSectionHeader (juce::String ((int) albums.size()) + " albums sélectionnés"_t);
 
     m.addItem ("Lire"_t, [app, albums] { app->playTracks (albumTracks (*app, albums), 0); });

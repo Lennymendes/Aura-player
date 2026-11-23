@@ -60,6 +60,8 @@ private:
     AppContext& ctx;
 public:
     IconButton favButton;                  // heart right of the title (follows the library)
+    IconButton infoButton;                 // detailed metadata of the track (i), right of the heart
+    ArtworkView& getArtwork() noexcept { return artwork; }
 private:
     void placeHeart();
     ArtworkView artwork;

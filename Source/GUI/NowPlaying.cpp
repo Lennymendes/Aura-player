@@ -231,10 +231,18 @@ void LyricsView::paint (juce::Graphics& g)
 //==============================================================================
 NowPlayingPage::NowPlayingPage (AppContext& c)
     : ctx (c), favButton (style::Icon::HeartOutline, "Ajouter aux favoris / retirer"_t, c),
+      infoButton (style::Icon::Info, "Informations détaillées (format, étiquettes, fichier)"_t, c),
       artwork (c, 1024), lyricsView (c), signalPath (c, true), pluginSlot (c, "nowplaying.side")
 {
     favButton.onClick = [this] { ctx.toggleCurrentFavourite(); };
     addChildComponent (favButton);
+    addChildComponent (infoButton);
+    infoButton.onClick = [this] { if (const auto* t = ctx.currentTrack()) ctx.showDetails ({ *t }); };
+    artwork.setOnClick ([this]
+    {
+        if (const auto* t = ctx.currentTrack()) ctx.showArtwork (t->artworkKey, t->album.isNotEmpty() ? t->album : t->title, t->displayArtist());
+    });
+    artwork.setTooltip ("Afficher la pochette en grand"_t);
     artwork.cornerRadius = 16.0f;
     addAndMakeVisible (artwork);
     addAndMakeVisible (lyricsView);
@@ -257,6 +265,7 @@ void NowPlayingPage::trackChanged()
 void NowPlayingPage::favouriteChanged()
 {
     syncHeart (favButton, ctx.currentTrack());
+    infoButton.setVisible (ctx.currentTrack() != nullptr);
     placeHeart();
 }
 
@@ -265,9 +274,10 @@ void NowPlayingPage::placeHeart()
     // right after the centred title (same font as paint), clamped inside the info area
     const auto* t = ctx.currentTrack();
     if (t == nullptr || infoArea.isEmpty()) return;
-    const int w = juce::jmin ((int) style::textWidth (style::font (24.0f, true), t->title), infoArea.getWidth() - 72);
-    const int x = juce::jmin (infoArea.getCentreX() + w / 2 + 8, infoArea.getRight() - 30);
+    const int w = juce::jmin ((int) style::textWidth (style::font (24.0f, true), t->title), infoArea.getWidth() - 104);
+    const int x = juce::jmin (infoArea.getCentreX() + w / 2 + 8, infoArea.getRight() - 60);
     favButton.setBounds (x, infoArea.getY() + 2, 28, 28);
+    infoButton.setBounds (favButton.getRight() + 2, infoArea.getY() + 2, 28, 28);
 }
 
 void NowPlayingPage::resized()
@@ -304,7 +314,7 @@ void NowPlayingPage::paint (juce::Graphics& g)
     {
         g.setColour (t.textCol());
         g.setFont (style::font (24.0f, true));
-        g.drawText (tr->title, r.removeFromTop (32).withSizeKeepingCentre (infoArea.getWidth() - 72, 32), juce::Justification::centred, true);
+        g.drawText (tr->title, r.removeFromTop (32).withSizeKeepingCentre (infoArea.getWidth() - 104, 32), juce::Justification::centred, true);
         g.setColour (t.textDim());
         g.setFont (style::font (16.0f));
         g.drawText (tr->displayArtist() + (tr->album.isNotEmpty() ? " — "_t + tr->album : juce::String()), r.removeFromTop (22), juce::Justification::centred, true);

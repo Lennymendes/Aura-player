@@ -144,6 +144,10 @@ public:
     virtual bool loadParametricPreset (const juce::String& name) = 0;
     /** AURA DSP: the "Aura Precision Audio Control" panel (source, headroom, sample rate conversion, filters). */
     virtual void showAuraDsp() = 0;
+    /** Artwork full size over the window (click, close button or Esc closes it). */
+    virtual void showArtwork (const juce::String& artworkKey, const juce::String& title, const juce::String& subtitle) = 0;
+    /** Detailed metadata: one track = its sheet, several = the album sheet. */
+    virtual void showDetails (const std::vector<TrackInfo>& tracks, const juce::String& albumTitle = {}) = 0;
     /** Official links (shop, Discord community); an empty Discord address hides its buttons. */
     virtual juce::String shopUrl() = 0;
     virtual juce::String discordUrl() = 0;

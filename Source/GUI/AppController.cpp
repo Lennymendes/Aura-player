@@ -1218,6 +1218,16 @@ bool AppController::loadParametricPreset (const juce::String& name)
     return true;
 }
 
+void AppController::showArtwork (const juce::String& key, const juce::String& title, const juce::String& subtitle)
+{
+    if (auto* m = getMainComponent()) m->showArtwork (key, title, subtitle);
+}
+
+void AppController::showDetails (const std::vector<TrackInfo>& tracks, const juce::String& albumTitle)
+{
+    if (auto* m = getMainComponent()) m->showDetails (tracks, albumTitle);
+}
+
 void AppController::showAuraDsp()
 {
     if (auto* m = getMainComponent()) m->showAuraDsp();

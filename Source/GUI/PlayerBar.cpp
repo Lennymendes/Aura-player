@@ -165,22 +165,22 @@ void PlayerBar::paint (juce::Graphics& g)
         juce::String info;
         if (const auto* tr = ctx.currentTrack()) info = channelBadge (tr->channels);
         if (auto an = ctx.currentAnalysis()) info << (info.isNotEmpty() ? juce::String::fromUTF8 (" \xc2\xb7 ") : juce::String()) << an->summary();
-        if (info.isNotEmpty() && r.getHeight() >= 46)
+        if (info.isNotEmpty() && r.getHeight() >= 46 * uiScale)
         {
             g.setColour (t.textDim().withAlpha (0.85f));
-            g.setFont (style::font (11.0f));
-            g.drawText (info, r.removeFromBottom (13), juce::Justification::bottomLeft, true);
+            g.setFont (style::font (11.0f * uiScale));
+            g.drawText (info, r.removeFromBottom (juce::roundToInt (13 * uiScale)), juce::Justification::bottomLeft, true);
         }
     }
     g.setColour (t.textCol());
-    g.setFont (style::font (14.5f, true));
+    g.setFont (style::font (14.5f * uiScale, true));
     g.drawText (title, r.removeFromTop (r.getHeight() / 2), juce::Justification::bottomLeft, true);
-    g.setFont (style::font (13.0f));
+    g.setFont (style::font (13.0f * uiScale));
     artistRect = {};
     if (artistText.isNotEmpty())
     {
-        const int aw = juce::jmin (r.getWidth(), juce::roundToInt (style::textWidth (style::font (13.0f), artistText)) + 2);
-        artistRect = r.withWidth (aw).withHeight (juce::jmin (r.getHeight(), 20));
+        const int aw = juce::jmin (r.getWidth(), juce::roundToInt (style::textWidth (style::font (13.0f * uiScale), artistText)) + 2);
+        artistRect = r.withWidth (aw).withHeight (juce::jmin (r.getHeight(), juce::roundToInt (20 * uiScale)));
         g.setColour (t.accent());
         g.drawText (artistText, artistRect, juce::Justification::topLeft, true);
         g.setColour (t.textDim());
@@ -201,46 +201,48 @@ void PlayerBar::mouseMove (const juce::MouseEvent& e)
 
 void PlayerBar::resized()
 {
-    auto r = getLocalBounds().reduced (12, 10);
+    const float k = uiScale;
+    auto sc = [k] (int v) { return juce::roundToInt ((float) v * k); };
+    auto r = getLocalBounds().reduced (12, sc (10));
     artwork.setBounds (r.removeFromLeft (r.getHeight()));
-    r.removeFromLeft (12);
+    r.removeFromLeft (sc (12));
     const int third = getWidth() / 3;
-    textArea = r.removeFromLeft (juce::jmax (120, third - r.getHeight() - 40));
-    favButton.setBounds (textArea.removeFromRight (30).withSizeKeepingCentre (26, 26));   // heart right of the title
+    textArea = r.removeFromLeft (juce::jmax (120, third - r.getHeight() - sc (40)));
+    favButton.setBounds (textArea.removeFromRight (sc (30)).withSizeKeepingCentre (sc (26), sc (26)));   // heart right of the title
     textArea.removeFromRight (4);
 
-    auto right = r.removeFromRight (juce::jmin (third + 40, 470));
+    auto right = r.removeFromRight (juce::jmin (third + sc (40), sc (470)));
     auto center = r.reduced (8, 0);
 
     // center: transport row + seek bar
     // waveform mode gives the seek area more height (Audirvana style)
     auto row = center.removeFromTop (center.getHeight() * (waveButton.active ? 44 : 55) / 100);
     const int b = row.getHeight();
-    auto controls = row.withSizeKeepingCentre (b * 5 + 40 + 10 + 44, b);
+    auto controls = row.withSizeKeepingCentre (b * 5 + sc (40 + 10 + 44), b);
     shuffleButton.setBounds (controls.removeFromLeft (b).reduced (6));
-    controls.removeFromLeft (10);
+    controls.removeFromLeft (sc (10));
     prevButton.setBounds (controls.removeFromLeft (b).reduced (4));
-    controls.removeFromLeft (10);
+    controls.removeFromLeft (sc (10));
     playButton.setBounds (controls.removeFromLeft (b).reduced (1));
-    controls.removeFromLeft (10);
+    controls.removeFromLeft (sc (10));
     nextButton.setBounds (controls.removeFromLeft (b).reduced (4));
-    controls.removeFromLeft (10);
+    controls.removeFromLeft (sc (10));
     repeatButton.setBounds (controls.removeFromLeft (b).reduced (6));
-    controls.removeFromLeft (10);
-    loopButton.setBounds (controls.removeFromLeft (44));
-    auto seekArea = center.withSizeKeepingCentre (juce::jmin (center.getWidth(), 646), center.getHeight());
-    waveButton.setBounds (seekArea.removeFromLeft (26).withSizeKeepingCentre (22, 22));   // left of the elapsed time
+    controls.removeFromLeft (sc (10));
+    loopButton.setBounds (controls.removeFromLeft (sc (44)));
+    auto seekArea = center.withSizeKeepingCentre (juce::jmin (center.getWidth(), sc (646)), center.getHeight());
+    waveButton.setBounds (seekArea.removeFromLeft (sc (26)).withSizeKeepingCentre (sc (22), sc (22)));   // left of the elapsed time
     seek.setBounds (seekArea);
 
     // right: badge + device chip / plug-ins, then buttons / volume
     auto top = right.removeFromTop (right.getHeight() / 2);
     {
         // wide enough for the pipeline label ("DSD64 → DXD 352,8 kHz [Anubis Ref]")
-        const int wanted = juce::roundToInt (juce::GlyphArrangement::getStringWidth (style::font (12.0f, true), badge.getLabel())) + 48;
-        const int chipW = juce::jmin (150, juce::jmax (100, top.getWidth() / 3));
+        const int wanted = juce::roundToInt (juce::GlyphArrangement::getStringWidth (style::font (12.0f * k, true), badge.getLabel())) + sc (48);
+        const int chipW = juce::jmin (sc (150), juce::jmax (sc (100), top.getWidth() / 3));
         deviceChip.setBounds (top.removeFromRight (chipW).reduced (0, 3));
         top.removeFromRight (6);
-        badge.setBounds (top.removeFromLeft (juce::jlimit (120, juce::jmax (120, top.getWidth()), juce::jmax (170, wanted))).reduced (0, 4));
+        badge.setBounds (top.removeFromLeft (juce::jlimit (sc (120), juce::jmax (sc (120), top.getWidth()), juce::jmax (sc (170), wanted))).reduced (0, 4));
     }
     top.removeFromLeft (6);
     pluginSlot.setVisible (! pluginSlot.isEmpty() && top.getWidth() > 40);
@@ -254,6 +256,21 @@ void PlayerBar::resized()
     volumeButton.setBounds (right.removeFromLeft (ib));
     volume.setBounds (right.reduced (4, 0));
     volumeLock.setBounds (volumeButton.getBounds().getUnion (volume.getBounds()));
+}
+
+void PlayerBar::setUiScale (float s)
+{
+    s = juce::jlimit (1.0f, 1.4f, s);
+    if (std::abs (s - uiScale) < 0.001f) return;
+    uiScale = s;
+    badge.uiScale = s;
+    deviceChip.uiScale = s;
+    volumeLock.setFont (style::font (12.0f * s, true));
+    const float glyph = 0.62f * (1.0f + (s - 1.0f) * 0.6f);       // icons grow a little more than the bar itself
+    for (auto* b : { &lyricsButton, &queueButton, &studioButton, &immersiveButton, &miniButton, &volumeButton, &shuffleButton, &repeatButton, &prevButton, &nextButton })
+        b->glyph = glyph;
+    resized();
+    repaint();
 }
 
 void PlayerBar::mouseUp (const juce::MouseEvent& e)
@@ -459,7 +476,7 @@ void DeviceChip::paint (juce::Graphics& g)
     if (activeFam != DeviceFamily::None) text = profileTag (activeFam, familyCurrentProfile (s, activeFam));
     else text = s.dsdMode == DsdMode::ConvertToPcm ? juce::String ("DSD -> DXD") : s.upsampleToDxd ? juce::String ("DXD") : juce::String ("Bit-Perfect");
     g.setColour (t.textCol());
-    g.setFont (style::font (11.5f, true));
+    g.setFont (style::font (11.5f * uiScale, true));
     g.drawText (text, r, juce::Justification::centredLeft, true);
 }
 

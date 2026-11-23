@@ -14,6 +14,8 @@
 #include "Onboarding.h"
 #include "Immersive.h"
 #include "AuraDsp.h"
+#include "ArtworkViewer.h"
+#include "Details.h"
 
 namespace nx
 {
@@ -106,6 +108,7 @@ public:
     NowPlayingPage& getNowPlaying() { return nowPlaying; }
     void favouriteChanged() { nowPlaying.favouriteChanged(); immersive.favouriteChanged(); }
     ListingPage& getListing() { return listing; }
+    PlayerBar& getPlayer() { return player; }
     int rememberedScroll (const PageRequest& r) const { auto it = scrollMemory.find (viewKey (r)); return it == scrollMemory.end() ? 0 : it->second; }
     PageRequest getCurrentPage() const { return current; }
     MarketplacePage& getMarketplace() { return marketplace; }
@@ -117,8 +120,25 @@ public:
     IconButton sidebarButton, backButton, forwardButton, remoteButton, settingsButton, streamerButton;
     AudioStatusChip audioStatus;
     AuraDspPanel auraDsp;
+    ArtworkViewer artworkViewer;
+    DetailsSheet detailsSheet;
     int playerHeight() const;
+    /** Wide screens: 1 up to 1600 px of window width, then rising to 104 / 84 at 2560 px (the bar, its icons and texts). */
+    float playerScale() const;
     void showAuraDsp() { auraDsp.open(); auraDsp.setBounds (getLocalBounds()); auraDsp.grabKeyboardFocus(); }
+    void showArtwork (const juce::String& key, const juce::String& title, const juce::String& subtitle)
+    {
+        if (key.isEmpty()) return;
+        artworkViewer.setBounds (getLocalBounds());
+        artworkViewer.open (key, title, subtitle);
+    }
+    void showDetails (const std::vector<TrackInfo>& tracks, const juce::String& albumTitle)
+    {
+        detailsSheet.setBounds (getLocalBounds());
+        detailsSheet.open (tracks, albumTitle);
+    }
+    ArtworkViewer& getArtworkViewer() { return artworkViewer; }
+    DetailsSheet& getDetailsSheet() { return detailsSheet; }
 
     /** Side mouse buttons (4 = back, 5 = forward) anywhere in the window. */
     struct SideButtons : juce::MouseListener

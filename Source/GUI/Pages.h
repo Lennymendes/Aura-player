@@ -76,6 +76,8 @@ public:
     };
     ViewBar viewBar { *this };
     IconButton editButton;              // album page: metadata editor (pencil)
+    IconButton infoButton;              // album page: detailed metadata (i)
+    ArtworkView& getHeroArt() noexcept { return heroArt; }
 
 private:
     std::unique_ptr<juce::Component> captionOwner;
