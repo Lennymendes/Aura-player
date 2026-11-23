@@ -19,6 +19,7 @@ struct TrackAnalysis
 {
     std::vector<float> minV, maxV, rms;   // per bin, linear (full scale = 1): signed peak min / max, RMS
     double peakDb = -200.0, rmsDb = -200.0;
+    double truePeakDb = -200.0;           // ITU-R BS.1770-4, 4x oversampled (DSD: after the decimation)
     int dr = 0;                            // DR value (0 = too short / silent)
     int channels = 0;
     juce::uint64 id = 0;                   // unique per scan (render cache key)

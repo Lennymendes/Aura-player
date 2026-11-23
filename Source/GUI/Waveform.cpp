@@ -2,6 +2,7 @@
 #include "Waveform.h"
 #include "../Audio/AudioDecoder.h"
 #include "../DSP/DsdToPcm.h"
+#include "../DSP/TruePeak.h"
 #include "../Core/Text.h"
 
 namespace nx
@@ -35,6 +36,7 @@ namespace
 
         void add (const double* x, int frames)
         {
+            tp.add (x, frames);
             for (int i = 0; i < frames; ++i, ++frame)
             {
                 while (frame >= binEnd && bin < bins - 1) binEnd = boundary (++bin);
@@ -76,6 +78,7 @@ namespace
             for (size_t b = 0; b < (size_t) bins; ++b)
                 out->rms[b] = binCount[b] > 0 ? (float) std::sqrt (binSum[b] / (double) binCount[b]) : 0.0f;
             out->peakDb = toDb (peak);
+            out->truePeakDb = tp.dbtp();
             out->rmsDb = frame > 0 ? toDb (std::sqrt (sumSq / ((double) frame * ch))) : -200.0;
 
             // DR (TT Dynamic Range meter): per channel, 3 s blocks; RMS of the loudest 20 % of the blocks
@@ -110,6 +113,7 @@ namespace
         std::vector<juce::int64> binCount;
         std::vector<std::vector<double>> blockRms, blockPeaks;
         std::shared_ptr<TrackAnalysis> out;
+        truepeak::Meter tp { ch };
     };
 }
 

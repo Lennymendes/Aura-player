@@ -2,6 +2,7 @@
 // Detailed metadata of a track or an album: the library's data, what the file header says and every tag the file carries
 // (ID3v2, Vorbis / FLAC, MP4, WAV INFO). Read-only: nothing is written to the files.
 #pragma once
+#include <limits>
 
 #include "AppContext.h"
 #include "Widgets.h"
@@ -13,7 +14,9 @@ struct DetailRow { juce::String label, value; };
 struct DetailSection { juce::String title; std::vector<DetailRow> rows; };
 
 /** One track: Morceau / Audio / Fichier / Étiquettes (read from the file when it is local and present) / Crédits. */
-std::vector<DetailSection> trackDetails (const TrackInfo& track);
+/** truePeakDb: measured True Peak (NaN = not measured); ceilingDb: Auto-Headroom ceiling (NaN = Auto-Headroom off). */
+std::vector<DetailSection> trackDetails (const TrackInfo& track, double truePeakDb = std::numeric_limits<double>::quiet_NaN(),
+                                         double ceilingDb = std::numeric_limits<double>::quiet_NaN());
 /** An album: summary (formats, duration, total size) then one line per track. */
 std::vector<DetailSection> albumDetails (const std::vector<TrackInfo>& tracks, const juce::String& albumTitle);
 /** Plain text, for the "Copier" button and bug reports. */

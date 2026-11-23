@@ -11,6 +11,9 @@
 #include "../Source/DSP/FilterDesign.h"
 #include "../Source/DSP/PcmToDsd.h"
 #include "../Source/DSP/E9ds.h"
+#include "../Source/DSP/TruePeak.h"
+#include "../Source/GUI/Waveform.h"
+#include "../Source/Library/Library.h"
 #include "../Source/Engine/DeviceProfiles.h"
 #include "../Source/Audio/LoopingDecoder.h"
 #include <complex>
@@ -2478,5 +2481,187 @@ NX_TEST_SECTION (123, "E9DS avec la conversion PCM -> DSD (XZ Automatic, DSD128 
                  && on.dsp.contains ("E9DS") && off.dsp.isEmpty() && on.meter > 1.0,
                  "PCM 44,1 kHz -> "_t + name + " + E9DS : sibilance 6,5 kHz " + juce::String (cut, 2) + " dB, 1 kHz " + juce::String (low, 3)
                  + " dB, « E9DS » dans le chemin du signal, indicateur de réduction " + juce::String (on.meter, 1) + " dB");
+    }
+}
+
+NX_TEST_SECTION (124, "Auto-Headroom True Peak : mesure BS.1770-4, atténuation par piste, bit-perfect sous le plafond, 0 allocation")
+{
+    constexpr double pi = juce::MathConstants<double>::pi;
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    // 1. the meter: a sine at fs/4 sampled at 45° has its samples at 1.0 but peaks at sqrt(2) between them (+3,01 dBTP)
+    {
+        const int n = 48000;
+        std::vector<double> over ((size_t) n * 2), clean ((size_t) n * 2);
+        for (int i = 0; i < n; ++i)
+        {
+            over[(size_t) i * 2] = over[(size_t) i * 2 + 1] = std::sqrt (2.0) * std::sin (pi / 2.0 * i + pi / 4.0);
+            clean[(size_t) i * 2] = clean[(size_t) i * 2 + 1] = 0.5 * std::sin (2.0 * pi * 1000.0 * i / 48000.0);
+        }
+        nx::truepeak::Meter a (2), b (2);
+        a.add (over.data(), n);
+        b.add (clean.data(), n);
+        t.check (std::abs (a.dbtp() - 3.01) < 0.3 && std::abs (b.dbtp() + 6.02) < 0.1,
+                 "True Peak ITU-R BS.1770-4 (x4) : sinus fs/4 à 45° (échantillons à 0 dBFS) = "_t + juce::String (a.dbtp(), 2)
+                     + " dBTP (attendu +3,01), sinus 1 kHz à -6 dBFS = " + juce::String (b.dbtp(), 2) + " dBTP");
+        using nx::truepeak::attenuationDb;
+        t.check (attenuationDb (2.0, -1.0) == 3.0 && attenuationDb (-2.3, -1.0) == 0.0 && attenuationDb (nan, -1.0) == 0.0
+                     && std::abs (attenuationDb (-0.7, -1.0) - 0.3) < 1e-12 && attenuationDb (-0.7, -0.5) == 0.0
+                     && nx::truepeak::gain (false, 5.0, -1.0) == 1.0 && nx::truepeak::gain (true, -3.0, -1.0) == 1.0,
+                 "marge : seulement l'excès au-dessus du plafond (-1,0 / -0,5 dBTP), 0 dB pour un morceau propre ou non mesuré"_t);
+    }
+    // 2. the background analysis of a file measures it (24-bit WAV with inter-sample overs)
+    auto overs = t.tempDir.getChildFile ("tp_overs.wav");
+    {
+        std::vector<int32_t> pcm (96000 * 2);
+        for (size_t i = 0; i < pcm.size() / 2; ++i)
+            pcm[i * 2] = pcm[i * 2 + 1] = (int32_t) ((uint32_t) (std::llround (0.999 * std::sqrt (2.0) * std::sin (pi / 2.0 * (double) i + pi / 4.0) * 8388608.0)) << 8);
+        writeWav (overs, &pcm, nullptr, 2, 96000, 24, 24, false);
+        const auto an = nx::TrackAnalyzer::analyse (overs, 400, [] { return false; });
+        t.check (an != nullptr && an->truePeakDb > 2.5 && an->peakDb < 0.0 && an->peakDb > -0.1,
+                 "analyse en tâche de fond : Peak "_t + (an ? juce::String (an->peakDb, 2) : "?") + " dBFS, True Peak "
+                     + (an ? juce::String (an->truePeakDb, 2) : "?") + " dBTP (crêtes inter-échantillons détectées)");
+    }
+    // 3. library: kept with the file, forgotten when the file changes
+    {
+        nx::Library lib;
+        juce::String err;
+        lib.openInMemory (t.tempDir.getChildFile ("tp_lib"), err);
+        nx::TrackInfo tr;
+        tr.source = "local"; tr.externalId = tr.uri = "/music/a.flac"; tr.title = "A"; tr.fileSize = 1000; tr.modified = 100;
+        lib.upsert (tr);
+        const bool none = ! lib.getTruePeak (tr.externalId).has_value();
+        lib.setTruePeak (tr.externalId, 1.25);
+        lib.upsert (tr);                                                   // rescan, same file
+        const auto kept = lib.getTruePeak (tr.externalId);
+        tr.modified = 200;
+        lib.upsert (tr);                                                   // the file changed
+        t.check (none && kept.has_value() && *kept == 1.25 && ! lib.getTruePeak (tr.externalId).has_value(),
+                 "base : colonne true_peak gardée au rescan, effacée quand le fichier change (taille / date)"_t);
+    }
+
+    // 4. engine, PCM to the DAC as is: a loud track (TP +2,0) then a clean one, gapless
+    const double g = std::pow (10.0, -3.0 / 20.0);                       // +2,0 dBTP, ceiling -1,0: -3,0 dB
+    auto loud = t.tempDir.getChildFile ("tp_loud.wav"), clean = t.tempDir.getChildFile ("tp_clean.wav");
+    const auto loudPcm = sinePcm (57600, 2, 24, 96000.0, 1000.0, 0.5);
+    const auto cleanPcm = randomPcm (96000, 2, 24, 4242u);
+    writeWav (loud, &loudPcm, nullptr, 2, 96000, 24, 24, false);
+    writeWav (clean, &cleanPcm, nullptr, 2, 96000, 24, 24, false);
+    struct Run { std::vector<int32_t> got; std::vector<uint8_t> dsd; double rate = 0; juce::String node; long allocs = 0; };
+    auto play = [&] (bool on, double tpLoud, int liveAt, std::function<void (nx::CaptureBackend&)> cfg = {}, std::function<void (nx::EngineSettings&)> more = {})
+    {
+        EngineRig rig (cfg);
+        auto st = rig.engine->getSettings();
+        st.autoTruePeak = on;
+        st.truePeakCeilingDb = -1.0;
+        if (more) more (st);
+        rig.engine->setSettings (st);
+        auto a = EngineRig::item (loud), b = EngineRig::item (clean);
+        a.truePeakDb = tpLoud;
+        b.truePeakDb = -6.0;
+        rig.cap->renderFlag = &nxtest_countAllocations;
+        nxtest_allocationCount = 0;
+        Run r;
+        rig.engine->setQueue ({ a, b }, 0, true);
+        rig.runToEnd (1024, 60.0, [&] (int block)
+        {
+            if (block == 8) for (auto& nd : rig.engine->getSignalPath().nodes) if (nd.stage == "Headroom") r.node = nd.title + " | " + nd.detail;
+            if (block == liveAt) rig.engine->setTrackTruePeak (0, 2.0);
+        });
+        rig.cap->renderFlag = nullptr;
+        r.allocs = nxtest_allocationCount.load();
+        r.got = rig.cap->capturedInt;
+        r.dsd = rig.cap->capturedDsd;
+        r.rate = rig.cap->config.sampleRate;
+        return r;
+    };
+    auto amp = [] (const std::vector<int32_t>& v, int from, int len, double rate)
+    {
+        if ((size_t) (from + len) * 2 > v.size()) return 0.0;
+        std::vector<double> x ((size_t) len);
+        for (int i = 0; i < len; ++i) x[(size_t) i] = v[(size_t) (from + i) * 2] * (1.0 / 2147483648.0);
+        return fitSine (x.data(), len, 1, rate, 1000.0).first;
+    };
+    auto sameFrom = [&] (const std::vector<int32_t>& got, size_t from, size_t to)
+    {
+        if (got.size() < to) return false;
+        for (size_t i = from; i < to; ++i) if (got[i] != (i < loudPcm.size() ? loudPcm[i] : cleanPcm[i - loudPcm.size()])) return false;
+        return true;
+    };
+    {
+        const auto off = play (false, 2.0, -1);
+        const auto on = play (true, 2.0, -1);
+        const double ratio = amp (on.got, 20000, 30000, 96000.0) / 0.5;
+        const size_t end = loudPcm.size() + cleanPcm.size();
+        t.check (sameFrom (off.got, 0, end), "désactivé : les deux pistes arrivent au DAC bit à bit (bit-perfect strict)"_t);
+        t.check (std::abs (20.0 * std::log10 (ratio) + 3.0) < 0.01 && sameFrom (on.got, loudPcm.size() + 38400, end) && on.allocs == 0,
+                 "actif, plafond -1,0 dBTP : piste à +2,0 dBTP baissée de "_t + juce::String (20.0 * std::log10 (ratio), 3)
+                     + " dB (attendu -3,000), piste propre suivante bit à bit (gapless, 0 dB), 0 allocation sur le thread audio");
+        t.check (on.node.contains ("-3,0 dB") && on.node.contains ("+2,0 dBTP"), "Chemin du signal : "_t + on.node);
+        // measurement arriving during playback (first listen): the rest of the track is attenuated, 10 ms glide
+        const auto live = play (true, nan, 20);
+        const double before = amp (live.got, 2000, 8000, 96000.0) / 0.5, after = amp (live.got, 36000, 20000, 96000.0) / 0.5;
+        int maxStep = 0;
+        for (size_t i = 2 * 20000; i + 2 < 2 * 36000; i += 2) maxStep = std::max (maxStep, std::abs ((live.got[i + 2] >> 8) - (live.got[i] >> 8)));
+        const int sineStep = (int) std::lround (0.5 * 8388608.0 * 2.0 * pi * 1000.0 / 96000.0) + 4;
+        t.check (std::abs (before - 1.0) < 1e-3 && std::abs (20.0 * std::log10 (after) + 3.0) < 0.01 && maxStep <= sineStep,
+                 "mesure arrivée en cours de lecture : 0 dB avant, "_t + juce::String (20.0 * std::log10 (after), 3) + " dB après, sans saut (pas max "
+                     + juce::String (maxStep) + " <= " + juce::String (sineStep) + ")");
+    }
+    // 5. conversions: the decoder attenuates before the resampler (DXD upsampling) and before the DSD modulator
+    {
+        auto up = [] (nx::EngineSettings& st) { st.upsampleToDxd = true; };
+        const auto off = play (false, 2.0, -1, {}, up), on = play (true, 2.0, -1, {}, up);
+        const double rel = 20.0 * std::log10 (amp (on.got, 100000, 80000, on.rate) / juce::jmax (1e-9, amp (off.got, 100000, 80000, off.rate)));
+        t.check (on.rate > 300000.0 && std::abs (rel + 3.0) < 0.02 && on.allocs == 0,
+                 "suréchantillonnage vers "_t + nx::formatRate (on.rate) + " : atténuation appliquée avant le filtre sinc ("
+                     + juce::String (rel, 3) + " dB), 0 allocation");
+
+        auto dsdCaps = [] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0, 5644800.0, 11289600.0 }; };
+        auto toDsd = [] (nx::EngineSettings& st) { st.pcmToDsd = 128; };
+        auto level = [&] (const std::vector<uint8_t>& dsd, double dsdRate)
+        {
+            constexpr double dxd = 352800.0;
+            nx::dsp::DsdToPcm back;
+            back.prepare (dsdRate, dxd, 2, 1.0);
+            const int bytes = (int) (dsd.size() / 2);
+            std::vector<double> pcm ((size_t) (back.maxOutputFor (bytes) + 8) * 2);
+            const int got = back.process (dsd.data(), bytes, pcm.data(), back.maxOutputFor (bytes));
+            int start = 0;
+            while (start < got && std::abs (pcm[(size_t) start * 2]) < 0.05) ++start;
+            const int from = start + 35280, len = 88200;
+            if (from + len > got) return 0.0;
+            return fitSine (pcm.data() + (size_t) from * 2, len, 2, dxd, 1000.0).first;
+        };
+        const auto doff = play (false, 2.0, -1, dsdCaps, toDsd), don = play (true, 2.0, -1, dsdCaps, toDsd);
+        const double relDsd = 20.0 * std::log10 (level (don.dsd, don.rate) / juce::jmax (1e-9, level (doff.dsd, doff.rate)));
+        t.check (don.rate > 5000000.0 && std::abs (relDsd + 3.0) < 0.1 && don.allocs == 0,
+                 "PCM -> DSD128 : atténuation appliquée en 64 bits avant le modulateur ("_t + juce::String (relDsd, 2) + " dB), 0 allocation");
+    }
+    // 6. a DSD source is never touched: display only
+    {
+        auto dsf = t.tempDir.getChildFile ("tp_native.dsf");
+        const auto bytes = dsdSine (2822400.0, 0.5, 2, 1000.0, 0.4);
+        writeDsf (dsf, bytes, 2, 2822400.0, true);
+        EngineRig rig ([] (nx::CaptureBackend& c) { c.capabilities.nativeDsdRates = { 2822400.0 }; });
+        auto st = rig.engine->getSettings();
+        st.autoTruePeak = true;
+        rig.engine->setSettings (st);
+        auto it = EngineRig::item (dsf);
+        it.truePeakDb = 3.0;
+        rig.engine->setQueue ({ it }, 0, true);
+        juce::String node;
+        double att = -1.0;
+        rig.runToEnd (1024, 60.0, [&] (int block)
+        {
+            if (block == 8)
+            {
+                for (auto& nd : rig.engine->getSignalPath().nodes) if (nd.stage == "Headroom") node = nd.detail;
+                att = rig.engine->getTruePeakAttenuationDb();
+            }
+        });
+        const auto ref = decodeAllDsd (dsf);
+        const auto& got = rig.cap->capturedDsd;
+        const bool same = got.size() >= ref.size() && std::equal (ref.begin(), ref.end(), got.begin());
+        t.check (same && att == 0.0 && node.contains ("DSD"), "source DSD native (TP +3,0) : flux 1 bit intact, True Peak affiché seulement ("_t + node + ")");
     }
 }

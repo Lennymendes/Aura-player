@@ -1,5 +1,6 @@
 // Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "PlaybackEngine.h"
+#include "../DSP/TruePeak.h"
 #include <algorithm>
 #include "../Audio/SacdIso.h"
 #include "../Core/AudioLog.h"
@@ -117,6 +118,8 @@ void PlaybackEngine::setSettings (const EngineSettings& s, bool replanCurrent)
         settings = s;
     }
     fadesOn = s.transitionFades;
+    tpCeiling = s.truePeakCeilingDb;
+    tpAuto = s.autoTruePeak;
     if (replanCurrent && state.load() != State::Stopped && currentIndex.load() >= 0)
         requestFlushStart (currentIndex.load(), getPositionSeconds());
 }
@@ -165,6 +168,7 @@ juce::String PlaybackEngine::getLastError() const
 void PlaybackEngine::setQueue (std::vector<PlayableItem> items, int startIndex, bool startPlaying)
 {
     queue = std::move (items);
+    liveTpIndex = -1;                        // a measurement of the old queue never lands on the new one
     const int first = queue.empty() ? 0 : juce::jlimit (0, (int) queue.size() - 1, startIndex);
     {
         std::lock_guard<std::mutex> l (controlLock);
@@ -627,7 +631,15 @@ bool PlaybackEngine::openItem (int index, double startSeconds, bool flush)
         while (plans.size() > 32) plans.erase (plans.begin());
     }
 
-    const RingEvent e { RingEvent::Track, bytesWritten, decoderGen, index, planId, startSeconds };
+    // Auto-Headroom True Peak (PCM sources): the decoder applies it when it converts (before the resampler, the float -> int
+    // step or the DSD modulator), the audio thread when the PCM goes to the ring as is (its gain stage + dither)
+    const bool pcmSource = ! plan.source.isDsd();
+    decTpDb = pcmSource ? item.truePeakDb : std::numeric_limits<double>::quiet_NaN();
+    decTpApply = pcmSource && plan.conversion != PlaybackPlan::Conversion::None;
+    if (flush || ! sameWire) decTpSnap = true;
+    RingEvent e { RingEvent::Track, bytesWritten, decoderGen, index, planId, startSeconds };
+    e.truePeakDb = pcmSource ? item.truePeakDb : std::numeric_limits<double>::quiet_NaN();
+    e.truePeakInAudio = pcmSource && plan.conversion == PlaybackPlan::Conversion::None;
     events.write (&e, 1);
 
     // A-B loop on this track: wrap the decoder (positions in its units, the start is moved inside the loop).
@@ -834,7 +846,7 @@ int PlaybackEngine::produce (int writableBytes)
         case PlaybackPlan::Conversion::FloatToInt:
         {
             const int n = decoder->readDouble (tmpDouble.data(), maxOutFrames);
-            if (n > 0) doublesToRing (tmpDouble.data(), n);
+            if (n > 0) { applyDecoderTruePeak (tmpDouble.data(), n, srcCh, src.sampleRate); doublesToRing (tmpDouble.data(), n); }
             return n;
         }
 
@@ -853,6 +865,7 @@ int PlaybackEngine::produce (int writableBytes)
                 n = decoder->readDouble (tmpDouble.data(), juce::jmin (inFrames, kChunkFrames));
             }
             if (n <= 0) return 0;
+            applyDecoderTruePeak (tmpDouble.data(), n, srcCh, src.sampleRate);
             const int out = resampler->process (tmpDouble.data(), n, tmpDouble2.data(), resampler->maxOutputFor (n));
             if (out > 0) { shaper.process (tmpDouble2.data(), out); doublesToRing (tmpDouble2.data(), out); }
             return n;
@@ -923,6 +936,7 @@ int PlaybackEngine::produceRemodulated (int maxOutFrames)
         }
         else consumed = decoder->readDouble (tmpDouble.data(), inFrames);
         if (consumed <= 0) return 0;
+        applyDecoderTruePeak (tmpDouble.data(), consumed, srcCh, plan.source.sampleRate);
         nd = consumed;
         if (resampler != nullptr)
         {
@@ -1312,7 +1326,8 @@ void PlaybackEngine::renderInt (int32_t* const* out, int numCh, int numFrames) n
         else
         {
             const auto* src = reinterpret_cast<const int32_t*> (rtBytes.data());
-            const double targetGain = isFixedVolume() ? 1.0 : volume.load();
+            const double targetGain = (isFixedVolume() ? 1.0 : volume.load())
+                                      * (currentEvent.truePeakInAudio ? tpGainFor (currentEvent.itemIndex, currentEvent.truePeakDb) : 1.0);
             const bool dspOn = activeChain != nullptr && activeChain->isActive();
             const int exactBits = deviceExactBits.load();
             const bool ramp = fadeable && (fadingOut || xfGain < 1.0 || (untilSwitch >= 0.0 && untilSwitch < fadeLen + frames));
@@ -1729,6 +1744,48 @@ void PlaybackEngine::timerCallback()
 }
 
 //==============================================================================
+double PlaybackEngine::tpGainFor (int itemIndex, double eventTpDb) const noexcept
+{
+    if (! tpAuto.load (std::memory_order_relaxed)) return 1.0;
+    const double tp = liveTpIndex.load (std::memory_order_acquire) == itemIndex ? liveTpDb.load (std::memory_order_relaxed) : eventTpDb;
+    return truepeak::gain (true, tp, tpCeiling.load (std::memory_order_relaxed));
+}
+
+void PlaybackEngine::applyDecoderTruePeak (double* x, int frames, int channels, double rate) noexcept
+{
+    const double target = decTpApply ? tpGainFor (decIndex, decTpDb) : 1.0;
+    if (decTpSnap) { decTpGain = target; decTpSnap = false; }   // fresh start: the faded-in stream starts at its level
+    if (target == 1.0 && decTpGain == 1.0) return;              // clean track: untouched
+    const double coeff = 1.0 - std::exp (-1.0 / (0.010 * std::max (1.0, rate)));
+    for (int i = 0; i < frames; ++i)
+    {
+        if (decTpGain != target)
+        {
+            decTpGain += (target - decTpGain) * coeff;
+            if (std::abs (decTpGain - target) < 1e-9) decTpGain = target;
+        }
+        for (int c = 0; c < channels; ++c) x[(size_t) i * (size_t) channels + (size_t) c] *= decTpGain;
+    }
+}
+
+void PlaybackEngine::setTrackTruePeak (int index, double tpDb)
+{
+    {
+        std::lock_guard<std::mutex> l (controlLock);
+        if (index >= 0 && index < (int) decoderQueue.size()) decoderQueue[(size_t) index].truePeakDb = tpDb;
+    }
+    if (index >= 0 && index < (int) queue.size()) queue[(size_t) index].truePeakDb = tpDb;
+    liveTpDb.store (tpDb, std::memory_order_relaxed);
+    liveTpIndex.store (index, std::memory_order_release);
+}
+
+double PlaybackEngine::getTruePeakAttenuationDb() const
+{
+    const int idx = currentIndex.load();
+    if (! tpAuto.load() || idx < 0 || idx >= (int) queue.size() || getCurrentPlan().source.isDsd()) return 0.0;
+    return truepeak::attenuationDb (queue[(size_t) idx].truePeakDb, tpCeiling.load());
+}
+
 SignalPath PlaybackEngine::getSignalPath() const
 {
     SignalPath path;
@@ -1755,6 +1812,20 @@ SignalPath PlaybackEngine::getSignalPath() const
     else
         path.add ("Décodage"_t, src.codec + " -> entiers " + juce::String (src.bitsPerSample) + " bits", "Bit à bit, sans passer par le flottant"_t,
                   PathQuality::BitPerfect);
+
+    if (tpAuto.load())
+    {
+        const double tp = item.truePeakDb, ceil = tpCeiling.load();
+        const auto num = [] (double v, bool sign) { return (sign && v > 0.0 ? "+" : "") + juce::String (v, 1).replaceCharacter ('.', ','); };
+        const juce::String measured = std::isfinite (tp) ? "True Peak "_t + num (tp, true) + " dBTP" : juce::String ("True Peak en cours de mesure"_t);
+        const juce::String plafond = "plafond "_t + num (ceil, true) + " dBTP";
+        if (src.isDsd())
+            path.add ("Headroom", measured, "Source DSD : affichage seulement, le flux 1 bit n'est pas modifié"_t, PathQuality::BitPerfect);
+        else if (const double a = truepeak::attenuationDb (tp, ceil); a > 0.0)
+            path.add ("Headroom", "Auto-Headroom : "_t + num (-a, false) + " dB", measured + " > " + plafond + ", 64 bits avant toute conversion"_t, PathQuality::HighQuality);
+        else
+            path.add ("Headroom", "Auto-Headroom : 0 dB"_t, measured + (std::isfinite (tp) ? juce::String::fromUTF8 (" \xe2\x89\xa4 ") + plafond + ", aucune atténuation"_t : juce::String()), PathQuality::BitPerfect);
+    }
 
     if (plan.downmix)
         path.add ("Canaux"_t, juce::String (src.numChannels) + " -> 2 (mixage stéréo ITU)"_t,

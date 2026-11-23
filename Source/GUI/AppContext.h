@@ -138,6 +138,8 @@ public:
     virtual void setParametricEq (const hpeq::ParametricBands& bands, bool enabled, bool persist) = 0;
     /** E9DS (de-esser): applied at once without rebuilding the chain (the switch ramps in / out), and remembered. */
     virtual void setE9ds (bool enabled, double focusHz, double amountDb, int mode) = 0;
+    /** Auto-Headroom True Peak (AURA DSP / Gestion du headroom): on / off and ceiling (-1,0 or -0,5 dBTP); saved. */
+    virtual void setAutoTruePeak (bool on, double ceilingDb) = 0;
     /** User presets of the parametric EQ, kept in settings.json ("peqPresets"). */
     virtual juce::StringArray getParametricPresetNames() = 0;
     virtual void saveParametricPreset (const juce::String& name) = 0;

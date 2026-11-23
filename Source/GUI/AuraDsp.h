@@ -94,7 +94,9 @@ public:
     /** Headphone view, once a profile is loaded: adds the parametric EQ on top (its own bands, the profile untouched). */
     juce::TextButton addPeqButton;
     juce::ComboBox userPresets;
-    juce::ToggleButton headroom, upsample, crossfeed, hpEq, peq, phase, e9ds;
+    juce::ToggleButton headroom, truePeak, upsample, crossfeed, hpEq, peq, phase, e9ds;
+    /** Auto-Headroom True Peak: ceiling -1,0 / -0,5 dBTP (a click switches). */
+    juce::TextButton tpCeiling;
     /** E9DS view: Focus 4-12 kHz (presets 6.5 / 9 kHz), Amount 0 to -6 dB, Split-Band / Dynamic HF. */
     juce::Slider e9Focus, e9Amount;
     juce::TextButton e9Split, e9Hf, e9Sib, e9Bril;

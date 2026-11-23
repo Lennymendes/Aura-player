@@ -189,6 +189,7 @@ AppController::AppController (Options options)
     eng->onTrackChanged = [this] { onTrackChanged(); };
     eng->onStateChanged = [this] { if (auto* m = getMainComponent()) m->stateChanged(); updateSystemNowPlaying (true); };
     eng->onSignalPathChanged = [this] { if (auto* m = getMainComponent()) m->stateChanged(); };
+    trackScan->addChangeListener (this);                 // Auto-Headroom: True Peak of each track
     eng->setShuffle ((bool) appSettings.get ("shuffle", false));
     eng->setRepeat ((PlaybackEngine::Repeat) juce::jlimit (0, 2, (int) appSettings.get ("repeat", 0)));
     eng->onError = [this] (const juce::String& e)
@@ -415,6 +416,7 @@ std::vector<TrackInfo> AppController::withoutStudioMasters (const std::vector<Tr
 
 AppController::~AppController()
 {
+    trackScan->removeChangeListener (this);
     alive.reset();
     stopTimer();
     juce::Desktop::getInstance().removeDarkModeSettingListener (this);
@@ -473,6 +475,8 @@ void AppController::loadEngineSettings()
         s.keepDsdOutput = (bool) v.getProperty ("keepDsdOutput", true);
         s.rateMode = (RateMode) juce::jlimit (0, 2, (int) v.getProperty ("rateMode", 0));
         s.transitionFades = (bool) v.getProperty ("transitionFades", true);
+        s.autoTruePeak = (bool) v.getProperty ("autoTruePeak", false);
+        s.truePeakCeilingDb = (double) v.getProperty ("truePeakCeiling", -1.0) > -0.75 ? -0.5 : -1.0;
         if (const auto* map = v.getProperty ("channelMap", {}).getArray(); map != nullptr && map->size() == 8)
             for (int c = 0; c < 8; ++c) s.channelMap[(size_t) c] = juce::jlimit (0, 7, (int) (*map)[c]);
     }
@@ -493,6 +497,8 @@ void AppController::saveEngineSettings()
     o->setProperty ("keepDsdOutput", s.keepDsdOutput);
     o->setProperty ("rateMode", (int) s.rateMode);
     o->setProperty ("transitionFades", s.transitionFades);
+    o->setProperty ("autoTruePeak", s.autoTruePeak);
+    o->setProperty ("truePeakCeiling", s.truePeakCeilingDb);
     juce::Array<juce::var> map;
     for (auto m : s.channelMap) map.add (m);
     o->setProperty ("channelMap", map);
@@ -733,7 +739,7 @@ void AppController::playTracks (const std::vector<TrackInfo>& requested, int sta
         if (unified->routeFor (t) != PlaybackRoute::Engine) continue;
         if (i == startIndex) start = (int) items.size();
         queueTracks.push_back (t);
-        items.push_back (unified->toPlayable (t));
+        items.push_back (playable (t));
     }
     eng->setQueue (std::move (items), start, true);
 }
@@ -790,7 +796,7 @@ void AppController::extendShuffle()
 
     std::vector<PlayableItem> items;
     for (auto& t : chunk)
-        if (unified->routeFor (t) == PlaybackRoute::Engine) { queueTracks.push_back (t); items.push_back (unified->toPlayable (t)); }
+        if (unified->routeFor (t) == PlaybackRoute::Engine) { queueTracks.push_back (t); items.push_back (playable (t)); }
     if (! items.empty()) eng->appendToQueue (std::move (items));
 }
 
@@ -802,7 +808,7 @@ void AppController::enqueue (const std::vector<TrackInfo>& requested)
     if (tracks.empty()) return;
     std::vector<PlayableItem> items;
     for (auto& t : tracks)
-        if (unified->routeFor (t) == PlaybackRoute::Engine) { queueTracks.push_back (t); items.push_back (unified->toPlayable (t)); }
+        if (unified->routeFor (t) == PlaybackRoute::Engine) { queueTracks.push_back (t); items.push_back (playable (t)); }
     if (eng->getQueue().empty()) { playTracks (tracks, 0); return; }
     eng->appendToQueue (std::move (items));
     showMessage (juce::String ((int) tracks.size()) + " morceau(x) ajouté(s) à la file"_t);
@@ -1003,9 +1009,9 @@ void AppController::onTrackChanged()
     {
         // one background scan per track (cancels the previous one), read by the player bar and the immersive view
         const auto* t = currentTrack();
-        analysisPath = t == nullptr || externalPlaying ? juce::String()
-                     : t->source == "local" ? t->externalId : lib.getOfflineCopy (*t);
+        analysisPath = t == nullptr || externalPlaying ? juce::String() : localPathOf (*t);
         if (analysisPath.isNotEmpty()) trackScan->request (analysisPath);
+        changeListenerCallback (nullptr);                 // already measured (cache): straight to the engine
     }
     if (const auto* t = currentTrack(); t != nullptr && ! externalPlaying && t->artworkKey.isEmpty())
     {
@@ -1115,6 +1121,54 @@ void AppController::updateDspNeedsPcm()
         const bool affectsCurrent = plan.source.isDsd() || plan.remodulates();
         eng->setSettings (s, affectsCurrent);
     }
+    if (auto* m = getMainComponent()) m->stateChanged();
+}
+
+void AppController::setAutoTruePeak (bool on, double ceilingDb)
+{
+    auto s = eng->getSettings();
+    s.autoTruePeak = on;
+    s.truePeakCeilingDb = ceilingDb > -0.75 ? -0.5 : -1.0;
+    eng->setSettings (s, false);                          // live: the gain stage follows, no re-plan
+    saveEngineSettings();
+    if (auto* m = getMainComponent()) m->stateChanged();
+}
+
+juce::String AppController::localPathOf (const TrackInfo& t)
+{
+    return t.source == "local" ? t.externalId : lib.getOfflineCopy (t);
+}
+
+PlayableItem AppController::playable (const TrackInfo& t)
+{
+    auto item = unified->toPlayable (t);
+    if (t.source == "local")
+        if (const auto tp = lib.getTruePeak (t.externalId)) item.truePeakDb = *tp;
+    return item;
+}
+
+void AppController::changeListenerCallback (juce::ChangeBroadcaster*)
+{
+    if (externalPlaying) return;
+    const auto& q = eng->getQueue();
+    auto measured = [&] (int index) -> bool          // true when the track's True Peak is known (now or before)
+    {
+        if (index < 0 || index >= (int) q.size() || index >= (int) queueTracks.size()) return true;
+        if (std::isfinite (q[(size_t) index].truePeakDb)) return true;
+        const auto& t = queueTracks[(size_t) index];
+        const auto path = localPathOf (t);
+        if (path.isEmpty()) return true;                 // stream: nothing to measure
+        const auto a = trackScan->get (path);
+        if (a == nullptr) return false;
+        if (t.source == "local") lib.setTruePeak (path, a->truePeakDb);
+        eng->setTrackTruePeak (index, a->truePeakDb);
+        return true;
+    };
+    const int cur = eng->getCurrentIndex();
+    if (! measured (cur)) return;
+    const int next = eng->getNextIndex (cur);
+    if (next != cur && ! measured (next))
+        trackScan->request (localPathOf (queueTracks[(size_t) next]));   // measured before it starts
     if (auto* m = getMainComponent()) m->stateChanged();
 }
 

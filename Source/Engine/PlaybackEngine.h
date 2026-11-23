@@ -22,6 +22,7 @@
 #include <array>
 #include <atomic>
 #include <functional>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <random>
@@ -38,6 +39,7 @@ struct PlayableItem
     juce::String title, artist, album;
     juce::String sourceName;             // "Fichiers locaux", "Qobuz", "NAS (UPnP)"...
     double durationHint = 0.0;
+    double truePeakDb = std::numeric_limits<double>::quiet_NaN();   // measured True Peak (dBTP), NaN = not yet
     /** Optional: custom stream opener (authenticated streams, caches...). Called on the decoder thread. */
     std::function<std::unique_ptr<juce::InputStream>()> openStream;
 };
@@ -131,6 +133,11 @@ public:
     /** A second instance of the same chain, for the decoder thread: it processes the DXD signal before the DSD
         modulator (PCM -> DSD, DSD -> DXD -> DSD). Never shared with the audio thread's chain. */
     void setDecoderDspChain (std::unique_ptr<DspChain> chain);
+    /** Auto-Headroom True Peak: the measurement of a queued track arrived (message thread). It applies at once to the
+        track being played (10 ms glide) and to the next ones from their first sample. */
+    void setTrackTruePeak (int queueIndex, double truePeakDb);
+    /** dB of attenuation the Auto-Headroom applies to the current track (0 = none; PCM sources only). */
+    double getTruePeakAttenuationDb() const;
 
     //== Status ===============================================================
     PlaybackPlan getCurrentPlan() const;
@@ -211,6 +218,8 @@ private:
         int itemIndex = 0;
         int planId = 0;
         double startSeconds = 0.0;
+        double truePeakDb = std::numeric_limits<double>::quiet_NaN();
+        bool truePeakInAudio = false;    // the audio thread applies the Auto-Headroom (PCM as is to the ring)
     };
 
     bool consumeEvents (const PlanWire& active) noexcept;   // audio thread
@@ -313,6 +322,17 @@ private:
     dsp::DopPacker dop;
     std::array<dsp::Requantizer, 8> requantizers;
     double smoothedGain = 1.0;
+    // Auto-Headroom True Peak: settings for the realtime threads, and a measurement that arrived during playback
+    std::atomic<bool> tpAuto { false };
+    std::atomic<double> tpCeiling { -1.0 };
+    std::atomic<int> liveTpIndex { -1 };
+    std::atomic<double> liveTpDb { 0.0 };
+    double tpGainFor (int itemIndex, double eventTpDb) const noexcept;
+    // decoder thread: the Auto-Headroom of the track being decoded (conversions: before the resampler / modulator)
+    void applyDecoderTruePeak (double* interleaved, int frames, int channels, double rate) noexcept;
+    double decTpDb = std::numeric_limits<double>::quiet_NaN();
+    bool decTpApply = false, decTpSnap = true;
+    double decTpGain = 1.0;
     std::vector<double> planar;              // 8 × maxBlock
     std::array<double*, 8> planarPtrs {};
     std::vector<uint8_t> rtBytes;

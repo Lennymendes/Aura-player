@@ -27,7 +27,7 @@ namespace
     }
 }
 
-std::vector<DetailSection> trackDetails (const TrackInfo& t)
+std::vector<DetailSection> trackDetails (const TrackInfo& t, double truePeakDb, double ceilingDb)
 {
     std::vector<DetailSection> out;
     auto add = [] (DetailSection& s, const juce::String& label, const juce::String& value) { if (value.isNotEmpty()) s.rows.push_back ({ label, value }); };
@@ -54,6 +54,18 @@ std::vector<DetailSection> trackDetails (const TrackInfo& t)
         add (audio, "Débit moyen"_t, juce::String (juce::roundToInt ((double) t.fileSize * 8.0 / t.duration / 1000.0)) + " kb/s");
     add (audio, "Compression"_t, t.codec.isNotEmpty() ? (t.lossy ? "Avec perte"_t : "Sans perte"_t) : juce::String());
     add (audio, "Résolution"_t, t.resolutionBadge());
+    {
+        const auto num = [] (double v) { return (v > 0.0 ? "+" : "") + juce::String (v, 1).replaceCharacter ('.', ','); };
+        add (audio, "True Peak", std::isfinite (truePeakDb) ? num (truePeakDb) + " dBTP (ITU-R BS.1770-4)"
+                                                            : juce::String ("Non mesuré (mesuré en tâche de fond à la lecture d'un fichier)"_t));
+        juce::String ah;
+        if (! std::isfinite (ceilingDb)) ah = "Désactivé"_t;
+        else if (t.isDsd) ah = "Source DSD : affichage seulement"_t;
+        else if (! std::isfinite (truePeakDb)) ah = "En attente de la mesure"_t;
+        else if (truePeakDb > ceilingDb) ah = num (ceilingDb - truePeakDb) + " dB (" + "plafond "_t + num (ceilingDb) + " dBTP)";
+        else ah = "0 dB, sous le plafond de "_t + num (ceilingDb) + " dBTP";
+        add (audio, "Auto-Headroom", ah);
+    }
     out.push_back (std::move (audio));
 
     DetailSection file { "Fichier"_t, {} };
@@ -190,7 +202,14 @@ void DetailsSheet::open (const std::vector<TrackInfo>& t, const juce::String& al
     {
         heading = tracks.front().title;
         sub = tracks.front().displayArtist() + (tracks.front().album.isNotEmpty() ? juce::String::fromUTF8 (" \xe2\x80\x94 ") + tracks.front().album : juce::String());
-        sections = trackDetails (tracks.front());
+        const auto& t0 = tracks.front();
+        double tp = std::numeric_limits<double>::quiet_NaN();
+        if (t0.source == "local")
+            if (const auto v = ctx.library().getTruePeak (t0.externalId)) tp = *v;
+        if (! std::isfinite (tp))
+            if (const auto a = ctx.trackAnalyzer().get (t0.source == "local" ? t0.externalId : t0.uri)) tp = a->truePeakDb;
+        const auto st = ctx.engine().getSettings();
+        sections = trackDetails (t0, tp, st.autoTruePeak ? st.truePeakCeilingDb : std::numeric_limits<double>::quiet_NaN());
     }
     else
     {

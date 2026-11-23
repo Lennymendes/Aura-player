@@ -1020,7 +1020,7 @@ namespace nx
 //==============================================================================
 // "+" explanations (AURA DSP, Settings › Audio)
 //==============================================================================
-juce::StringArray explainerIds() { return { "e9ds", "dxd", "crossfeed", "headroom", "hpeq", "rate", "fades", "pcmdsd", "keepdsd" }; }
+juce::StringArray explainerIds() { return { "e9ds", "dxd", "crossfeed", "headroom", "truepeak", "hpeq", "rate", "fades", "pcmdsd", "keepdsd" }; }
 
 Explainer explainer (const juce::String& id)
 {
@@ -1044,6 +1044,11 @@ Explainer explainer (const juce::String& id)
                  "Baisse le niveau juste ce qu'il faut avant les égaliseurs pour que leurs bosses ne dépassent jamais 0 dBFS."_t,
                  "Aucune saturation numérique quand un EQ remonte des basses ou des aigus, même sur des masters déjà au maximum."_t,
                  "Le volume baisse de la valeur de la plus grande bosse : à compenser au volume de l'ampli. Sans effet si aucun EQ n'est actif."_t };
+    if (id == "truepeak")
+        return { "Auto-Headroom True Peak"_t,
+                 "Mesure en tâche de fond le vrai pic de chaque morceau entre les échantillons (True Peak, ITU-R BS.1770-4, suréchantillonné ×4). Si ce pic dépasse le plafond (-1,0 ou -0,5 dBTP), le morceau est baissé de l'écart exact, avant toute conversion, égaliseur ou modulateur DSD."_t,
+                 "Plus de saturation sur les masters modernes qui frôlent 0 dBFS mais dépassent 0 dBTP : reconstruction du DAC, suréchantillonnage DXD et modulation DSD restent propres. Un morceau déjà sous le plafond garde 0 dB : sa dynamique et le bit-perfect sont intacts."_t,
+                 "Un morceau baissé n'est plus bit-perfect (gain 64 bits + dither). À la première écoute, l'atténuation arrive dès la fin de la mesure (glissement de 10 ms) ; ensuite elle est connue dès le premier échantillon. Source DSD : True Peak affiché seulement. Flux réseau non mesurés."_t };
     if (id == "hpeq")
         return { "Égaliseur casque"_t,
                  "Corrige la courbe de réponse d'un casque mesuré pour la rapprocher d'une cible neutre (profils intégrés, 64 bits)."_t,

@@ -59,6 +59,10 @@ struct EngineSettings
     /** 10 ms micro-fades where the PCM stream breaks (start, pause, stop, skip, seek, rate change). Off: strictly
         bit-perfect from the first sample after a break too (the DAC sees the step). Gapless joins are never faded. */
     bool transitionFades = true;
+    /** Auto-Headroom True Peak (PCM sources): a track whose True Peak (ITU-R BS.1770-4) exceeds the ceiling is attenuated
+        by exactly the excess, before any conversion / DSP / modulator; a clean track keeps 0 dB (bit-perfect). Off by default. */
+    bool autoTruePeak = false;
+    double truePeakCeilingDb = -1.0;     // -1,0 or -0,5 dBTP
     /** PCM -> DSD: 0 = off, 64 / 128 / 256 = remodulated to that DSD rate (DoP or native) when the DAC takes it,
         xzAutomatic = the rate follows the source (see xzAutomaticTarget). */
     static constexpr int xzAutomatic = -1;

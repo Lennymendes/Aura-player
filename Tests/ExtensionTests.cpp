@@ -971,7 +971,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         }
         for (auto* head : { "CE QUE ÇA FAIT", "GAIN RÉEL À L'ÉCOUTE", "COMPROMIS / LIMITES" })
             if (! english.hasProperty (juce::Identifier (juce::String::fromUTF8 (head)))) { translated = false; untranslated << head << " "; }
-        t.check (complete && translated, "explications « + » : 9 fiches (ce que ça fait, gain à l'écoute, compromis), toutes traduites en anglais"_t
+        t.check (complete && translated, "explications « + » : 10 fiches (ce que ça fait, gain à l'écoute, compromis), toutes traduites en anglais"_t
                  + (untranslated.isNotEmpty() ? " [" + untranslated + "]" : juce::String()));
     }
     app.plugins().setUiPluginEnabled ("nx.analog-vu", true);
@@ -1141,6 +1141,39 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         const bool mono = app.studioTools().monitor.load() == nx::StudioToolsState::Monitor::Mono;
         dsp.chooseMonitor (0);
         {
+            // Auto-Headroom True Peak: its row (switch, ceiling, "+"), saved, and the measurement in the Informations sheet
+            const bool offFirst = ! app.engine().getSettings().autoTruePeak && ! dsp.truePeak.getToggleState();
+            dsp.truePeak.triggerClick();
+            settle (60);
+            const bool on = app.engine().getSettings().autoTruePeak && app.engine().getSettings().truePeakCeilingDb == -1.0 && dsp.tpCeiling.getButtonText() == "-1,0 dBTP";
+            dsp.tpCeiling.triggerClick();
+            settle (60);
+            const bool half = app.engine().getSettings().truePeakCeilingDb == -0.5 && dsp.tpCeiling.getButtonText() == "-0,5 dBTP"
+                              && (double) app.settings().get ("engine").getProperty ("truePeakCeiling", 0.0) == -0.5;
+            dsp.tpCeiling.triggerClick();
+            settle (60);
+            bool plus = false;
+            for (auto* c : dsp.getChildren()) if (auto* ib = dynamic_cast<nx::InfoButton*> (c)) plus = plus || ib->id == "truepeak";
+            shoot ("46b_aura_dsp_true_peak");
+            const auto albumTracks = app.library().getAlbumTracks ("Zeyn", "Neon Roads");
+            const auto played = albumTracks.size() > 2 ? albumTracks[2] : albumTracks.front();
+            const auto stored = app.library().getTruePeak (played.externalId);
+            app.showDetails (std::vector<nx::TrackInfo> { played }, {});
+            settle (100);
+            juce::String tpRow, ahRow;
+            for (auto& sec : main->getDetailsSheet().getSections())
+                for (auto& r : sec.rows) { if (r.label == "True Peak") tpRow = r.value; if (r.label == "Auto-Headroom") ahRow = r.value; }
+            shoot ("46d_informations_true_peak");
+            main->getDetailsSheet().close();
+            dsp.truePeak.triggerClick();
+            settle (60);
+            t.check (offFirst && on && half && plus && stored.has_value() && tpRow.endsWith ("dBTP (ITU-R BS.1770-4)") && ahRow.contains ("dB")
+                         && ! app.engine().getSettings().autoTruePeak,
+                     "AURA DSP : Auto-Headroom True Peak (désactivé par défaut, plafond -1,0 / -0,5 dBTP enregistré, « + »), mesure enregistrée en base, fiche Informations : "_t
+                         + tpRow + " / " + ahRow + " [" + juce::String ((int) offFirst) + juce::String ((int) on) + juce::String ((int) half) + juce::String ((int) plus)
+                         + juce::String ((int) stored.has_value()) + "]");
+        }
+        {
             // Sous-étape E: "+ EQ paramétrique" next to the headphone list adds an EQ of its own, the profile untouched
             auto gains = [&] { juce::String g; for (auto& band : app.studioTools().parametricBands()) g << band.gain << "/" << band.freq << ";"; return g; };
             const bool shown = dsp.addPeqButton.isVisible() && dsp.addPeqButton.getButtonText() == "+ EQ paramétrique"_t && ! app.studioTools().peqActive();
@@ -1225,7 +1258,9 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
                  + " [" + juce::String ((int) peqView) + juce::String ((int) knob) + juce::String ((int) handle) + juce::String ((int) typeChange) + juce::String ((int) persisted)
                  + juce::String ((int) flat) + juce::String ((int) copied) + juce::String ((int) loaded) + juce::String ((int) headroom) + "]");
         t.check (chipShown && bypassed && backOn && fromChip && ! app.studioTools().anyActive(),
-                 "en-tête : témoin Bit-Perfect, EQ casque contourné / réactivé d'un clic, ouvre AURA DSP"_t);
+                 "en-tête : témoin Bit-Perfect, EQ casque contourné / réactivé d'un clic, ouvre AURA DSP"_t
+                 + " [" + juce::String ((int) chipShown) + juce::String ((int) bypassed) + juce::String ((int) backOn) + juce::String ((int) fromChip)
+                 + juce::String ((int) ! app.studioTools().anyActive()) + "]");
         {
             // E9DS: row of AURA DSP, its own view (focus presets, amount, mode), remembered; DSD converted while it is on
             main->player.studioButton.onClick();

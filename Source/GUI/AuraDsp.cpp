@@ -1,5 +1,6 @@
 // Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 #include "AuraDsp.h"
+#include <limits>
 #include "../DSP/StudioTools.h"
 #include "../DSP/E9ds.h"
 
@@ -268,8 +269,8 @@ void BandStrip::paint (juce::Graphics& g)
 //==============================================================================
 namespace
 {
-    enum Row { Source, Headroom, Conversion, Crossfeed, HeadphoneEq, ParametricEq, Polarity, E9ds, numRows };
-    const char* const rowTitles[] = { "Source", "Gestion du headroom", "Conversion de fréquence", "Crossfeed", "Égaliseur casque", "Égaliseur paramétrique", "Polarité", "E9DS" };
+    enum Row { Source, Headroom, TruePeak, Conversion, Crossfeed, HeadphoneEq, ParametricEq, Polarity, E9ds, numRows };
+    const char* const rowTitles[] = { "Source", "Gestion du headroom", "Auto-Headroom", "Conversion de fréquence", "Crossfeed", "Égaliseur casque", "Égaliseur paramétrique", "Polarité", "E9DS" };
 }
 
 AuraDspPanel::AuraDspPanel (AppContext& c)
@@ -280,7 +281,7 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
     setWantsKeyboardFocus (true);
     addAndMakeVisible (closeButton);
     closeButton.onClick = [this] { close(); };
-    for (auto* t : { &headroom, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds }) addAndMakeVisible (t);
+    for (auto* t : { &headroom, &truePeak, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds }) addAndMakeVisible (t);
     headroom.onClick = [this]
     {
         auto& s = ctx.studioTools();
@@ -288,6 +289,17 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
         ctx.setHeadphoneEq (s.eqPreset.load(), s.eqBypass.load());     // preamp worked out again (and saved)
         repaint();
     };
+    truePeak.onClick = [this] { ctx.setAutoTruePeak (truePeak.getToggleState(), ctx.engine().getSettings().truePeakCeilingDb); repaint(); };
+    tpCeiling.setTooltip ("Plafond de sécurité : -1,0 dBTP (recommandé) ou -0,5 dBTP"_t);
+    truePeak.setTooltip ("Auto-Headroom True Peak : baisse seulement les morceaux dont le True Peak dépasse le plafond"_t);
+    tpCeiling.onClick = [this]
+    {
+        const auto st = ctx.engine().getSettings();
+        ctx.setAutoTruePeak (st.autoTruePeak, st.truePeakCeilingDb < -0.75 ? -0.5 : -1.0);
+        syncControls();
+        repaint();
+    };
+    addAndMakeVisible (tpCeiling);
     upsample.onClick = [this]
     {
         auto st = ctx.engine().getSettings();
@@ -310,7 +322,7 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
         setView (View::Parametric);
     };
     e9ds.onClick = [this] { e9Changed (true); setView (View::E9ds); };
-    for (auto [row, id] : std::initializer_list<std::pair<int, const char*>> { { Headroom, "headroom" }, { Conversion, "dxd" }, { Crossfeed, "crossfeed" },
+    for (auto [row, id] : std::initializer_list<std::pair<int, const char*>> { { Headroom, "headroom" }, { TruePeak, "truepeak" }, { Conversion, "dxd" }, { Crossfeed, "crossfeed" },
                                                                             { HeadphoneEq, "hpeq" }, { E9ds, "e9ds" } })
     {
         infos.emplace_back (row, std::make_unique<InfoButton> (ctx, id));
@@ -464,6 +476,8 @@ void AuraDspPanel::syncControls()
     const auto& s = ctx.studioTools();
     headroom.setToggleState (s.autoHeadroom.load(), juce::dontSendNotification);
     upsample.setToggleState (ctx.engine().getSettings().upsampleToDxd, juce::dontSendNotification);
+    truePeak.setToggleState (ctx.engine().getSettings().autoTruePeak, juce::dontSendNotification);
+    tpCeiling.setButtonText (ctx.engine().getSettings().truePeakCeilingDb < -0.75 ? "-1,0 dBTP" : "-0,5 dBTP");
     crossfeed.setToggleState (s.crossfeed.load(), juce::dontSendNotification);
     hpEq.setToggleState (s.eqActive(), juce::dontSendNotification);
     peq.setToggleState (s.peqActive(), juce::dontSendNotification);
@@ -621,8 +635,9 @@ void AuraDspPanel::resized()
     closeButton.setBounds (p.removeFromTop (40).removeFromRight (36).withSizeKeepingCentre (32, 32));
     p.removeFromTop (12);
     left = p.removeFromLeft (juce::jmin (340, p.getWidth() / 3));
-    juce::ToggleButton* toggles[] = { nullptr, &headroom, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds };
+    juce::ToggleButton* toggles[] = { nullptr, &headroom, &truePeak, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds };
     for (int r = 1; r < numRows; ++r) toggles[r]->setBounds (rowBounds (r).removeFromRight (52).withSizeKeepingCentre (48, 28));
+    tpCeiling.setBounds (rowBounds (TruePeak).withTrimmedRight (56).removeFromRight (78).withSizeKeepingCentre (78, 26));
     for (auto& [r, b] : infos)
     {
         // "+" right after the row's title (first half of the row, see drawRow)
@@ -737,7 +752,7 @@ void AuraDspPanel::paint (juce::Graphics& g)
         g.setColour (on ? t.accent() : t.textDim().withAlpha (0.5f));
         g.fillEllipse (dot);
         if (on) { g.setColour (t.accent().withAlpha (0.25f)); g.drawEllipse (dot.expanded (3.0f), 2.0f); }
-        auto text = row.withTrimmedLeft (30).withTrimmedRight (60);
+        auto text = row.withTrimmedLeft (30).withTrimmedRight (i == TruePeak ? 140 : 60);
         g.setColour (t.textCol());
         g.setFont (style::font (14.5f, true));
         g.drawText (tr (juce::String::fromUTF8 (rowTitles[i])), text.removeFromTop (text.getHeight() / 2 + 2), juce::Justification::bottomLeft, true);
@@ -754,6 +769,23 @@ void AuraDspPanel::paint (juce::Graphics& g)
     drawRow (Headroom, anyEq && s.autoHeadroom.load(),
              s.autoHeadroom.load() ? (anyEq ? "Automatique : "_t + juce::String (preampDb, 1).replaceCharacter ('.', ',') + " dB, jamais d'écrêtage"_t : juce::String ("Automatique (aucun gain à compenser)"_t))
                                    : juce::String ("Désactivé : attention à l'écrêtage"_t));
+    {
+        // Auto-Headroom True Peak: the measurement of the track being played and what is applied to it
+        const auto st = ctx.engine().getSettings();
+        const auto& q = ctx.engine().getQueue();
+        const int ci = ctx.engine().getCurrentIndex();
+        const double tp = ci >= 0 && ci < (int) q.size() ? q[(size_t) ci].truePeakDb : std::numeric_limits<double>::quiet_NaN();
+        const auto num = [] (double v) { return (v > 0.0 ? "+" : "") + juce::String (v, 1).replaceCharacter ('.', ','); };
+        const bool dsd = ctx.engine().getCurrentPlan().source.isDsd();
+        const double att = ctx.engine().getTruePeakAttenuationDb();
+        juce::String detail;
+        if (! st.autoTruePeak) detail = "True Peak · désactivé"_t;
+        else if (ci < 0) detail = "True Peak, plafond "_t + num (st.truePeakCeilingDb);
+        else if (! std::isfinite (tp)) detail = "Mesure du True Peak…"_t;
+        else if (dsd) detail = "TP " + num (tp) + " dBTP" + " · DSD"_t;
+        else detail = "TP " + num (tp) + " dBTP" + juce::String::fromUTF8 ("  \xe2\x86\x92  ") + (att > 0.0 ? num (-att) + " dB" : juce::String ("0 dB"));
+        drawRow (TruePeak, st.autoTruePeak && att > 0.0, detail);
+    }
     drawRow (Conversion, upsample.getToggleState(), upsample.getToggleState() ? "Sinc polyphase vers DXD 352,8 / 384 kHz"_t : juce::String ("Fréquence d'origine (bit-perfect possible)"_t));
     drawRow (Crossfeed, s.crossfeed.load(), "Bauer bs2b 700 Hz / 4,5 dB, pour le casque"_t);
     drawRow (HeadphoneEq, s.eqActive(), preset != nullptr ? preset->displayName() + (s.eqBypass.load() ? "  ·  contourné"_t : juce::String()) : juce::String ("Choisissez un profil dans la liste"_t));

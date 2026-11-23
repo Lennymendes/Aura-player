@@ -39,7 +39,7 @@ class OverlayWindow;
 class MiniWindow;
 class MainComponent;
 
-class AppController final : public AppContext, private juce::Timer, private juce::DarkModeSettingListener
+class AppController final : public AppContext, private juce::Timer, private juce::DarkModeSettingListener, private juce::ChangeListener
 {
 public:
     struct Options
@@ -126,6 +126,7 @@ public:
     void setHeadphoneEq (int presetIndex, bool bypass) override;
     void setParametricEq (const hpeq::ParametricBands& bands, bool enabled, bool persist) override;
     void setE9ds (bool enabled, double focusHz, double amountDb, int mode) override;
+    void setAutoTruePeak (bool on, double ceilingDb) override;
     void updateDspNeedsPcm();
     juce::StringArray getParametricPresetNames() override;
     void saveParametricPreset (const juce::String& name) override;
@@ -215,6 +216,10 @@ private:
     std::shared_ptr<E9dsState> e9dsState = std::make_shared<E9dsState>();
     std::unique_ptr<TrackAnalyzer> trackScan = std::make_unique<TrackAnalyzer>();   // outlives the windows (listeners)
     juce::String analysisPath;                     // local file of the current track
+    /** A scan finished: its True Peak goes to the library and the engine; then the next track of the queue is measured. */
+    void changeListenerCallback (juce::ChangeBroadcaster*) override;
+    juce::String localPathOf (const TrackInfo& t);       // local file or offline copy (empty for streams)
+    PlayableItem playable (const TrackInfo& t);          // toPlayable + the stored True Peak
     SleepBlocker sleepBlocker;
     double lastRemoteState = 0.0;
     double lastNowPlayingUpdate = 0.0;

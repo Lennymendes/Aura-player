@@ -127,6 +127,7 @@ bool Library::createSchema (juce::String& error)
     if (! db.exec (schema)) { error = db.lastError(); return false; }
     // Fields edited by hand (bits: 1 album, 2 album artist, 4 year, 8 cover): a rescan never overwrites them.
     db.exec ("ALTER TABLE tracks ADD COLUMN locked INTEGER DEFAULT 0");   // fails harmlessly when the column exists
+    db.exec ("ALTER TABLE tracks ADD COLUMN true_peak REAL");             // Auto-Headroom: measured True Peak (dBTP), NULL = not yet
     loadOfflineIndex();
 
     // Full-text search (FTS5) when this SQLite has it; LIKE otherwise.
@@ -142,6 +143,23 @@ bool Library::createSchema (juce::String& error)
             INSERT INTO tracks_fts (rowid, title, artist, album, album_artist, composer) VALUES (new.id, new.title, new.artist, new.album, new.album_artist, new.composer); END;
     )SQL");
     return true;
+}
+
+std::optional<double> Library::getTruePeak (const juce::String& path)
+{
+    std::lock_guard<std::recursive_mutex> l (db.getMutex());
+    SqliteStatement q (db, "SELECT true_peak FROM tracks WHERE source = 'local' AND external_id = ?1 AND true_peak IS NOT NULL");
+    q.bind (1, path);
+    if (q.step()) return q.getDouble (0);
+    return std::nullopt;
+}
+
+void Library::setTruePeak (const juce::String& path, double truePeakDb)
+{
+    std::lock_guard<std::recursive_mutex> l (db.getMutex());
+    SqliteStatement u (db, "UPDATE tracks SET true_peak = ?2 WHERE source = 'local' AND external_id = ?1");
+    u.bind (1, path).bind (2, truePeakDb);
+    u.step();
 }
 
 juce::int64 Library::upsert (TrackInfo& t)
@@ -161,7 +179,8 @@ juce::int64 Library::upsert (TrackInfo& t)
             sample_rate = excluded.sample_rate, bits = excluded.bits, channels = excluded.channels, is_dsd = excluded.is_dsd,
             lossy = excluded.lossy, file_size = excluded.file_size, mtime = excluded.mtime,
             artwork = CASE WHEN tracks.locked & 8 THEN tracks.artwork ELSE excluded.artwork END,
-            lyrics_path = excluded.lyrics_path, credits = excluded.credits
+            lyrics_path = excluded.lyrics_path, credits = excluded.credits,
+            true_peak = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.true_peak ELSE NULL END
     )SQL");
     s.bind (1, t.source).bind (2, t.externalId).bind (3, t.uri).bind (4, t.title).bind (5, t.artist).bind (6, t.albumArtist)
      .bind (7, t.album).bind (8, t.genre).bind (9, t.composer).bind (10, t.year).bind (11, t.trackNumber).bind (12, t.discNumber)
