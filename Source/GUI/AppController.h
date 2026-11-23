@@ -137,6 +137,8 @@ public:
     void showAuraDsp() override;
     void showArtwork (const juce::String& artworkKey, const juce::String& title, const juce::String& subtitle) override;
     void showDetails (const std::vector<TrackInfo>& tracks, const juce::String& albumTitle) override;
+    void showStudioView() override;
+    void showTagDoctor() override;
     juce::String shopUrl() override    { return links::resolve (appSettings.get ("purchaseUrl"), links::shop); }
     juce::String discordUrl() override { return links::resolve (appSettings.get ("discordUrl"), links::discord); }
     void setUserVolume (double v) override;

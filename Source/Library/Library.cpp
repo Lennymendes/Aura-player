@@ -130,6 +130,11 @@ bool Library::createSchema (juce::String& error)
     db.exec ("ALTER TABLE tracks ADD COLUMN true_peak REAL");             // Auto-Headroom: measured True Peak (dBTP), NULL = not yet
     db.exec ("ALTER TABLE tracks ADD COLUMN dr INTEGER");                 // Smart Ear Comfort: DR and 6-10 kHz share, NULL = not yet
     db.exec ("ALTER TABLE tracks ADD COLUMN hf_share REAL");
+    db.exec ("ALTER TABLE tracks ADD COLUMN hires INTEGER");               // Studio View: "Faux Hi-Res" verdict (hires::Verdict), NULL = not yet
+    db.exec ("ALTER TABLE tracks ADD COLUMN hires_ext REAL");
+    db.exec ("ALTER TABLE tracks ADD COLUMN hires_wall REAL");
+    // Tag & Cover Doctor: versions hidden from the library (the files stay; a rescan skips them)
+    db.exec ("CREATE TABLE IF NOT EXISTS hidden_tracks (source TEXT NOT NULL, external_id TEXT NOT NULL, hidden INTEGER, PRIMARY KEY (source, external_id))");
     loadOfflineIndex();
 
     // Full-text search (FTS5) when this SQLite has it; LIKE otherwise.
@@ -181,9 +186,74 @@ void Library::setProfile (const juce::String& path, int dr, double hfShareDb)
     u.step();
 }
 
+std::optional<hires::Check> Library::getHiRes (const juce::String& path)
+{
+    std::lock_guard<std::recursive_mutex> l (db.getMutex());
+    SqliteStatement q (db, "SELECT hires, hires_ext, hires_wall FROM tracks WHERE source = 'local' AND external_id = ?1 AND hires IS NOT NULL");
+    q.bind (1, path);
+    if (! q.step()) return std::nullopt;
+    hires::Check c;
+    c.verdict = q.getInt (0);
+    c.extDb = q.getDouble (1);
+    c.wallDb = q.getDouble (2);
+    return c;
+}
+
+void Library::setHiRes (const juce::String& path, const hires::Check& c)
+{
+    std::lock_guard<std::recursive_mutex> l (db.getMutex());
+    SqliteStatement u (db, "UPDATE tracks SET hires = ?2, hires_ext = ?3, hires_wall = ?4 WHERE source = 'local' AND external_id = ?1");
+    u.bind (1, path).bind (2, c.verdict).bind (3, c.extDb).bind (4, c.wallDb);
+    u.step();
+}
+
+bool Library::isHidden (const juce::String& source, const juce::String& externalId)
+{
+    std::lock_guard<std::recursive_mutex> l (db.getMutex());
+    SqliteStatement q (db, "SELECT 1 FROM hidden_tracks WHERE source = ?1 AND external_id = ?2");
+    q.bind (1, source).bind (2, externalId);
+    return q.step();
+}
+
+bool Library::hideTrack (const juce::String& source, const juce::String& externalId)
+{
+    {
+        std::lock_guard<std::recursive_mutex> l (db.getMutex());
+        SqliteStatement h (db, "INSERT OR IGNORE INTO hidden_tracks (source, external_id, hidden) VALUES (?1, ?2, ?3)");
+        h.bind (1, source).bind (2, externalId).bind (3, juce::Time::currentTimeMillis()).execute();
+    }
+    return remove (source, externalId);
+}
+
+juce::StringArray Library::getHiddenPaths()
+{
+    std::lock_guard<std::recursive_mutex> l (db.getMutex());
+    juce::StringArray out;
+    SqliteStatement q (db, "SELECT external_id FROM hidden_tracks WHERE source = 'local' ORDER BY hidden");
+    while (q.step()) out.add (q.getText (0));
+    return out;
+}
+
+int Library::unhideAll()
+{
+    const auto paths = getHiddenPaths();
+    {
+        std::lock_guard<std::recursive_mutex> l (db.getMutex());
+        db.exec ("DELETE FROM hidden_tracks");
+    }
+    int back = 0;
+    for (auto& p : paths)
+    {
+        TrackInfo t;
+        if (juce::File (p).existsAsFile() && readLocalTrack (juce::File (p), *this, t)) { upsert (t); ++back; }
+    }
+    return back;
+}
+
 juce::int64 Library::upsert (TrackInfo& t)
 {
     std::lock_guard<std::recursive_mutex> l (db.getMutex());
+    if (isHidden (t.source, t.externalId)) return 0;     // hidden by the Tag & Cover Doctor: stays out
     if (t.added == 0) t.added = juce::Time::currentTimeMillis();
     SqliteStatement s (db, R"SQL(
         INSERT INTO tracks (source, external_id, uri, title, artist, album_artist, album, genre, composer, year, track_no, disc_no,
@@ -201,7 +271,10 @@ juce::int64 Library::upsert (TrackInfo& t)
             lyrics_path = excluded.lyrics_path, credits = excluded.credits,
             true_peak = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.true_peak ELSE NULL END,
             dr = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.dr ELSE NULL END,
-            hf_share = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.hf_share ELSE NULL END
+            hf_share = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.hf_share ELSE NULL END,
+            hires = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.hires ELSE NULL END,
+            hires_ext = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.hires_ext ELSE NULL END,
+            hires_wall = CASE WHEN tracks.mtime = excluded.mtime AND tracks.file_size = excluded.file_size THEN tracks.hires_wall ELSE NULL END
     )SQL");
     s.bind (1, t.source).bind (2, t.externalId).bind (3, t.uri).bind (4, t.title).bind (5, t.artist).bind (6, t.albumArtist)
      .bind (7, t.album).bind (8, t.genre).bind (9, t.composer).bind (10, t.year).bind (11, t.trackNumber).bind (12, t.discNumber)

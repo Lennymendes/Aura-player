@@ -3,6 +3,8 @@
 #include "../Audio/AudioDecoder.h"
 #include "../DSP/DsdToPcm.h"
 #include "../DSP/TruePeak.h"
+#include "../DSP/HiResCheck.h"
+#include <juce_dsp/juce_dsp.h>
 #include "../Core/Text.h"
 
 namespace nx
@@ -44,6 +46,18 @@ namespace
                 const double b = band (m);
                 eAll += m * m;
                 eBand += b * b;
+                if (fft != nullptr)
+                {
+                    fftBuf[(size_t) fftFill] = (float) (m / ch) * win[(size_t) fftFill];
+                    if (++fftFill == fftSize)
+                    {
+                        std::fill (fftBuf.begin() + fftSize, fftBuf.end(), 0.0f);
+                        fft->performFrequencyOnlyForwardTransform (fftBuf.data(), true);
+                        for (int k = 0; k <= fftSize / 2; ++k) psd[(size_t) k] += (double) fftBuf[(size_t) k] * (double) fftBuf[(size_t) k];
+                        ++fftFrames;
+                        fftFill = 0;
+                    }
+                }
             }
             for (int i = 0; i < frames; ++i, ++frame)
             {
@@ -88,6 +102,12 @@ namespace
             out->peakDb = toDb (peak);
             out->truePeakDb = tp.dbtp();
             out->hfShareDb = eAll > 1e-20 && eBand > 0.0 ? 10.0 * std::log10 (eBand / eAll) : -200.0;
+            out->sampleRate = sampleRate;
+            if (fft != nullptr && fftFrames > 0)
+            {
+                for (auto& v : psd) v /= (double) fftFrames;
+                out->hiRes = hires::evaluate (psd, sampleRate / fftSize, sampleRate);
+            }
             out->rmsDb = frame > 0 ? toDb (std::sqrt (sumSq / ((double) frame * ch))) : -200.0;
 
             // DR (TT Dynamic Range meter): per channel, 3 s blocks; RMS of the loudest 20 % of the blocks
@@ -136,6 +156,20 @@ namespace
         Biquad hp = design (6000.0, sampleRate, true), lp = design (10000.0, sampleRate, false);
         double band (double v) { return lp.run (hp.run (v)); }
         double eAll = 0.0, eBand = 0.0;
+        // "Faux Hi-Res": long-term power spectrum of the mono sum (8192-point FFT, Hann), PCM at >= 88,2 kHz only
+        static constexpr int fftSize = 8192;
+        std::unique_ptr<juce::dsp::FFT> fft;
+        std::vector<float> fftBuf, win;
+        std::vector<double> psd;
+        int fftFill = 0, fftFrames = 0;
+        void enableSpectrum()
+        {
+            fft = std::make_unique<juce::dsp::FFT> (13);
+            fftBuf.assign ((size_t) fftSize * 2, 0.0f);
+            win.resize ((size_t) fftSize);
+            for (int i = 0; i < fftSize; ++i) win[(size_t) i] = 0.5f - 0.5f * std::cos (2.0f * juce::MathConstants<float>::pi * (float) i / (float) fftSize);
+            psd.assign ((size_t) fftSize / 2 + 1, 0.0);
+        }
     };
 }
 
@@ -232,6 +266,7 @@ std::shared_ptr<TrackAnalysis> TrackAnalyzer::analyse (const juce::File& file, i
     }
 
     Accumulator acc (ch, bins, dec->getLength(), fmt.sampleRate);
+    if (fmt.sampleRate >= 88199.0) acc.enableSpectrum();
     std::vector<double> buf ((size_t) block * (size_t) ch);
     std::vector<int32_t> ints (fmt.kind == SampleKind::PcmFloat ? 0 : (size_t) block * (size_t) ch);
     for (;;)

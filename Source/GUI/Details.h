@@ -2,6 +2,7 @@
 // Detailed metadata of a track or an album: the library's data, what the file header says and every tag the file carries
 // (ID3v2, Vorbis / FLAC, MP4, WAV INFO). Read-only: nothing is written to the files.
 #pragma once
+#include "../DSP/HiResCheck.h"
 #include <limits>
 
 #include "AppContext.h"
@@ -18,7 +19,8 @@ struct DetailSection { juce::String title; std::vector<DetailRow> rows; };
     dr / hfShareDb: the analysis for the mastering profile (0 / NaN = not measured), smartComfort: Smart Ear Comfort on. */
 std::vector<DetailSection> trackDetails (const TrackInfo& track, double truePeakDb = std::numeric_limits<double>::quiet_NaN(),
                                          double ceilingDb = std::numeric_limits<double>::quiet_NaN(),
-                                         int dr = 0, double hfShareDb = std::numeric_limits<double>::quiet_NaN(), bool smartComfort = false);
+                                         int dr = 0, double hfShareDb = std::numeric_limits<double>::quiet_NaN(), bool smartComfort = false,
+                                         const hires::Check* hiRes = nullptr);
 /** An album: summary (formats, duration, total size) then one line per track. */
 std::vector<DetailSection> albumDetails (const std::vector<TrackInfo>& tracks, const juce::String& albumTitle);
 /** Plain text, for the "Copier" button and bug reports. */

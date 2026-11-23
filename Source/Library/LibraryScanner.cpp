@@ -35,6 +35,7 @@ namespace
 bool LibraryScanner::needsUpdate (const juce::File& f)
 {
     auto existing = library.findTrack ("local", f.getFullPathName());
+    if (! existing.has_value() && library.isHidden ("local", f.getFullPathName())) return false;   // hidden version: not re-read
     return ! existing.has_value()
         || existing->modified != f.getLastModificationTime().toMilliseconds()
         || existing->fileSize != f.getSize();

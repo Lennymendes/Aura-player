@@ -2,6 +2,7 @@
 // Unified library (SQLite): local files, NAS / UPnP servers and streaming services live in the same
 // tables, each row tagged with its source. Albums and artists are derived views of the tracks.
 #pragma once
+#include "../DSP/HiResCheck.h"
 
 #include "Sqlite.h"
 #include "TagReader.h"
@@ -108,6 +109,15 @@ public:
     /** Smart Ear Comfort: DR and share of the 6-10 kHz energy (dB) of a local file, kept until the file changes. */
     std::optional<std::pair<int, double>> getProfile (const juce::String& path);
     void setProfile (const juce::String& path, int dr, double hfShareDb);
+    /** Studio View: the "Faux Hi-Res" diagnosis of a local file (PCM >= 88,2 kHz), kept until the file changes. */
+    std::optional<hires::Check> getHiRes (const juce::String& path);
+    void setHiRes (const juce::String& path, const hires::Check& check);
+    /** Tag & Cover Doctor: a version hidden from the library (the file stays where it is; rescans skip it). */
+    bool hideTrack (const juce::String& source, const juce::String& externalId);
+    bool isHidden (const juce::String& source, const juce::String& externalId);
+    juce::StringArray getHiddenPaths();
+    /** Shows the hidden versions again (re-read from their files). Returns how many came back. */
+    int unhideAll();
     std::vector<TrackInfo> getTracks (const juce::String& orderBy = "title", int limit = 5000, const juce::String& sourceFilter = {});
     std::vector<TrackInfo> getAlbumTracks (const juce::String& artist, const juce::String& album);
     std::vector<TrackInfo> getArtistTracks (const juce::String& artist);

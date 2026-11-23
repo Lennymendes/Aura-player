@@ -16,6 +16,8 @@
 #include "AuraDsp.h"
 #include "ArtworkViewer.h"
 #include "Details.h"
+#include "StudioView.h"
+#include "TagDoctor.h"
 
 namespace nx
 {
@@ -122,6 +124,8 @@ public:
     AuraDspPanel auraDsp;
     ArtworkViewer artworkViewer;
     DetailsSheet detailsSheet;
+    StudioView studioView;
+    TagDoctor tagDoctor;
     int playerHeight() const;
     /** Wide screens: 1 up to 1600 px of window width, then rising to 104 / 84 at 2560 px (the bar, its icons and texts). */
     float playerScale() const;
@@ -137,6 +141,10 @@ public:
         detailsSheet.setBounds (getLocalBounds());
         detailsSheet.open (tracks, albumTitle);
     }
+    void showStudioView() { studioView.setBounds (getLocalBounds()); studioView.open(); }
+    void showTagDoctor() { tagDoctor.setBounds (getLocalBounds()); tagDoctor.open(); }
+    StudioView& getStudioView() { return studioView; }
+    TagDoctor& getTagDoctor() { return tagDoctor; }
     ArtworkViewer& getArtworkViewer() { return artworkViewer; }
     DetailsSheet& getDetailsSheet() { return detailsSheet; }
 

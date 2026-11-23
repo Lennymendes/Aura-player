@@ -264,7 +264,8 @@ void MarketCard::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-MarketplacePage::MarketplacePage (AppContext& c) : ScrollPage (c), importButton ("Importer un plugin…"_t), folderButton ("Ouvrir le dossier des plugins")
+MarketplacePage::MarketplacePage (AppContext& c) : ScrollPage (c), importButton ("Importer un plugin…"_t), folderButton ("Ouvrir le dossier des plugins"),
+      studioViewTool ("Studio View : DR, True Peak, Faux Hi-Res, spectre"_t), doctorTool ("Tag & Cover Doctor : doublons, pochettes, étiquettes"_t)
 {
     contentComp.addAndMakeVisible (header);
     filter.setTextToShowWhenEmpty ("Filtrer…"_t, ctx.theme().textDim());
@@ -279,6 +280,12 @@ MarketplacePage::MarketplacePage (AppContext& c) : ScrollPage (c), importButton 
     contentComp.addChildComponent (emptyLabel);
     contentComp.addChildComponent (folderButton);
     importButton.onClick = [this] { importPlugin(); };
+    contentComp.addChildComponent (studioViewTool);
+    contentComp.addChildComponent (doctorTool);
+    studioViewTool.onClick = [this] { ctx.showStudioView(); };
+    doctorTool.onClick = [this] { ctx.showTagDoctor(); };
+    studioViewTool.setTooltip ("Diagnostic qualité du morceau en lecture : dynamique, crêtes, vrai ou faux Hi-Res, spectre et spectrogramme en direct"_t);
+    doctorTool.setTooltip ("Nettoyage de la bibliothèque : doublons classés par qualité, pochettes manquantes ou trop petites, étiquettes incomplètes"_t);
     folderButton.onClick = [this]
     {
         auto root = userPluginsRoot();
@@ -338,6 +345,8 @@ void MarketplacePage::refresh()
         contentComp.addAndMakeVisible (b);
     }
     importButton.setVisible (mode == Mode::UserPlugins);
+    studioViewTool.setVisible (mode == Mode::Gallery);
+    doctorTool.setVisible (mode == Mode::Gallery);
     folderButton.setVisible (mode == Mode::UserPlugins);
     build();
 }
@@ -583,6 +592,15 @@ void MarketplacePage::layoutContent (int width)
     filter.setBounds (row.removeFromRight (juce::jmin (260, juce::jmax (140, row.getWidth()))));
     y += 34 + 14;
 
+    if (mode == Mode::Gallery)
+    {
+        auto tools = juce::Rectangle<int> (pad, y, inner, 40);
+        const int w = juce::jmin (420, (inner - 12) / 2);
+        studioViewTool.setBounds (tools.removeFromLeft (w));
+        tools.removeFromLeft (12);
+        doctorTool.setBounds (tools.removeFromLeft (w));
+        y += 40 + 16;
+    }
     if (mode == Mode::UserPlugins)
     {
         auto actions = juce::Rectangle<int> (pad, y, inner, 34);

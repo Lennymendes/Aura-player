@@ -15,6 +15,7 @@
 #include "../Source/DSP/SmartComfort.h"
 #include "../Source/GUI/Waveform.h"
 #include "../Source/Library/Library.h"
+#include "../Source/Library/LibraryDoctor.h"
 #include "../Source/Engine/DeviceProfiles.h"
 #include "../Source/Audio/LoopingDecoder.h"
 #include <complex>
@@ -2846,5 +2847,163 @@ NX_TEST_SECTION (125, "Smart Ear Comfort : profil de mastering (DR, aigus 6-10 k
         const auto& got = rig.cap->capturedDsd;
         t.check (got.size() >= ref.size() && std::equal (ref.begin(), ref.end(), got.begin()) && dose == 0.0 && node.contains ("DSD"),
                  "source DSD native (profil brillant) : flux 1 bit intact, profil affiché seulement ("_t + node + ")");
+    }
+}
+
+NX_TEST_SECTION (126, "Studio View & Tag & Cover Doctor : faux Hi-Res, spectre en direct, doublons classés, audit, sans perte de données")
+{
+    constexpr double pi = juce::MathConstants<double>::pi;
+    // 1. "Faux Hi-Res" on 96 kHz synthesis: a CD-band master (content stops at 21 kHz, 16-bit dither floor above),
+    //    a 48 kHz master upsampled (content stops at 23,5 kHz), a real wide-band recording (content up to 45 kHz)
+    auto synth = [&] (const juce::String& name, double rate, double fMax, uint32_t seed)
+    {
+        std::mt19937 rng (seed);
+        std::uniform_real_distribution<double> uf (std::log (100.0), std::log (fMax)), ph (0.0, 2.0 * pi), tpdf (-0.5, 0.5);
+        struct Tone { double f, a, p; };
+        std::vector<Tone> tones;
+        for (int k = 0; k < 400; ++k) { const double f = std::exp (uf (rng)); tones.push_back ({ f, 0.02 * std::sqrt (1000.0 / f), ph (rng) }); }
+        const int n = (int) (rate * 2.0);
+        std::vector<int32_t> pcm ((size_t) n * 2);
+        for (int i = 0; i < n; ++i)
+        {
+            double x = 0.0;
+            for (auto& tn : tones) x += tn.a * std::sin (2.0 * pi * tn.f * i / rate + tn.p);
+            x += (tpdf (rng) + tpdf (rng)) / 32768.0;                               // 16-bit TPDF dither: a flat floor
+            const auto v = (int32_t) ((uint32_t) std::llround (juce::jlimit (-0.99, 0.99, x) * 8388607.0) << 8);
+            pcm[(size_t) i * 2] = pcm[(size_t) i * 2 + 1] = v;
+        }
+        auto f = t.tempDir.getChildFile (name);
+        writeWav (f, &pcm, nullptr, 2, rate, 24, 24, false);
+        return nx::TrackAnalyzer::analyse (f, 400, [] { return false; });
+    };
+    const auto fake = synth ("hr_fake.wav", 96000.0, 21000.0, 11u), up48 = synth ("hr_up48.wav", 96000.0, 23500.0, 12u),
+               real = synth ("hr_real.wav", 96000.0, 45000.0, 13u), cd = synth ("hr_cd.wav", 44100.0, 20000.0, 14u);
+    const bool ok = fake && up48 && real && cd;
+    auto txt = [] (const std::shared_ptr<nx::TrackAnalysis>& a) { return a ? nx::hires::describe (a->hiRes) : juce::String ("?"); };
+    t.check (ok && fake->hiRes.verdict == nx::hires::Fake && real->hiRes.verdict == nx::hires::Real && up48->hiRes.verdict != nx::hires::Real
+                 && cd->hiRes.verdict == nx::hires::NotApplicable,
+             "faux Hi-Res 96 kHz : bande CD -> "_t + txt (fake) + " ; 48 kHz suréchantillonné -> " + txt (up48) + " ; large bande -> " + txt (real)
+                 + " ; 44,1 kHz -> " + txt (cd));
+    {
+        nx::Library lib;
+        juce::String err;
+        lib.openInMemory (t.tempDir.getChildFile ("hr_lib"), err);
+        nx::TrackInfo tr;
+        tr.source = "local"; tr.externalId = tr.uri = "/music/hr.flac"; tr.title = "HR"; tr.fileSize = 10; tr.modified = 1;
+        lib.upsert (tr);
+        lib.setHiRes (tr.externalId, fake->hiRes);
+        lib.upsert (tr);
+        const auto kept = lib.getHiRes (tr.externalId);
+        tr.modified = 2;
+        lib.upsert (tr);
+        t.check (kept && kept->verdict == nx::hires::Fake && std::abs (kept->wallDb - fake->hiRes.wallDb) < 1e-9 && ! lib.getHiRes (tr.externalId),
+                 "base : diagnostic Hi-Res enregistré avec la piste, effacé quand le fichier change"_t);
+    }
+    // 3. duplicates ranked by objective quality
+    nx::Library lib;
+    juce::String err;
+    lib.openInMemory (t.tempDir.getChildFile ("doc_lib"), err);
+    auto add = [&] (const juce::String& path, const juce::String& artist, const juce::String& title, double dur, const juce::String& codec,
+                    bool lossy, int bits, double rate, juce::int64 size)
+    {
+        nx::TrackInfo tr;
+        tr.source = "local"; tr.externalId = tr.uri = path; tr.artist = artist; tr.title = title; tr.album = "Album"; tr.duration = dur;
+        tr.codec = codec; tr.lossy = lossy; tr.bitsPerSample = bits; tr.sampleRate = rate; tr.fileSize = size; tr.modified = 1;
+        tr.year = 2001; tr.trackNumber = 1;
+        lib.upsert (tr);
+        return tr;
+    };
+    add ("/m/song.mp3", "The Band", "Song", 200.0, "MP3", true, 0, 44100.0, 8000000);
+    add ("/m/song16.flac", "the band", "Song (2011 Remaster)", 201.0, "FLAC", false, 16, 44100.0, 30000000);
+    add ("/m/song24a.flac", "The Band", "song", 199.5, "FLAC", false, 24, 96000.0, 90000000);
+    add ("/m/song24b.flac", "The Band", "Song", 200.2, "FLAC", false, 24, 96000.0, 91000000);
+    add ("/m/song_live.flac", "The Band", "Song", 320.0, "FLAC", false, 24, 96000.0, 140000000);   // another performance
+    add ("/m/other.flac", "The Band", "Other", 180.0, "FLAC", false, 16, 44100.0, 20000000);
+    lib.setProfile ("/m/song24a.flac", 8, -20.0);
+    lib.setProfile ("/m/song24b.flac", 12, -22.0);
+    const auto groups = nx::doctor::findDuplicates (lib);
+    juce::StringArray order;
+    if (groups.size() == 1) for (auto& v : groups[0].versions) order.add (juce::File (v.track.externalId).getFileName());
+    t.check (groups.size() == 1 && order.joinIntoString (",") == "song24b.flac,song24a.flac,song16.flac,song.mp3",
+             "doublons : artiste / titre / durée (casse, « (Remaster) » ignorés, version live à part), classés lossless > lossy, résolution, DR : "_t
+                 + order.joinIntoString (" > "));
+    t.check (groups.size() == 1 && groups[0].versions[0].label.contains ("24/96") && groups[0].versions[0].label.contains ("DR12")
+                 && groups[0].versions[3].label.contains ("MP3") && groups[0].versions[3].label.contains ("kb/s"),
+             "étiquettes de qualité : "_t + (groups.size() == 1 ? groups[0].versions[0].label + " / " + groups[0].versions[3].label : juce::String ("?")));
+    // hide: out of the library, a rescan does not bring it back, reversible
+    {
+        auto f = t.tempDir.getChildFile ("doc_hidden.wav");
+        const auto pcm = sinePcm (4800, 2, 16, 48000.0, 440.0, 0.3);
+        writeWav (f, &pcm, nullptr, 2, 48000, 16, 16, false);
+        nx::TrackInfo tr;
+        nx::readLocalTrack (f, lib, tr);
+        lib.upsert (tr);
+        const bool hidden = lib.hideTrack ("local", f.getFullPathName()) && ! lib.findTrack ("local", f.getFullPathName()) && lib.isHidden ("local", f.getFullPathName());
+        nx::TrackInfo again;
+        nx::readLocalTrack (f, lib, again);
+        lib.upsert (again);                                                  // what a rescan does
+        const bool stays = ! lib.findTrack ("local", f.getFullPathName()).has_value() && f.existsAsFile();
+        const bool back = lib.unhideAll() == 1 && lib.findTrack ("local", f.getFullPathName()).has_value() && ! lib.isHidden ("local", f.getFullPathName());
+        t.check (hidden && stays && back, "masquer : la version quitte la bibliothèque, le fichier reste, un rescan ne la remet pas, « Réafficher » la rend"_t);
+    }
+    // trash: only after confirmation (panel); a refused trash removes nothing
+    {
+        auto f = t.tempDir.getChildFile ("doc_trash.wav");
+        const auto pcm = sinePcm (4800, 2, 16, 48000.0, 440.0, 0.3);
+        writeWav (f, &pcm, nullptr, 2, 48000, 16, 16, false);
+        nx::TrackInfo tr;
+        nx::readLocalTrack (f, lib, tr);
+        lib.upsert (tr);
+        const bool trashed = nx::doctor::moveToTrash (lib, tr);
+        const bool inLib = lib.findTrack ("local", f.getFullPathName()).has_value();
+        t.check ((trashed && ! f.existsAsFile() && ! inLib) || (! trashed && f.existsAsFile() && inLib),
+                 trashed ? "corbeille : fichier déplacé dans la corbeille du système puis retiré de la bibliothèque"_t
+                         : "corbeille refusée par le système : fichier et bibliothèque intacts (aucune suppression)"_t);
+    }
+    // 4. audit: covers missing / under 500 px, incomplete tags, an album split between two album artists
+    {
+        nx::Library al;
+        al.openInMemory (t.tempDir.getChildFile ("audit_lib"), err);
+        auto png = [&] (int size)
+        {
+            juce::Image img (juce::Image::RGB, size, size, true);
+            juce::MemoryOutputStream mo;
+            juce::PNGImageFormat().writeImageToStream (img, mo);
+            return al.storeArtwork (mo.getMemoryBlock(), "image/png");
+        };
+        auto mk = [&] (const juce::String& path, const juce::String& artist, const juce::String& album, const juce::String& art, int year, int no)
+        {
+            nx::TrackInfo tr;
+            tr.source = "local"; tr.externalId = tr.uri = path; tr.artist = tr.albumArtist = artist; tr.album = album; tr.title = juce::File (path).getFileNameWithoutExtension();
+            tr.artworkKey = art; tr.year = year; tr.trackNumber = no; tr.codec = "FLAC"; tr.bitsPerSample = 16; tr.sampleRate = 44100.0; tr.duration = 100.0;
+            al.upsert (tr);
+        };
+        const auto small = png (300), big = png (600);
+        mk ("/a/nocover/1.flac", "A", "No Cover", {}, 2000, 1);
+        mk ("/a/small/1.flac", "B", "Small Cover", small, 2001, 1);
+        mk ("/a/big/1.flac", "C", "Big Cover", big, 2002, 1);
+        mk ("/a/big/2.flac", "C", "Big Cover", big, 0, 0);                   // no year, no number
+        mk ("/a/split/1.flac", "D", "Split", big, 2003, 1);
+        mk ("/a/split/2.flac", "D", "Split", big, 2003, 2);
+        mk ("/a/split/3.flac", "D feat. E", "Split", big, 2004, 3);
+        const auto a = nx::doctor::audit (al);
+        const bool covers = a.missingCovers.size() == 1 && a.missingCovers[0].album.title == "No Cover" && a.lowResCovers.size() == 1
+                            && a.lowResCovers[0].album.title == "Small Cover" && a.lowResCovers[0].width == 300;
+        bool tags = a.incompleteTags.size() == 1 && a.incompleteTags[0].missing.size() == 2;
+        const bool split = a.inconsistentAlbums.size() == 1 && a.inconsistentAlbums[0].artist == "D" && a.inconsistentAlbums[0].year == 2003
+                           && a.inconsistentAlbums[0].otherArtists.contains ("D feat. E");
+        const int fixed = split ? nx::doctor::makeUniform (al, a.inconsistentAlbums[0]) : 0;
+        const auto after = nx::doctor::audit (al);
+        t.check (covers && tags && split && fixed == 3 && after.inconsistentAlbums.empty() && al.getAlbumTracks ("D", "Split").size() == 3,
+                 "audit : 1 album sans pochette, 1 pochette 300 × 300 px (< 500), 1 piste sans année ni numéro, album éclaté « Split » uniformisé (3 pistes, bibliothèque seulement)"_t
+                     + " [" + juce::String ((int) covers) + juce::String ((int) tags) + juce::String ((int) split) + juce::String (fixed) + "]");
+    }
+    // 5. online cover (opt-in): the query and the reply's 1200 px artwork
+    {
+        const auto url = nx::doctor::itunesSearchUrl ("Daft Punk", "Discovery").toString (true);
+        const auto art = nx::doctor::itunesArtworkFromJson (R"({"resultCount":1,"results":[{"collectionName":"Discovery","artworkUrl100":"https://is1-ssl.mzstatic.com/image/thumb/x/100x100bb.jpg"}]})");
+        t.check (url.startsWith ("https://itunes.apple.com/search?") && url.contains ("entity=album") && url.contains ("Daft")
+                     && art == "https://is1-ssl.mzstatic.com/image/thumb/x/1200x1200bb.jpg" && nx::doctor::itunesArtworkFromJson ("{\"results\":[]}").isEmpty(),
+                 "pochette en ligne (option) : requête iTunes Search, illustration 1200 × 1200 px extraite de la réponse"_t);
     }
 }

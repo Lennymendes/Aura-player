@@ -12,6 +12,7 @@ AudioAnalyzer::AudioAnalyzer (AnalyzerTap& t) : tap (t)
     for (int i = 0; i < n; ++i) window[(size_t) i] = 0.5f - 0.5f * std::cos (2.0f * juce::MathConstants<float>::pi * (float) i / (float) (n - 1));
     fftData.assign ((size_t) n * 2, 0.0f);
     pullBuffer.assign (1 << 16, 0.0f);
+    fine.assign ((size_t) n / 2, -140.0f);
 }
 
 void AudioAnalyzer::update (double dt, bool playing)
@@ -65,6 +66,16 @@ void AudioAnalyzer::update (double dt, bool playing)
     std::fill (fftData.begin() + n, fftData.end(), 0.0f);
     fft.performFrequencyOnlyForwardTransform (fftData.data(), true);
 
+    {
+        const float normFine = 4.0f / (float) n;               // Hann coherent gain 0.5, one-sided
+        const float rel = (float) std::exp (-dt / 0.35);
+        for (int i = 0; i < n / 2; ++i)
+        {
+            const float db = playing ? juce::Decibels::gainToDecibels (fftData[(size_t) i] * normFine, -140.0f) : -140.0f;
+            auto& f = fine[(size_t) i];
+            f = db > f ? db : f * rel + db * (1.0f - rel);
+        }
+    }
     const double nyquist = rate * 0.5;
     const double fMin = 20.0, fMax = juce::jmin (20000.0, nyquist);
     const float norm = 2.0f / (float) n * 2.0f;   // Hann coherent gain 0.5

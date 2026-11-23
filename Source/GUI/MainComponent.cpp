@@ -196,7 +196,7 @@ MainComponent::MainComponent (AppContext& c)
       remoteButton (style::Icon::Phone, "Aura Remote : piloter depuis le téléphone (QR code)"_t, c),
       settingsButton (style::Icon::Settings, "Réglages (Cmd/Ctrl + ,)"_t, c),
       streamerButton (style::Icon::Bolt, "Mode Streamer / Gaming : interface au repos (OBS, jeu), audio inchangé"_t, c),
-      audioStatus (c), auraDsp (c), artworkViewer (c), detailsSheet (c),
+      audioStatus (c), auraDsp (c), artworkViewer (c), detailsSheet (c), studioView (c), tagDoctor (c),
       ctx (c), listing (c), nowPlaying (c), sourcePage (c), marketplace (c), queue (c), toast (c),
       settingsWindow (c), immersive (c), onboarding (c)
 {
@@ -236,6 +236,8 @@ MainComponent::MainComponent (AppContext& c)
     addChildComponent (auraDsp);
     addChildComponent (artworkViewer);
     addChildComponent (detailsSheet);
+    addChildComponent (studioView);
+    addChildComponent (tagDoctor);
     addChildComponent (onboarding);
     addChildComponent (toast);
     settingsWindow.onClose = [this] { grabKeyboardFocus(); };
@@ -422,7 +424,7 @@ void MainComponent::resized()
     if (queueVisible) r.removeFromRight (margin);
 
     for (auto* p : std::initializer_list<juce::Component*> { &listing, &nowPlaying, &sourcePage, &marketplace }) p->setBounds (r);
-    for (auto* o : std::initializer_list<juce::Component*> { &settingsWindow, &auraDsp, &immersive, &onboarding, &artworkViewer, &detailsSheet }) o->setBounds (getLocalBounds());
+    for (auto* o : std::initializer_list<juce::Component*> { &settingsWindow, &auraDsp, &immersive, &onboarding, &artworkViewer, &detailsSheet, &studioView, &tagDoctor }) o->setBounds (getLocalBounds());
     placeToast();
 }
 
@@ -930,6 +932,8 @@ bool MainComponent::keyPressed (const juce::KeyPress& k)
     {
         if (artworkViewer.isVisible()) artworkViewer.close();
         else if (detailsSheet.isVisible()) detailsSheet.close();
+        else if (studioView.isVisible()) studioView.close();
+        else if (tagDoctor.isVisible()) tagDoctor.close();
         else if (auraDsp.isVisible()) auraDsp.close();
         else if (settingsWindow.isVisible()) settingsWindow.close();
         else if (immersive.isVisible()) setImmersive (false);

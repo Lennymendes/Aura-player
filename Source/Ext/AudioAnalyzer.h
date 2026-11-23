@@ -24,6 +24,9 @@ public:
     float getRms (int ch) const noexcept  { return rms[(size_t) (ch & 1)]; }            // 0..1 linear, VU ballistics
     float getPeak (int ch) const noexcept { return peak[(size_t) (ch & 1)]; }
     const std::array<float, scopeSize>& getScope() const noexcept { return scope; }
+    /** Studio View: full-resolution spectrum, dB per FFT bin (0 .. Nyquist of the stream, n / 2 bins), smoothed. */
+    const std::vector<float>& getFineSpectrum() const noexcept { return fine; }
+    static constexpr int fftSize = 1 << fftOrder;
     double getSampleRate() const noexcept { return rate; }
     bool isDsdDensity() const noexcept { return dsd; }
     float getLevel() const noexcept { return 0.5f * (rms[0] + rms[1]); }
@@ -34,7 +37,7 @@ public:
 private:
     AnalyzerTap& tap;
     juce::dsp::FFT fft { fftOrder };
-    std::vector<float> history, window, fftData, pullBuffer;
+    std::vector<float> history, window, fftData, pullBuffer, fine;
     int historyPos = 0;
     std::array<float, numBands> bands {};
     std::array<float, scopeSize> scope {};

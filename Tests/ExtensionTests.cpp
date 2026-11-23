@@ -6,6 +6,7 @@
 #include "../Source/Core/Diagnostics.h"
 #include "FakeUpnp.h"
 #include <set>
+#include <random>
 #include "TestAudioFiles.h"
 #include "CoverFixtures.h"
 #include "../Source/Core/ImageDecode.h"
@@ -987,6 +988,111 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     for (int i = 0; i < galleryCards; ++i) noThemeCard = noThemeCard && market.getCard (i)->getData().kind != nx::MarketCard::Kind::Theme;
     t.check (galleryCards >= 1 && noThemeCard, "Extensions : "_t + juce::String (galleryCards) + " cartes, plug-ins d'interface et DSP seulement (aucun thème)"_t);
     t.check (shoot ("12_extensions") > 60, "galerie avec aperçus en direct"_t);
+    {
+        // Studio View (Extensions tool, Now Playing): a wide-band 96 kHz recording, its measures and the live spectrum
+        constexpr double pi = juce::MathConstants<double>::pi;
+        auto wide = t.tempDir.getChildFile ("studio_wide.wav");
+        {
+            std::mt19937 rng (77u);
+            std::uniform_real_distribution<double> uf (std::log (60.0), std::log (45000.0)), ph (0.0, 2.0 * pi);
+            std::vector<std::pair<double, double>> tones;
+            for (int k = 0; k < 120; ++k) { const double f = std::exp (uf (rng)); tones.push_back ({ f, ph (rng) }); }
+            const int n = 96000 * 4;
+            std::vector<int32_t> pcm ((size_t) n * 2);
+            for (int i = 0; i < n; ++i)
+            {
+                double x = 0.0;
+                const double env = 0.35 + 0.65 * std::abs (std::sin (pi * i / 96000.0));          // some dynamics
+                for (auto& [f, p0] : tones) x += 0.03 * std::sqrt (1000.0 / f) * std::sin (2.0 * pi * f * i / 96000.0 + p0);
+                pcm[(size_t) i * 2] = pcm[(size_t) i * 2 + 1] = (int32_t) ((uint32_t) std::llround (juce::jlimit (-0.98, 0.98, x * env) * 8388607.0) << 8);
+            }
+            writeWav (wide, &pcm, nullptr, 2, 96000, 24, 24, false);
+        }
+        nx::TrackInfo tr;
+        tr.source = "local"; tr.externalId = tr.uri = wide.getFullPathName(); tr.title = "Wide Band"; tr.artist = "Aura Test"; tr.album = "Studio";
+        tr.codec = "WAV"; tr.sampleRate = 96000.0; tr.bitsPerSample = 24; tr.channels = 2; tr.duration = 4.0; tr.fileSize = wide.getSize();
+        std::optional<nx::TrackInfo> previous;
+        if (const auto* c = app.currentTrack()) previous = *c;
+        app.playTracks ({ tr }, 0);
+        const bool toolsShown = shownInMain (&market.studioViewTool) && shownInMain (&market.doctorTool);
+        market.studioViewTool.triggerClick();
+        auto& sv = main->getStudioView();
+        for (int i = 0; i < 60 && app.currentAnalysis() == nullptr; ++i) settle (50);
+        settle (1500);
+        const auto lines = sv.metricLines().joinIntoString ("\n");
+        const bool measures = sv.isVisible() && lines.contains ("Dynamic Range|DR") && lines.contains ("dBTP") && lines.contains ("Hi-Res|" + nx::hires::verdictName (nx::hires::Real));
+        const bool live = sv.showsHiResMark() && sv.spectrogramColumns() > 0;
+        shoot ("48_studio_view");
+        main->keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+        const bool esc = ! sv.isVisible();
+        app.navigate ({ nx::PageId::NowPlaying });
+        settle (100);
+        auto& np = main->getNowPlaying();
+        np.studioViewButton.triggerClick();
+        settle (100);
+        const bool fromNowPlaying = shownInMain (&np.infoButton) && sv.isVisible();
+        sv.close();
+        app.showDetails (std::vector<nx::TrackInfo> { tr }, {});
+        settle (100);
+        juce::String hiRow;
+        for (auto& sec : main->getDetailsSheet().getSections()) for (auto& r : sec.rows) if (r.label == "Hi-Res") hiRow = r.value;
+        main->getDetailsSheet().close();
+        t.check (toolsShown && measures && live && esc && fromNowPlaying && hiRow.startsWith (nx::hires::verdictName (nx::hires::Real)),
+                 "Studio View (Extensions, En cours) : DR, True Peak, Peak / RMS, profil, Hi-Res, spectre et spectrogramme en direct avec repère 22,05 kHz ; fiche Informations : "_t
+                     + hiRow + " [" + juce::String ((int) toolsShown) + juce::String ((int) measures) + juce::String ((int) live) + juce::String ((int) esc)
+                     + juce::String ((int) fromNowPlaying) + "] " + lines.replace ("\n", " / ") + " {" + juce::String (app.analyzer().getSampleRate()) + " Hz, "
+                     + juce::String (sv.spectrogramColumns()) + "}");
+        if (previous) app.playTracks ({ *previous }, 0); else app.engine().stop();
+        app.navigate ({ nx::PageId::Marketplace });
+        settle (100);
+    }
+    {
+        // Tag & Cover Doctor: an MP3 copy of a FLAC track found, ranked under it; nothing removed before the confirmation
+        const auto neon = app.library().getAlbumTracks ("Zeyn", "Neon Roads");
+        const auto orig = neon.size() > 2 ? neon[2] : neon.front();
+        auto copy = t.tempDir.getChildFile ("doctor").getChildFile ("Night Drive (MP3).wav");
+        copy.getParentDirectory().createDirectory();
+        juce::File (orig.externalId).copyFileTo (copy);
+        nx::TrackInfo dup = orig;
+        dup.id = 0; dup.externalId = dup.uri = copy.getFullPathName(); dup.codec = "MP3"; dup.lossy = true; dup.bitsPerSample = 0; dup.fileSize = copy.getSize();
+        app.library().upsert (dup);
+        market.doctorTool.triggerClick();
+        settle (150);
+        auto& doc = main->getTagDoctor();
+        doc.scanNow();
+        const nx::doctor::DuplicateGroup* grp = nullptr;
+        for (auto& g : doc.getDuplicates()) if (g.title == orig.title) grp = &g;
+        const bool found = doc.isVisible() && grp != nullptr && grp->versions.size() == 2 && grp->versions[1].track.externalId == copy.getFullPathName();
+        doc.requestTrashLowerVersions();
+        settle (100);
+        const bool armed = doc.hasPendingAction() && copy.existsAsFile() && doc.confirmButton.isVisible();
+        shoot ("49_tag_doctor_doublons");
+        doc.cancelPending();
+        const bool safe = ! doc.hasPendingAction() && copy.existsAsFile() && app.library().findTrack ("local", copy.getFullPathName()).has_value();
+        const int hidden = doc.hideLowerVersions();
+        const bool gone = hidden >= 1 && ! app.library().findTrack ("local", copy.getFullPathName()).has_value() && copy.existsAsFile();
+        const int back = doc.showHiddenAgain();
+        doc.setTab (nx::TagDoctor::Tab::Audit);
+        settle (100);
+        const auto rows = doc.rowTexts().joinIntoString ("\n");
+        const bool audit = rows.contains ("Albums sans pochette"_t) && rows.contains ("Pochettes sous 500"_t) && rows.contains ("étiquettes incomplètes"_t);
+        shoot ("49b_tag_doctor_audit");
+        doc.close();
+        app.library().remove ("local", copy.getFullPathName());
+        {
+            const auto en = juce::JSON::parse (juce::String::fromUTF8 (NXData::en_json, NXData::en_jsonSize));
+            juce::String missing;
+            for (auto* k : { "Vrai Hi-Res", "Faux Hi-Res probable", "Hi-Res douteux", "SPECTROGRAMME", "EN DIRECT · PEAK / RMS", "Doublons", "Pochettes & étiquettes",  // raw-utf8
+                             "Analyser la bibliothèque", "Masquer les versions inférieures", "Albums sans pochette", "Pochettes sous 500 × 500 px",  // raw-utf8
+                             "Recherche de pochettes en ligne (iTunes)", "Studio View : DR, True Peak, Faux Hi-Res, spectre", "Tag & Cover Doctor : doublons, pochettes, étiquettes" })  // raw-utf8
+                if (! en.hasProperty (juce::Identifier (juce::String::fromUTF8 (k)))) missing << juce::String::fromUTF8 (k) << "; ";
+            t.check (missing.isEmpty(), "Studio View et Tag & Cover Doctor traduits en anglais"_t + (missing.isNotEmpty() ? " [" + missing + "]" : juce::String()));
+        }
+        t.check (found && armed && safe && gone && back >= 1 && audit,
+                 "Tag & Cover Doctor : copie MP3 classée sous l'original, corbeille seulement après confirmation (annulée : fichier intact), masquer / réafficher, audit pochettes et étiquettes"_t
+                     + " [" + juce::String ((int) found) + juce::String ((int) armed) + juce::String ((int) safe) + juce::String ((int) gone) + juce::String (back)
+                     + juce::String ((int) audit) + "]");
+    }
     const int themeCount = (int) app.themes().getThemes().size();
     t.check (themeCount == 7 && app.themes().findTheme ("aura") != nullptr && app.themes().findTheme ("nx-emerald") != nullptr,
              "thèmes livrés : "_t + juce::String (themeCount) + " (Aura par défaut, NX Emerald en thème secondaire)"_t);

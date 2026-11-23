@@ -1168,15 +1168,23 @@ void AppController::changeListenerCallback (juce::ChangeBroadcaster*)
     auto measured = [&] (int index) -> bool          // true when the track's True Peak is known (now or before)
     {
         if (index < 0 || index >= (int) q.size() || index >= (int) queueTracks.size()) return true;
-        if (std::isfinite (q[(size_t) index].truePeakDb) && q[(size_t) index].dr > 0) return true;
+        const bool known = std::isfinite (q[(size_t) index].truePeakDb) && q[(size_t) index].dr > 0;
         const auto& t = queueTracks[(size_t) index];
         const auto path = localPathOf (t);
         if (path.isEmpty()) return true;                 // stream: nothing to measure
         const auto a = trackScan->get (path);
-        if (a == nullptr) return false;
-        if (t.source == "local") { lib.setTruePeak (path, a->truePeakDb); lib.setProfile (path, a->dr, a->hfShareDb); }
-        eng->setTrackTruePeak (index, a->truePeakDb);
-        eng->setTrackProfile (index, a->dr, a->hfShareDb);
+        if (a == nullptr) return known;
+        if (t.source == "local" && ! lib.getHiRes (path).has_value())   // first time (or measured by an older version)
+        {
+            lib.setTruePeak (path, a->truePeakDb);
+            lib.setProfile (path, a->dr, a->hfShareDb);
+            lib.setHiRes (path, a->hiRes);
+        }
+        if (! known)
+        {
+            eng->setTrackTruePeak (index, a->truePeakDb);
+            eng->setTrackProfile (index, a->dr, a->hfShareDb);
+        }
         return true;
     };
     const int cur = eng->getCurrentIndex();
@@ -1291,6 +1299,9 @@ void AppController::showArtwork (const juce::String& key, const juce::String& ti
 {
     if (auto* m = getMainComponent()) m->showArtwork (key, title, subtitle);
 }
+
+void AppController::showStudioView() { if (auto* m = getMainComponent()) m->showStudioView(); }
+void AppController::showTagDoctor() { if (auto* m = getMainComponent()) m->showTagDoctor(); }
 
 void AppController::showDetails (const std::vector<TrackInfo>& tracks, const juce::String& albumTitle)
 {

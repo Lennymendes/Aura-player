@@ -61,6 +61,7 @@ private:
 public:
     IconButton favButton;                  // heart right of the title (follows the library)
     IconButton infoButton;                 // detailed metadata of the track (i), right of the heart
+    IconButton studioViewButton;           // Studio View (DR, True Peak, spectrum), right of the (i)
     ArtworkView& getArtwork() noexcept { return artwork; }
 private:
     void placeHeart();

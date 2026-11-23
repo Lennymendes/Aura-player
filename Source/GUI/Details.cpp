@@ -28,7 +28,8 @@ namespace
     }
 }
 
-std::vector<DetailSection> trackDetails (const TrackInfo& t, double truePeakDb, double ceilingDb, int dr, double hfShareDb, bool smartComfort)
+std::vector<DetailSection> trackDetails (const TrackInfo& t, double truePeakDb, double ceilingDb, int dr, double hfShareDb, bool smartComfort,
+                                         const hires::Check* hiRes)
 {
     std::vector<DetailSection> out;
     auto add = [] (DetailSection& s, const juce::String& label, const juce::String& value) { if (value.isNotEmpty()) s.rows.push_back ({ label, value }); };
@@ -66,6 +67,9 @@ std::vector<DetailSection> trackDetails (const TrackInfo& t, double truePeakDb, 
         else if (truePeakDb > ceilingDb) ah = num (ceilingDb - truePeakDb) + " dB (" + "plafond "_t + num (ceilingDb) + " dBTP)";
         else ah = "0 dB, sous le plafond de "_t + num (ceilingDb) + " dBTP";
         add (audio, "Auto-Headroom", ah);
+        if (t.isDsd) add (audio, "Hi-Res", "Source DSD : sans objet"_t);
+        else if (t.sampleRate < 88199.0) add (audio, "Hi-Res", hires::verdictName (hires::NotApplicable));
+        else add (audio, "Hi-Res", hiRes != nullptr ? hires::describe (*hiRes) : juce::String ("Non mesuré (mesuré en tâche de fond à la lecture d'un fichier)"_t));
         const auto r = comfort::classify (dr, hfShareDb);
         add (audio, "Profil de mastering"_t, r.profile == comfort::Profile::Unknown      ? juce::String ("Non mesuré"_t)
                                            : r.profile == comfort::Profile::Undetermined ? comfort::profileName (r.profile)
@@ -225,8 +229,13 @@ void DetailsSheet::open (const std::vector<TrackInfo>& t, const juce::String& al
             if (! std::isfinite (tp)) tp = a->truePeakDb;
             if (dr <= 0) { dr = a->dr; hf = a->hfShareDb; }
         }
+        std::optional<hires::Check> hr;
+        if (t0.source == "local") hr = ctx.library().getHiRes (t0.externalId);
+        if (! hr)
+            if (const auto a = ctx.trackAnalyzer().get (t0.source == "local" ? t0.externalId : t0.uri)) hr = a->hiRes;
         const auto st = ctx.engine().getSettings();
-        sections = trackDetails (t0, tp, st.autoTruePeak ? st.truePeakCeilingDb : std::numeric_limits<double>::quiet_NaN(), dr, hf, st.smartComfort);
+        sections = trackDetails (t0, tp, st.autoTruePeak ? st.truePeakCeilingDb : std::numeric_limits<double>::quiet_NaN(), dr, hf, st.smartComfort,
+                                 hr ? &*hr : nullptr);
     }
     else
     {

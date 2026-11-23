@@ -6,6 +6,7 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include "../DSP/HiResCheck.h"
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -19,6 +20,8 @@ struct TrackAnalysis
 {
     std::vector<float> minV, maxV, rms;   // per bin, linear (full scale = 1): signed peak min / max, RMS
     double peakDb = -200.0, rmsDb = -200.0;
+    hires::Check hiRes;                    // "Faux Hi-Res" detector (PCM >= 88,2 kHz; NotApplicable otherwise)
+    double sampleRate = 0.0;
     double hfShareDb = -200.0;            // share of the 6-10 kHz energy (channels summed), dB (Smart Ear Comfort)
     double truePeakDb = -200.0;           // ITU-R BS.1770-4, 4x oversampled (DSD: after the decimation)
     int dr = 0;                            // DR value (0 = too short / silent)

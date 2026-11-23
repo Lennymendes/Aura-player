@@ -106,6 +106,10 @@ private:
     juce::OwnedArray<juce::TextButton> tabButtons;
     juce::TextEditor filter;
     juce::TextButton importButton, folderButton;
+public:
+    /** Built-in tools of the gallery (always available): Studio View, Tag & Cover Doctor. */
+    juce::TextButton studioViewTool, doctorTool;
+private:
     juce::OwnedArray<MarketCard> cards;
     juce::String emptyText;
     juce::Label emptyLabel;
