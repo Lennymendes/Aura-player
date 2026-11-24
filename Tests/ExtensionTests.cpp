@@ -521,7 +521,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         }
         b->triggerClick();
         auto opened = [] { auto* p = nx::InfoButton::lastPopover(); return p != nullptr && p->findParentComponentOfClass<juce::CallOutBox>() != nullptr && p->getHeight() > 120; };
-        for (int i = 0; i < 20 && ! opened(); ++i) settle (50);               // slow CI machines: up to 1 s
+        for (int i = 0; i < 80 && ! opened(); ++i) settle (50);               // slow macOS CI: up to 4 s (returns as soon as it opens)
         settle (100);
         return opened();
     };
