@@ -1,6 +1,6 @@
 // Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Smart Ear Comfort: the mastering profile of a track from its analysis (DR, share of the 6-10 kHz energy), and the
-// E9DS dose it gets when the mode is on. Bright / compressed master (DR <= 8 and treble >= -18 dB): E9DS Dynamic HF
+// E9DS dose it gets when the mode is on. Bright / compressed master (DR <= 8 and treble >= -26 dB): E9DS Dynamic HF
 // 8 kHz, -1,5 to -6 dB (more compression and more treble = more); dynamic (DR >= 12) or balanced: nothing (bit-perfect).
 #pragma once
 
@@ -22,8 +22,8 @@ inline Result classify (int dr, double hfShareDb) noexcept
 {
     if (! std::isfinite (hfShareDb)) return {};
     if (dr <= 0) return { Profile::Undetermined, 0.0 };
-    if (dr <= 8 && hfShareDb >= -18.0)
-        return { Profile::Bright, std::clamp (1.5 + 0.5 * (8 - dr) + 0.25 * (hfShareDb + 18.0), 1.5, 6.0) };
+    if (dr <= 8 && hfShareDb >= -26.0)
+        return { Profile::Bright, std::clamp (1.5 + 0.5 * (8 - dr) + 0.25 * (hfShareDb + 26.0), 1.5, 6.0) };
     return { dr >= 12 ? Profile::Dynamic : Profile::Balanced, 0.0 };
 }
 

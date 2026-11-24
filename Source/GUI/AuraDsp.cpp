@@ -820,9 +820,9 @@ void AuraDspPanel::paint (juce::Graphics& g)
         if (! st.smartComfort) detail = "Désactivé"_t;
         else if (ci < 0) detail = "Adapte E9DS au profil de chaque morceau"_t;
         else if (r.profile == comfort::Profile::Unknown) detail = "Profil en cours de mesure"_t;
-        else if (ctx.engine().getCurrentPlan().source.isDsd()) detail = shortName + " (DR" + juce::String (q[(size_t) ci].dr) + ")" + arrow + "DSD : affichage"_t;
+        else if (ctx.engine().getCurrentPlan().source.isDsd()) detail = shortName + " (" + comfort::measures (q[(size_t) ci].dr, q[(size_t) ci].hfShareDb) + ")" + arrow + "DSD : affichage"_t;
         else if (e.enabled.load()) detail = shortName + arrow + "E9DS manuel prioritaire"_t;
-        else detail = shortName + " (DR" + juce::String (q[(size_t) ci].dr) + ")" + arrow + (dose > 0.0 ? "E9DS -" + num (dose) + " dB" : juce::String ("bit-perfect"));
+        else detail = shortName + " (" + comfort::measures (q[(size_t) ci].dr, q[(size_t) ci].hfShareDb) + ")" + arrow + (dose > 0.0 ? "E9DS -" + num (dose) + " dB" : juce::String ("bit-perfect"));
         drawRow (Smart, st.smartComfort && dose > 0.0 && ! e.enabled.load(), detail);
     }
 

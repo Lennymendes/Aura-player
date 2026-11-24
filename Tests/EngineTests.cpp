@@ -2675,11 +2675,11 @@ NX_TEST_SECTION (125, "Smart Ear Comfort : profil de mastering (DR, aigus 6-10 k
     using P = nx::comfort::Profile;
     // 1. the profile and the dose
     {
-        const auto a = classify (6, -14.0), b = classify (8, -18.0), c = classify (9, -10.0), d = classify (8, -19.0), e = classify (12, -10.0),
+        const auto a = classify (6, -14.0), b = classify (8, -26.0), c = classify (9, -10.0), d = classify (8, -27.0), e = classify (12, -10.0),
                    f = classify (2, 0.0), g = classify (0, -10.0), h = classify (6, std::numeric_limits<double>::quiet_NaN());
-        t.check (a.profile == P::Bright && std::abs (a.doseDb - 3.5) < 1e-9 && b.profile == P::Bright && b.doseDb == 1.5 && c.profile == P::Balanced && c.doseDb == 0.0
+        t.check (a.profile == P::Bright && std::abs (a.doseDb - 5.5) < 1e-9 && std::abs (classify (2, -23.0).doseDb - 5.25) < 1e-9 && b.profile == P::Bright && b.doseDb == 1.5 && c.profile == P::Balanced && c.doseDb == 0.0
                      && d.profile == P::Balanced && e.profile == P::Dynamic && e.doseDb == 0.0 && f.doseDb == 6.0 && g.profile == P::Undetermined && g.doseDb == 0.0 && h.profile == P::Unknown,
-                 "profil : brillant / compressé (DR <= 8 et aigus >= -18 dB, dose -1,5 à -6 dB), équilibré, dynamique (DR >= 12), indéterminé (sans DR), inconnu"_t);
+                 "profil : brillant / compressé (DR <= 8 et aigus >= -26 dB, dose -1,5 à -6 dB), équilibré, dynamique (DR >= 12), indéterminé (sans DR), inconnu"_t);
     }
     // 2. the analysis measures it: a loud steady master with strong 8 kHz, a quiet dynamic recording with bursts at 200 Hz
     auto bright = t.tempDir.getChildFile ("sec_bright.wav"), dyn = t.tempDir.getChildFile ("sec_dynamic.wav");
