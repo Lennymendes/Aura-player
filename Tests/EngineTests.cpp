@@ -1453,6 +1453,38 @@ NX_TEST_SECTION (116, "Sous-étape A : DAC qui ne cadence plus (reprise complèt
                  && added.contains ("blocage du DAC, aucun buffer demande pendant"),
                  "audio.log : un blocage du DAC en cours de lecture est noté avec sa durée, la position et le ring"_t);
     }
+
+    // 6. a stall that never ends during playback: logged at once, the DAC is closed and opened again, playback goes on
+    {
+        const auto longPcm = randomPcm (96000 * 4, 2, 24, 4244u);
+        auto longWav = t.tempDir.getChildFile ("stall_recover.wav");
+        writeWav (longWav, &longPcm, nullptr, 2, 96000, 24, 24, false);
+        EngineRig rig ([] (nx::CaptureBackend& cap) { cap.realtime = true; });
+        rig.engine->stallRecoverMs = 400;
+        rig.engine->setQueue ({ EngineRig::item (longWav) }, 0, true);
+        const auto mark = "test: repere reprise " + juce::String (juce::Random::getSystemRandom().nextInt64());
+        nx::audioLog (mark);
+        const auto t0 = juce::Time::getMillisecondCounter();
+        size_t samplesBefore = 0, samplesAfter = 0;
+        while (juce::Time::getMillisecondCounter() - t0 < 9000)
+        {
+            rig.engine->serviceMessageThread();
+            const auto ms = juce::Time::getMillisecondCounter() - t0;
+            const bool dead = ms > 6000 && rig.cap->opens == 1;          // dead until the engine reopens the device
+            if (ms > 5900 && ms < 6000) samplesBefore = rig.cap->capturedInt.size();
+            if (rig.cap->isRunning() && ! dead)
+            {
+                for (int w = 0; w < 500 && rig.engine->isDecoderBusy() && rig.engine->getBufferedBytes() < (1u << 18); ++w) juce::Thread::sleep (1);
+                rig.cap->pump (48);
+            }
+            juce::Thread::sleep (5);
+        }
+        samplesAfter = rig.cap->capturedInt.size();
+        const auto added = nx::audioLogFile().loadFileAsString().fromLastOccurrenceOf (mark, false, false);
+        t.check (rig.cap->opens == 2 && added.contains ("reprise 1/2") && rig.engine->getState() == nx::PlaybackEngine::State::Playing && samplesAfter > samplesBefore,
+                 "blocage définitif en lecture : noté dans audio.log, DAC fermé puis rouvert, la lecture repart (ouvertures "_t
+                     + juce::String (rig.cap->opens) + ")");
+    }
 }
 
 //==============================================================================
@@ -2549,7 +2581,7 @@ NX_TEST_SECTION (124, "Auto-Headroom True Peak : mesure BS.1770-4, atténuation 
     writeWav (loud, &loudPcm, nullptr, 2, 96000, 24, 24, false);
     writeWav (clean, &cleanPcm, nullptr, 2, 96000, 24, 24, false);
     struct Run { std::vector<int32_t> got; std::vector<uint8_t> dsd; double rate = 0; juce::String node; long allocs = 0; };
-    auto play = [&] (bool on, double tpLoud, int liveAt, std::function<void (nx::CaptureBackend&)> cfg = {}, std::function<void (nx::EngineSettings&)> more = {})
+    auto play = [&] (bool on, double tpLoud, int liveAt, std::function<void (nx::CaptureBackend&)> cfg = {}, std::function<void (nx::EngineSettings&)> more = {}, int nextAt = -1)
     {
         EngineRig rig (cfg);
         auto st = rig.engine->getSettings();
@@ -2720,7 +2752,7 @@ NX_TEST_SECTION (125, "Smart Ear Comfort : profil de mastering (DR, aigus 6-10 k
 
     // 3. engine, PCM to the DAC: the bright master then the dynamic recording, gapless, E9DS in both chains as in the app
     struct Run { std::vector<int32_t> got; std::vector<uint8_t> dsd; double rate = 0; juce::String node, dsp; long allocs = 0; };
-    auto play = [&] (bool on, bool known, int liveAt, bool manual, std::function<void (nx::CaptureBackend&)> cfg = {}, std::function<void (nx::EngineSettings&)> more = {})
+    auto play = [&] (bool on, bool known, int liveAt, bool manual, std::function<void (nx::CaptureBackend&)> cfg = {}, std::function<void (nx::EngineSettings&)> more = {}, int nextAt = -1)
     {
         EngineRig rig (cfg);
         auto st = rig.engine->getSettings();
@@ -2751,6 +2783,7 @@ NX_TEST_SECTION (125, "Smart Ear Comfort : profil de mastering (DR, aigus 6-10 k
                     if (nd.stage == "DSP") r.dsp = nd.title;
                 }
             if (block == liveAt) rig.engine->setTrackProfile (0, ab->dr, ab->hfShareDb);
+            if (block == nextAt) rig.engine->setTrackProfile (1, ad->dr, ad->hfShareDb);      // the pre-analysis of the next track
         }, 1u << 16);
         rig.cap->renderFlag = nullptr;
         r.allocs = nxtest_allocationCount.load();
@@ -2791,6 +2824,12 @@ NX_TEST_SECTION (125, "Smart Ear Comfort : profil de mastering (DR, aigus 6-10 k
         const double before = db (amp (live.got, 1000, 8000, 48000.0, 8000.0), 0.35), after = db (amp (live.got, 48000, 40000, 48000.0, 8000.0), 0.35);
         t.check (std::abs (before) < 0.05 && after < -0.5 && live.allocs == 0,
                  "profil arrivé en cours de lecture : 8 kHz "_t + juce::String (before, 2) + " dB avant, " + juce::String (after, 2) + " dB après");
+        // the measure of the NEXT track arrives afterwards (pre-analysis): the track being played keeps its dose
+        // (the single live slot used to be overwritten: E9DS dropped out mid-track until a seek rebuilt the events)
+        const auto both = play (true, false, 12, false, {}, {}, 20);
+        const double kept = db (amp (both.got, 48000, 40000, 48000.0, 8000.0), 0.35);
+        t.check (kept < -0.5 && both.allocs == 0,
+                 "mesure du morceau suivant reçue ensuite : le morceau en cours garde son adoucissement (8 kHz "_t + juce::String (kept, 2) + " dB)");
     }
     // 4. PCM -> DSD128: applied in the decoder's chain, before the modulator
     {

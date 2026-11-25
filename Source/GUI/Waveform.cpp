@@ -179,7 +179,7 @@ juce::String TrackAnalysis::summary() const
 {
     auto num = [] (double v) { auto s = juce::String (v, 1); return i18n::isEnglish() ? s : s.replaceCharacter ('.', ','); };
     const auto dot = juce::String::fromUTF8 (" \xc2\xb7 ");
-    auto s = "Peak " + num (peakDb) + " dBFS" + dot + "RMS " + num (rmsDb) + " dBFS";
+    auto s = "Peak " + num (peakDb) + " dB";
     if (dr > 0) s << dot << "DR" << dr;
     return s;
 }

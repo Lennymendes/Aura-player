@@ -270,8 +270,8 @@ void BandStrip::paint (juce::Graphics& g)
 //==============================================================================
 namespace
 {
-    enum Row { Source, Headroom, TruePeak, Conversion, Crossfeed, HeadphoneEq, ParametricEq, Polarity, E9ds, Smart, numRows };
-    const char* const rowTitles[] = { "Source", "Gestion du headroom", "Auto-Headroom", "Conversion de fréquence", "Crossfeed", "Égaliseur casque", "Égaliseur paramétrique", "Polarité", "E9DS", "Smart Ear Comfort" };
+    enum Row { Source, Headroom, TruePeak, Crossfeed, HeadphoneEq, ParametricEq, Polarity, E9ds, Smart, numRows };
+    const char* const rowTitles[] = { "Source", "Gestion du headroom", "Auto-Headroom", "Smart Crossfeed", "Égaliseur casque", "Égaliseur paramétrique", "Polarité", "E9DS", "Smart Ear Comfort" };
 }
 
 AuraDspPanel::AuraDspPanel (AppContext& c)
@@ -282,7 +282,7 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
     setWantsKeyboardFocus (true);
     addAndMakeVisible (closeButton);
     closeButton.onClick = [this] { close(); };
-    for (auto* t : { &headroom, &truePeak, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds, &smart }) addAndMakeVisible (t);
+    for (auto* t : { &headroom, &truePeak, &crossfeed, &hpEq, &peq, &phase, &e9ds, &smart }) addAndMakeVisible (t);
     headroom.onClick = [this]
     {
         auto& s = ctx.studioTools();
@@ -303,13 +303,27 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
         repaint();
     };
     addAndMakeVisible (tpCeiling);
-    upsample.onClick = [this]
     {
-        auto st = ctx.engine().getSettings();
-        st.upsampleToDxd = upsample.getToggleState();
-        ctx.engine().setSettings (st);
-        ctx.applyEngineSettings();
+        const auto st = ctx.settings().get ("dspStages");
+        showHp = (bool) st.getProperty ("hp", false);
+        showPeq = (bool) st.getProperty ("peq", false);
+        showPhase = (bool) st.getProperty ("phase", false);
+    }
+    addStageButton.setButtonText ("+ Ajouter un étage"_t);
+    addStageButton.setTooltip ("Égaliseur casque, égaliseur paramétrique, polarité : à ajouter à la chaîne seulement si vous en avez besoin"_t);
+    addStageButton.onClick = [this] { showAddStageMenu(); };
+    addAndMakeVisible (addStageButton);
+    presetBox.setTextWhenNothingSelected ("Presets AURA DSP"_t);
+    presetBox.setTooltip ("Réglages prêts à l'emploi pour toute la chaîne"_t);
+    for (int i = 0; i < numPresets; ++i) presetBox.addItem (presetName (i), i + 1);
+    presetBox.onChange = [this]
+    {
+        const int id = presetBox.getSelectedId();
+        if (id <= 0) return;
+        applyPreset (id - 1);
+        presetBox.setSelectedId (0, juce::dontSendNotification);
     };
+    addAndMakeVisible (presetBox);
     crossfeed.onClick = [this] { ctx.studioTools().crossfeed = crossfeed.getToggleState(); ctx.applyStudioTools(); repaint(); };
     phase.onClick = [this] { ctx.studioTools().invertPhase = phase.getToggleState(); ctx.applyStudioTools(); repaint(); };
     hpEq.onClick = [this]
@@ -325,7 +339,7 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
         setView (View::Parametric);
     };
     e9ds.onClick = [this] { e9Changed (true); setView (View::E9ds); };
-    for (auto [row, id] : std::initializer_list<std::pair<int, const char*>> { { Headroom, "headroom" }, { TruePeak, "truepeak" }, { Conversion, "dxd" }, { Crossfeed, "crossfeed" },
+    for (auto [row, id] : std::initializer_list<std::pair<int, const char*>> { { Headroom, "headroom" }, { TruePeak, "truepeak" }, { Crossfeed, "crossfeed" },
                                                                             { HeadphoneEq, "hpeq" }, { E9ds, "e9ds" }, { Smart, "smart" } })
     {
         infos.emplace_back (row, std::make_unique<InfoButton> (ctx, id));
@@ -441,7 +455,7 @@ AuraDspPanel::AuraDspPanel (AppContext& c)
 void AuraDspPanel::open()
 {
     syncControls();
-    setView (ctx.studioTools().peqActive() && ! ctx.studioTools().eqActive() ? View::Parametric : View::Headphone);
+    setView (ctx.studioTools().peqActive() && ! ctx.studioTools().eqActive() ? View::Parametric : rowShown (HeadphoneEq) ? View::Headphone : View::E9ds);
     setVisible (true);
     toFront (true);
     resized();
@@ -478,7 +492,6 @@ void AuraDspPanel::syncControls()
 {
     const auto& s = ctx.studioTools();
     headroom.setToggleState (s.autoHeadroom.load(), juce::dontSendNotification);
-    upsample.setToggleState (ctx.engine().getSettings().upsampleToDxd, juce::dontSendNotification);
     truePeak.setToggleState (ctx.engine().getSettings().autoTruePeak, juce::dontSendNotification);
     smart.setToggleState (ctx.engine().getSettings().smartComfort, juce::dontSendNotification);
     tpCeiling.setButtonText (ctx.engine().getSettings().truePeakCeilingDb < -0.75 ? "-1,0 dBTP" : "-0,5 dBTP");
@@ -628,9 +641,132 @@ juce::Rectangle<int> AuraDspPanel::panelBounds() const
     return getLocalBounds().withSizeKeepingCentre (juce::jmin (1120, getWidth() - 48), juce::jmin (740, getHeight() - 40));
 }
 
+bool AuraDspPanel::rowShown (int row) const
+{
+    const auto& s = ctx.studioTools();
+    switch (row)
+    {
+        case HeadphoneEq:   return showHp || s.eqPreset.load() >= 0;
+        case ParametricEq:  return showPeq || s.peqActive();
+        case Polarity:      return showPhase || s.invertPhase.load();
+        default:            return true;
+    }
+}
+
+int AuraDspPanel::slotOf (int row) const
+{
+    int n = 0;
+    for (int r = 0; r < row; ++r) if (rowShown (r)) ++n;
+    return n;
+}
+
+int AuraDspPanel::shownRows() const { return slotOf (numRows); }
+
+/** Rows are laid out in order, the hidden optional stages take no room (row == numRows: just after the last one). */
 juce::Rectangle<int> AuraDspPanel::rowBounds (int row) const
 {
-    return { left.getX(), left.getY() + row * rowH, left.getWidth(), rowH };
+    return { left.getX(), left.getY() + slotOf (row) * rowH, left.getWidth(), rowH };
+}
+
+bool AuraDspPanel::isStageShown (Stage st) const
+{
+    return rowShown (st == Stage::HeadphoneEq ? HeadphoneEq : st == Stage::ParametricEq ? ParametricEq : Polarity);
+}
+
+void AuraDspPanel::saveStages()
+{
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("hp", showHp);
+    o->setProperty ("peq", showPeq);
+    o->setProperty ("phase", showPhase);
+    ctx.settings().set ("dspStages", juce::var (o));
+}
+
+void AuraDspPanel::addStage (Stage st)
+{
+    (st == Stage::HeadphoneEq ? showHp : st == Stage::ParametricEq ? showPeq : showPhase) = true;
+    saveStages();
+    if (st == Stage::HeadphoneEq) setView (View::Headphone);
+    else if (st == Stage::ParametricEq) setView (View::Parametric);
+    syncControls();
+    resized();
+    repaint();
+}
+
+void AuraDspPanel::showAddStageMenu()
+{
+    juce::PopupMenu m;
+    struct Item { Stage st; juce::String name; bool inUse; };
+    const auto& s = ctx.studioTools();
+    const Item items[] = { { Stage::HeadphoneEq, "Égaliseur casque (profils mesurés)"_t, s.eqPreset.load() >= 0 },
+                           { Stage::ParametricEq, "Égaliseur paramétrique (7 bandes)"_t, s.peqActive() },
+                           { Stage::Polarity, "Polarité (inversion Ø)"_t, s.invertPhase.load() } };
+    for (auto& it : items)
+    {
+        const bool shown = isStageShown (it.st);
+        // an unused stage can be put away again; one in use stays (switch it off first)
+        m.addItem (it.name, ! (shown && it.inUse), shown, [this, st = it.st, shown]
+        {
+            if (! shown) { addStage (st); return; }
+            (st == Stage::HeadphoneEq ? showHp : st == Stage::ParametricEq ? showPeq : showPhase) = false;
+            saveStages();
+            if (view != View::E9ds && ! isStageShown (st == Stage::HeadphoneEq ? Stage::HeadphoneEq : Stage::ParametricEq)) setView (View::E9ds);
+            resized();
+            repaint();
+        });
+    }
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (addStageButton));
+}
+
+juce::String AuraDspPanel::presetName (int i)
+{
+    switch (i)
+    {
+        case 0: return "Bit-Perfect (tout désactivé)"_t;
+        case 1: return "ZEYN Safe EarMaster";
+        default: return "ZEYN Casque prêt à l'emploi"_t;
+    }
+}
+
+juce::String AuraDspPanel::presetSummary (int i)
+{
+    switch (i)
+    {
+        case 0: return "Tous les traitements désactivés : sortie bit-perfect."_t;
+        case 1: return "Smart Ear Comfort (E9DS en auto) + Auto-Headroom : protège les masters riches en aigus."_t;
+        default: return "Momentum M2 + Smart Ear Comfort + Auto-Headroom : prêt à écouter, rien à régler."_t;
+    }
+}
+
+void AuraDspPanel::applyPreset (int index)
+{
+    auto& s = ctx.studioTools();
+    const auto& e = ctx.e9ds();
+    const bool off = index == 0;
+    ctx.setE9ds (false, e.focusHz.load(), e.amountDb.load(), e.mode.load());       // E9DS by hand off: Smart Ear Comfort drives it
+    ctx.setSmartComfort (! off);
+    ctx.setAutoTruePeak (! off, -1.0);
+    if (off)
+    {
+        s.crossfeed = false;
+        s.invertPhase = false;
+        s.monitor = StudioToolsState::Monitor::Stereo;
+        ctx.applyStudioTools();
+        ctx.setParametricEq (s.parametricBands(), false, true);
+        ctx.setHeadphoneEq (s.eqPreset.load(), true);
+    }
+    else if (index == 2)
+    {
+        for (int i = 0; i < (int) hpeq::presets().size(); ++i)
+            if (juce::String (hpeq::presets()[(size_t) i].id) == "momentum-m2") { ctx.setHeadphoneEq (i, false); break; }
+        showHp = true;
+        saveStages();
+    }
+    syncControls();
+    if (index == 2) setView (View::Headphone); else if (view == View::Headphone && ! rowShown (HeadphoneEq)) setView (View::E9ds);
+    resized();
+    repaint();
+    ctx.showMessage (presetName (index) + " : " + presetSummary (index));
 }
 
 void AuraDspPanel::resized()
@@ -638,12 +774,23 @@ void AuraDspPanel::resized()
     auto p = panelBounds().reduced (24, 20);
     closeButton.setBounds (p.removeFromTop (40).removeFromRight (36).withSizeKeepingCentre (32, 32));
     p.removeFromTop (12);
-    left = p.removeFromLeft (juce::jmin (340, p.getWidth() / 3));
-    juce::ToggleButton* toggles[] = { nullptr, &headroom, &truePeak, &upsample, &crossfeed, &hpEq, &peq, &phase, &e9ds, &smart };
-    for (int r = 1; r < numRows; ++r) toggles[r]->setBounds (rowBounds (r).removeFromRight (52).withSizeKeepingCentre (48, 28));
+    left = p.removeFromLeft (juce::jmin (390, p.getWidth() * 2 / 5));
+    juce::ToggleButton* toggles[] = { nullptr, &headroom, &truePeak, &crossfeed, &hpEq, &peq, &phase, &e9ds, &smart };
+    for (int r = 1; r < numRows; ++r)
+    {
+        toggles[r]->setVisible (rowShown (r));
+        toggles[r]->setBounds (rowBounds (r).removeFromRight (52).withSizeKeepingCentre (48, 28));
+    }
     tpCeiling.setBounds (rowBounds (TruePeak).withTrimmedRight (56).removeFromRight (78).withSizeKeepingCentre (78, 26));
+    addStageButton.setBounds (rowBounds (numRows).withTrimmedLeft (30).withSizeKeepingCentre (left.getWidth() - 30, 34).withTrimmedRight (60));
+    {
+        auto head = panelBounds().reduced (24, 20).removeFromTop (40);
+        head.removeFromRight (44);
+        presetBox.setBounds (head.removeFromRight (250).withSizeKeepingCentre (250, 32));
+    }
     for (auto& [r, b] : infos)
     {
+        b->setVisible (rowShown (r));
         // "+" right after the row's title (first half of the row, see drawRow)
         auto row = rowBounds (r);
         const int x = row.getX() + 30 + (int) style::textWidth (style::font (14.5f, true), tr (juce::String::fromUTF8 (rowTitles[r]))) + 6;
@@ -704,8 +851,8 @@ void AuraDspPanel::resized()
 void AuraDspPanel::mouseUp (const juce::MouseEvent& e)
 {
     if (! panelBounds().contains (e.getPosition())) { close(); return; }
-    if (rowBounds (HeadphoneEq).withTrimmedRight (60).contains (e.getPosition())) { setView (View::Headphone); return; }
-    if (rowBounds (ParametricEq).withTrimmedRight (60).contains (e.getPosition())) { setView (View::Parametric); return; }
+    if (rowShown (HeadphoneEq) && rowBounds (HeadphoneEq).withTrimmedRight (60).contains (e.getPosition())) { setView (View::Headphone); return; }
+    if (rowShown (ParametricEq) && rowBounds (ParametricEq).withTrimmedRight (60).contains (e.getPosition())) { setView (View::Parametric); return; }
     if (rowBounds (E9ds).withTrimmedRight (60).contains (e.getPosition())) { setView (View::E9ds); return; }
     for (auto& [r, i] : monitorSegs) if (r.contains (e.getPosition())) { chooseMonitor (i); return; }
 }
@@ -790,23 +937,23 @@ void AuraDspPanel::paint (juce::Graphics& g)
         else detail = "TP " + num (tp) + " dBTP" + juce::String::fromUTF8 ("  \xe2\x86\x92  ") + (att > 0.0 ? num (-att) + " dB" : juce::String ("0 dB"));
         drawRow (TruePeak, st.autoTruePeak && att > 0.0, detail);
     }
-    drawRow (Conversion, upsample.getToggleState(), upsample.getToggleState() ? "Sinc polyphase vers DXD 352,8 / 384 kHz"_t : juce::String ("Fréquence d'origine (bit-perfect possible)"_t));
-    drawRow (Crossfeed, s.crossfeed.load(), "Bauer bs2b 700 Hz / 4,5 dB, pour le casque"_t);
-    drawRow (HeadphoneEq, s.eqActive(), preset != nullptr ? preset->displayName() + (s.eqBypass.load() ? "  ·  contourné"_t : juce::String()) : juce::String ("Choisissez un profil dans la liste"_t));
+    drawRow (Crossfeed, s.crossfeed.load(), "Casque : un peu de chaque voie dans l'autre, comme sur enceintes"_t);
+    if (rowShown (HeadphoneEq)) drawRow (HeadphoneEq, s.eqActive(), preset != nullptr ? preset->displayName() + (s.eqBypass.load() ? "  ·  contourné"_t : juce::String()) : juce::String ("Choisissez un profil dans la liste"_t));
     {
         int moved = 0;
         for (auto& b : s.parametricBands()) if (b.gain != 0.0) ++moved;
-        drawRow (ParametricEq, s.peqActive(), moved > 0 ? juce::String (moved) + " bande(s) réglée(s) sur 7"_t : juce::String ("7 bandes à plat (0 dB)"_t));
+        if (rowShown (ParametricEq)) drawRow (ParametricEq, s.peqActive(), moved > 0 ? juce::String (moved) + " bande(s) réglée(s) sur 7"_t : juce::String ("7 bandes à plat (0 dB)"_t));
     }
-    drawRow (Polarity, s.invertPhase.load(), "Inversion de polarité absolue (Ø)"_t);
+    if (rowShown (Polarity)) drawRow (Polarity, s.invertPhase.load(), "Inversion de polarité absolue (Ø)"_t);
     {
         const auto& e = ctx.e9ds();
         const juce::String khz = juce::String (e.focusHz.load() / 1000.0, 1).replaceCharacter ('.', ',');
         const double dose = ctx.engine().getComfortDoseDb();
         const auto num = [] (double v) { return juce::String (v, 1).replaceCharacter ('.', ','); };
+        const auto dot = juce::String::fromUTF8 (" \xc2\xb7 ");
         drawRow (E9ds, e.enabled.load() || dose > 0.0,
-                 e.enabled.load() ? juce::String (e.mode.load() == E9dsState::DynamicHf ? "Dynamic HF" : "Split-Band") + "  ·  " + khz + " kHz  ·  max -" + num (e.amountDb.load()) + " dB"
-                 : dose > 0.0     ? "Auto  ·  Dynamic HF 8 kHz  ·  max -"_t + num (dose) + " dB"
+                 e.enabled.load() ? "Manuel"_t + dot + (e.mode.load() == E9dsState::DynamicHf ? juce::String ("Dynamic HF ") : juce::String ("Split-Band ")) + khz + " kHz" + dot + "max -" + num (e.amountDb.load()) + " dB"
+                 : dose > 0.0     ? "Auto (Smart)"_t + dot + "Dynamic HF 8 kHz" + dot + "max -" + num (dose) + " dB"
                                   : juce::String ("De-esser transparent, sibilances et aigus durs"_t));
         // Smart Ear Comfort: the profile of the track being played and what it gets
         const auto st = ctx.engine().getSettings();
@@ -814,7 +961,7 @@ void AuraDspPanel::paint (juce::Graphics& g)
         const int ci = ctx.engine().getCurrentIndex();
         const auto r = ci >= 0 && ci < (int) q.size() ? comfort::classify (q[(size_t) ci].dr, q[(size_t) ci].hfShareDb) : comfort::Result();
         const auto arrow = juce::String::fromUTF8 (" \xe2\x86\x92 ");
-        const juce::String shortName = r.profile == comfort::Profile::Bright ? "Master brillant"_t : r.profile == comfort::Profile::Dynamic ? "Dynamique"_t
+        const juce::String shortName = r.profile == comfort::Profile::Bright ? "Brillant"_t : r.profile == comfort::Profile::Dynamic ? "Dynamique"_t
                                      : r.profile == comfort::Profile::Undetermined ? "Indéterminé"_t : "Équilibré"_t;
         juce::String detail;
         if (! st.smartComfort) detail = "Désactivé"_t;
@@ -828,7 +975,7 @@ void AuraDspPanel::paint (juce::Graphics& g)
 
     monitorSegs.clear();
     {
-        auto seg = juce::Rectangle<int> (left.getX(), rowBounds (numRows).getY() + 12, left.getWidth(), 32);
+        auto seg = juce::Rectangle<int> (left.getX(), rowBounds (numRows).getY() + rowH + 8, left.getWidth(), 32);
         const juce::String names[] = { "Stéréo"_t, "Mono", "Mid", "Side" };
         const int cur = (int) s.monitor.load();
         const int w = seg.getWidth() / 4;
@@ -883,10 +1030,20 @@ void AuraDspPanel::paint (juce::Graphics& g)
         g.fillRoundedRectangle (bar, 6.0f);
         g.setColour (t.accent());
         g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * (float) juce::jlimit (0.0, 1.0, gr / E9dsState::maxAmountDb)), 6.0f);
+        // who is in charge of E9DS right now (manual wins over Smart Ear Comfort), and what it costs in bit-perfect terms
+        const double dose = ctx.engine().getComfortDoseDb();
+        const bool smartOn = ctx.engine().getSettings().smartComfort;
+        const juce::String who = e.enabled.load() ? "Mode manuel : vos réglages ci-dessus s'appliquent à tous les morceaux (Smart Ear Comfort reste en retrait)."_t
+                               : dose > 0.0 ? "Mode auto : Smart Ear Comfort pilote E9DS sur ce morceau (Dynamic HF 8 kHz, au plus -"_t + juce::String (dose, 1).replaceCharacter ('.', ',') + " dB). L'interrupteur à droite de E9DS reprend la main."_t
+                               : smartOn ? "Smart Ear Comfort est actif : ce morceau n'en a pas besoin, E9DS reste à l'écart (bit-perfect)."_t
+                                         : juce::String ("E9DS est désactivé. Activez-le pour régler à la main, ou activez Smart Ear Comfort pour un dosage automatique par morceau."_t);
+        g.setColour (t.textCol());
+        g.setFont (style::font (12.5f, true));
+        g.drawFittedText (who, e9Meter.translated (0, 26).withHeight (44), juce::Justification::topLeft, 3);
         g.setColour (t.textDim());
         g.setFont (style::font (12.0f));
-        g.drawFittedText ("Seuil automatique (part des aigus dans le signal). Sous le seuil, la sortie est identique à l'entrée, au bit près."_t,
-                          e9Meter.translated (0, 28).withHeight (40), juce::Justification::topLeft, 2);
+        g.drawFittedText ("Bit-perfect : E9DS actif traite le son en 64 bits (le chemin du signal l'indique) ; au repos la sortie est identique à l'entrée. Une source DSD (natif ou DoP) n'est jamais traitée par Smart Ear Comfort : son profil est seulement affiché."_t,
+                          e9Meter.translated (0, 76).withHeight (60), juce::Justification::topLeft, 4);
     }
     if (view == View::Parametric)
         g.drawText ("Poignées : glisser = fréquence / gain, molette = Q"_t, right.withHeight (20), juce::Justification::centredRight);

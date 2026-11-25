@@ -76,6 +76,7 @@ struct PluginManager::UiRuntime
     juce::Graphics* graphics = nullptr;
     juce::Colour colour { juce::Colours::white };
     std::optional<juce::ColourGradient> gradient;
+    int overruns = 0;                       // consecutive frames that ran over the time budget
     juce::String error;
     bool hasInit = false, initDone = false;
 
@@ -401,9 +402,14 @@ bool PluginManager::render (const juce::String& id, const juce::String& slot, ju
 
     if (r.failed())
     {
-        rt->error = r.getErrorMessage();
+        const auto message = r.getErrorMessage();
+        // A frame that ran over its time budget (a busy machine, a first frame) is skipped, not fatal: the script only
+        // stays stopped (until reloaded) when it keeps overrunning, or when it is really broken.
+        if (message.containsIgnoreCase ("interrupted") && ++rt->overruns < 8) return false;
+        rt->error = message;
         return showError (rt->error);
     }
+    rt->overruns = 0;
     return true;
 }
 

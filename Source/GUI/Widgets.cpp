@@ -1028,17 +1028,17 @@ Explainer explainer (const juce::String& id)
         return { "E9DS",
                  "Baisse automatiquement les sibilances (« s », « ch ») ou les aigus durs autour de la fréquence choisie, seulement quand ils ressortent trop. Le reste du spectre ne bouge pas."_t,
                  "Masters modernes très brillants et voix proches du micro moins fatigants, surtout au casque ou sur un tweeter vif."_t,
-                 "Tant qu'il est actif, plus de bit-perfect ; une source DSD passe par le DXD 64 bits. Sous le seuil, la sortie reste identique à l'entrée au bit près."_t };
+                 "Deux façons de l'utiliser : à la main (l'interrupteur de E9DS) ou en auto, piloté par Smart Ear Comfort. À la main, E9DS a la priorité et s'applique à tous les morceaux. Actif, il n'est plus bit-perfect (traitement 64 bits, une source DSD passe par le DXD) ; sous le seuil, la sortie reste identique à l'entrée au bit près."_t };
     if (id == "dxd")
         return { "Conversion de fréquence (DXD)"_t,
                  "Suréchantillonne le PCM vers 352,8 / 384 kHz avec un filtre sinc polyphase 64 bits, avant le DAC."_t,
                  "Utile avec un DAC dont le filtre interne est moyen à 44,1 / 48 kHz : le filtrage se fait ici, plus raide et plus propre. Sans effet sur un DAC qui suréchantillonne déjà très bien."_t,
                  "Plus de bit-perfect, charge CPU un peu plus haute ; le DAC change de fréquence moins souvent (toujours 352,8 ou 384 kHz)."_t };
     if (id == "crossfeed")
-        return { "Crossfeed",
-                 "Mélange un peu de chaque voie dans l'autre, filtré et retardé comme à l'écoute sur enceintes (Bauer bs2b 700 Hz / 4,5 dB)."_t,
-                 "Au casque : moins de fatigue sur les vieux mixages très séparés (jazz, rock des années 60), image recentrée devant soi."_t,
-                 "Inutile sur enceintes ; stéréo un peu moins large ; plus de bit-perfect tant qu'il est actif."_t };
+        return { "Smart Crossfeed"_t,
+                 "Au casque, chaque oreille n'entend qu'une voie : un mixage très séparé (voix à gauche, instruments à droite) paraît « dans la tête » et fatigue. Le crossfeed ajoute un peu de la voie opposée, filtrée (surtout les graves) et retardée comme à l'écoute sur enceintes (Bauer bs2b 700 Hz / 4,5 dB)."_t,
+                 "La scène passe devant vous au lieu d'être collée aux oreilles : moins de fatigue, écoute plus longue, surtout sur les vieux mixages (jazz, rock des années 60) et les enregistrements très ouverts."_t,
+                 "Inutile sur enceintes et sur un mixage déjà centré : laissez-le désactivé. Stéréo un peu moins large ; plus de bit-perfect tant qu'il est actif."_t };
     if (id == "headroom")
         return { "Gestion du headroom"_t,
                  "Baisse le niveau juste ce qu'il faut avant les égaliseurs pour que leurs bosses ne dépassent jamais 0 dBFS."_t,
@@ -1051,9 +1051,9 @@ Explainer explainer (const juce::String& id)
                  "Un morceau baissé n'est plus bit-perfect (gain 64 bits + dither). À la première écoute, l'atténuation arrive dès la fin de la mesure (glissement de 10 ms) ; ensuite elle est connue dès le premier échantillon. Source DSD : True Peak affiché seulement. Flux réseau non mesurés."_t };
     if (id == "smart")
         return { "Smart Ear Comfort",
-                 "Lit le profil de mastering de chaque morceau mesuré en tâche de fond (dynamique DR, part d'énergie entre 6 et 10 kHz). Sur un master brillant et compressé (DR 8 ou moins, aigus forts), E9DS s'active tout seul en Dynamic HF 8 kHz, dosé de -1,5 à -6 dB selon le morceau ; sur les autres, rien."_t,
+                 "Lit le profil de mastering de chaque morceau mesuré en tâche de fond (dynamique DR, part d'énergie entre 6 et 10 kHz). Sur un master brillant et compressé (DR 8 ou moins, aigus à -26 dB ou plus), il enclenche E9DS tout seul en Dynamic HF 8 kHz, dosé de -1,5 à -6 dB selon le morceau ; sur les autres, rien."_t,
                  "Une playlist variée s'écoute sans retoucher le DSP : moins de fatigue sur les masters modernes durs, et les enregistrements dynamiques passent intacts, en bit-perfect s'il n'y a pas d'autre traitement."_t,
-                 "Un morceau traité n'est plus bit-perfect. E9DS réglé à la main reste prioritaire. Source DSD : profil affiché seulement. À la première écoute, l'adaptation arrive à la fin de la mesure (rampe de 20 ms) ; des cymbales très présentes peuvent compter comme des aigus forts, d'où la condition sur le DR."_t };
+                 "Un morceau traité n'est plus bit-perfect, les autres le restent. E9DS réglé à la main est prioritaire (Smart se met en retrait). Source DSD, natif ou DoP : jamais traitée, le profil est seulement affiché. Sur un morceau jamais mesuré, l'adaptation arrive dès la fin de la mesure (rampe de 20 ms) ; ensuite elle est connue dès le premier échantillon."_t };
     if (id == "hpeq")
         return { "Égaliseur casque"_t,
                  "Corrige la courbe de réponse d'un casque mesuré pour la rapprocher d'une cible neutre (profils intégrés, 64 bits)."_t,

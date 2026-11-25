@@ -256,26 +256,29 @@ NX_TEST_SECTION (111, "Moteur v1 : Memory Play (fichier en RAM) et Outils Studio
         bool exact = m2 != nullptr && cl != nullptr && m2->numBands == 7 && cl->numBands == 7;
         if (exact)
         {
-            const hp::Band want[] = { { hp::BandType::LowShelf, 105, 4.0, 0.7 }, { hp::BandType::Peak, 66, -6.5, 0.5 }, { hp::BandType::Peak, 220, -1.0, 0.8 },
-                                      { hp::BandType::Peak, 6500, -1.5, 3.0 }, { hp::BandType::Peak, 4000, 1.5, 2.5 }, { hp::BandType::Peak, 2700, -1.0, 2.8 },
-                                      { hp::BandType::HighShelf, 10000, 3.0, 0.7 } };
+            // M2: the reference settings of the EQ editor (shelves for Band 1 and 5, treble +1,0)
+            const hp::Band want[] = { { hp::BandType::LowShelf, 105, 4.0, 0.7 }, { hp::BandType::LowShelf, 66, -6.5, 0.5 }, { hp::BandType::Peak, 220, -1.0, 0.8 },
+                                      { hp::BandType::Peak, 6500, -1.5, 3.0 }, { hp::BandType::Peak, 4000, 1.5, 2.5 }, { hp::BandType::HighShelf, 10000, 1.0, 0.7 },
+                                      { hp::BandType::HighShelf, 2700, -1.0, 2.8 } };
+            // M2 CL: its own settings (peaks, treble +1,0)
+            const hp::Band wantCl[] = { { hp::BandType::LowShelf, 105, 4.0, 0.7 }, { hp::BandType::Peak, 66, -6.5, 0.5 }, { hp::BandType::Peak, 220, -1.0, 0.8 },
+                                        { hp::BandType::Peak, 6500, -1.5, 3.0 }, { hp::BandType::Peak, 4000, 1.5, 2.5 }, { hp::BandType::Peak, 2700, -1.0, 2.8 },
+                                        { hp::BandType::HighShelf, 10000, 1.0, 0.7 } };
             for (int b = 0; b < 7; ++b)
             {
                 const auto& g = m2->bands[(size_t) b];
                 const auto& c = cl->bands[(size_t) b];
                 exact = exact && g.type == want[b].type && g.freq == want[b].freq && g.gain == want[b].gain && g.q == want[b].q
-                        && c.type == g.type && c.freq == g.freq && c.q == g.q && c.gain == (b == 6 ? 1.0 : g.gain);
+                        && c.type == wantCl[b].type && c.freq == wantCl[b].freq && c.gain == wantCl[b].gain && c.q == wantCl[b].q;
             }
         }
-        t.check (exact, "égaliseur casque : MOMENTUM M2 (7 bandes exactes) et M2 CL (aigus +1,0 au lieu de +3,0)"_t);
-        // shelves: a low shelf gives its full gain far below, a high shelf far above; M2 - CL = 2 dB in the treble only
+        t.check (exact, "égaliseur casque : MOMENTUM M2 (réglages de référence de l'éditeur EQ) et M2 CL (7 bandes exactes)"_t);
+        // shelves: a low shelf gives its full gain far below, a high shelf far above
         const double fs = 48000.0;
-        const double d16k = hp::responseDb (*m2, fs, 16000.0) - hp::responseDb (*cl, fs, 16000.0);
-        const double d100 = hp::responseDb (*m2, fs, 100.0) - hp::responseDb (*cl, fs, 100.0);
         hp::Preset shelfOnly { "x", "x", "", "", false, 1, {{ { hp::BandType::LowShelf, 105.0, 4.0, 0.7 } }} };
-        t.check (std::abs (d16k - 2.0) < 0.15 && std::abs (d100) < 0.05 && std::abs (hp::responseDb (shelfOnly, fs, 20.0) - 4.0) < 0.2
+        t.check (std::abs (hp::responseDb (shelfOnly, fs, 20.0) - 4.0) < 0.2
                  && std::abs (hp::responseDb (shelfOnly, fs, 5000.0)) < 0.05,
-                 "biquads RBJ : plateau grave +4 dB sous 105 Hz, 0 dB au-dessus ; M2 - M2 CL = "_t + juce::String (d16k, 2) + " dB à 16 kHz");
+                 "biquads RBJ : plateau grave +4 dB sous 105 Hz, 0 dB au-dessus"_t);
 
         state->setEq (1, false);   // MOMENTUM M2 CL
         const double preamp = state->eqPreampDb.load(), peak = hp::peakBoostDb (*cl, 48000.0);
@@ -310,9 +313,9 @@ NX_TEST_SECTION (111, "Moteur v1 : Memory Play (fichier en RAM) et Outils Studio
         auto bandsOf = [] (const char* id) { return hp::find (id); };
         const auto* hd650 = bandsOf ("hd-650");
         const auto* dt = bandsOf ("dt-1990-pro");
-        const bool catalogue = hp::presets().size() == 11 && hd650 != nullptr && hd650->numBands == 5 && hd650->bands[0].type == hp::BandType::LowShelf
-                               && hd650->bands[0].freq == 70.0 && hd650->bands[0].gain == 3.5 && hd650->bands[3].freq == 4500.0 && hd650->bands[3].q == 3.0
-                               && hd650->bands[4].type == hp::BandType::HighShelf && dt != nullptr && dt->numBands == 3 && dt->bands[2].gain == -5.5 && dt->bands[2].q == 4.5
+        const bool catalogue = hp::presets().size() == 11 && hd650 != nullptr && hd650->numBands == 7 && hd650->bands[0].type == hp::BandType::LowShelf
+                               && hd650->bands[0].freq == 105.0 && hd650->bands[0].gain == 5.5 && hd650->bands[3].freq == 3100.0 && hd650->bands[3].q == 3.0
+                               && hd650->bands[6].type == hp::BandType::HighShelf && hd650->bands[6].gain == -5.0 && dt != nullptr && dt->numBands == 3 && dt->bands[2].gain == -5.5 && dt->bands[2].q == 4.5
                                && bandsOf ("hd-800-s")->bands[2].gain == -4.5 && bandsOf ("clear-mg")->bands[1].freq == 1200.0 && bandsOf ("em32")->bands[2].freq == 12000.0
                                && bandsOf ("hd-600")->bands[2].freq == 3300.0 && hp::find ("night")->studioCurve && ! hd650->studioCurve;
         int found650 = 0, foundFocal = 0, foundSenn = 0;
@@ -354,7 +357,7 @@ NX_TEST_SECTION (111, "Moteur v1 : Memory Play (fichier en RAM) et Outils Studio
         // copy the headphone curve into the 7 slots
         const auto copied = hp::toParametric (*hp::find ("momentum-m2"));
         t.check (copied[0].type == hp::BandType::LowShelf && copied[0].gain == 4.0 && copied[1].freq == 66.0 && copied[5].freq == 2700.0
-                 && copied[6].type == hp::BandType::HighShelf && copied[6].gain == 3.0, "courbe du Momentum M2 copiée dans les 7 bandes de l'EQ paramétrique"_t);
+                 && copied[6].type == hp::BandType::HighShelf && copied[6].gain == 1.0 && copied[5].type == hp::BandType::HighShelf && copied[5].gain == -1.0, "courbe du Momentum M2 copiée dans les 7 bandes de l'EQ paramétrique"_t);
         state->setParametric (hp::flatParametric(), false);
         state->setEq (-1, false);
     }

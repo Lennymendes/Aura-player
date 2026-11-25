@@ -170,8 +170,8 @@ juce::String PlaybackEngine::getLastError() const
 void PlaybackEngine::setQueue (std::vector<PlayableItem> items, int startIndex, bool startPlaying)
 {
     queue = std::move (items);
-    liveTpIndex = -1;                        // a measurement of the old queue never lands on the new one
-    liveComfortIndex = -1;
+    for (auto& l : liveTp) l.index = -1;     // a measurement of the old queue never lands on the new one
+    for (auto& l : liveComfort) l.index = -1;
     const int first = queue.empty() ? 0 : juce::jlimit (0, (int) queue.size() - 1, startIndex);
     {
         std::lock_guard<std::mutex> l (controlLock);
@@ -1679,9 +1679,11 @@ void PlaybackEngine::monitorPlayback()
     if (cb == monCallbacks)
     {
         if (monStallSince == 0) monStallSince = now;
+        else if (now - monStallSince >= stallRecoverMs) { recoverStalledDevice (now - monStallSince); return; }
     }
     else
     {
+        if (stallRecoveries > 0 && now - lastStallRecoverAt >= 10000) stallRecoveries = 0;     // it has been running well since
         if (monStallSince != 0 && now - monStallSince >= 300)
             audioLog ("Moteur : blocage du DAC, aucun buffer demande pendant " + juce::String ((int) (now - monStallSince))
                       + " ms (position " + juce::String (getPositionSeconds(), 2) + " s, ring " + juce::String ((juce::int64) ring.readable()) + " octets)");
@@ -1696,6 +1698,33 @@ void PlaybackEngine::monitorPlayback()
         monUnderruns = u;
         monLastGlitchLog = now;
     }
+}
+
+/** The DAC stopped asking for buffers while playing (logs of 25 Nov 2026: FiiO KA17 in DoP, ring full, no callback). A
+    stall that never ends was invisible (it is only logged when it ends) and nothing restarted the stream: close the
+    device (Hog Mode released, formats put back) and open it again, the ring and the position are kept. Twice at most,
+    then say what to do. */
+void PlaybackEngine::recoverStalledDevice (juce::uint32 stalledMs)
+{
+    const int planId = activePlanId;
+    monStallSince = 0;
+    const auto where = "position " + juce::String (getPositionSeconds(), 2) + " s, ring " + juce::String ((juce::int64) ring.readable()) + " octets";
+    if (planId == 0 || stallRecoveries >= 2)
+    {
+        audioLog ("Moteur : le DAC ne repond toujours pas apres " + juce::String (stallRecoveries) + " reprises, abandon (" + where + ")");
+        const auto devName = [this] { std::lock_guard<std::mutex> l (controlLock); return deviceName; }();
+        abortDeviceStart ("Le DAC « "_t + devName + " » s'est arrêté en cours de lecture et ne repart pas. Débranchez-le puis rebranchez-le "
+                          "(ou éteignez-le / rallumez-le), puis relancez la lecture. Réglages › À propos › Exporter les journaux si ça persiste."_t);
+        return;
+    }
+    ++stallRecoveries;
+    lastStallRecoverAt = juce::Time::getMillisecondCounter();
+    audioLog ("Moteur : blocage du DAC en cours depuis " + juce::String ((int) stalledMs) + " ms (" + where + "), fermeture et reouverture (reprise "
+              + juce::String (stallRecoveries) + "/2)");
+    if (deviceRunning) { backend->stop(); deviceRunning = false; }
+    backend->close();
+    juce::Thread::sleep (250);
+    if (configureDevice (planId)) monCallbacks = stats.callbacks.load();
 }
 
 void PlaybackEngine::timerCallback()
@@ -1756,7 +1785,8 @@ void PlaybackEngine::timerCallback()
 double PlaybackEngine::tpGainFor (int itemIndex, double eventTpDb) const noexcept
 {
     if (! tpAuto.load (std::memory_order_relaxed)) return 1.0;
-    const double tp = liveTpIndex.load (std::memory_order_acquire) == itemIndex ? liveTpDb.load (std::memory_order_relaxed) : eventTpDb;
+    double tp = eventTpDb;
+    if (itemIndex >= 0) liveTp[itemIndex & (liveSlots - 1)].get (itemIndex, tp);
     return truepeak::gain (true, tp, tpCeiling.load (std::memory_order_relaxed));
 }
 
@@ -1784,14 +1814,15 @@ void PlaybackEngine::setTrackTruePeak (int index, double tpDb)
         if (index >= 0 && index < (int) decoderQueue.size()) decoderQueue[(size_t) index].truePeakDb = tpDb;
     }
     if (index >= 0 && index < (int) queue.size()) queue[(size_t) index].truePeakDb = tpDb;
-    liveTpDb.store (tpDb, std::memory_order_relaxed);
-    liveTpIndex.store (index, std::memory_order_release);
+    if (index >= 0) liveTp[index & (liveSlots - 1)].put (index, tpDb);
 }
 
 double PlaybackEngine::comfortFor (int itemIndex, bool pcmSource, double eventDb) const noexcept
 {
     if (! pcmSource || ! smartOn.load (std::memory_order_relaxed)) return 0.0;
-    return liveComfortIndex.load (std::memory_order_acquire) == itemIndex ? liveComfortDb.load (std::memory_order_relaxed) : eventDb;
+    double db = eventDb;
+    if (itemIndex >= 0) liveComfort[itemIndex & (liveSlots - 1)].get (itemIndex, db);
+    return db;
 }
 
 void PlaybackEngine::setTrackProfile (int index, int dr, double hf)
@@ -1801,8 +1832,7 @@ void PlaybackEngine::setTrackProfile (int index, int dr, double hf)
         if (index >= 0 && index < (int) decoderQueue.size()) { decoderQueue[(size_t) index].dr = dr; decoderQueue[(size_t) index].hfShareDb = hf; }
     }
     if (index >= 0 && index < (int) queue.size()) { queue[(size_t) index].dr = dr; queue[(size_t) index].hfShareDb = hf; }
-    liveComfortDb.store (comfort::classify (dr, hf).doseDb, std::memory_order_relaxed);
-    liveComfortIndex.store (index, std::memory_order_release);
+    if (index >= 0) liveComfort[index & (liveSlots - 1)].put (index, comfort::classify (dr, hf).doseDb);
 }
 
 double PlaybackEngine::getComfortDoseDb() const

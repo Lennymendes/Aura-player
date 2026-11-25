@@ -175,6 +175,8 @@ public:
     void serviceMessageThread() { timerCallback(); }
     /** Start watchdog: how long a fresh stream may stay silent (no hardware buffer) before recovery. Tests shorten it. */
     juce::uint32 startPatienceMs = 4000;
+    /** A DAC that asks for no buffer for this long during playback is closed and opened again at the same position (twice at most). */
+    juce::uint32 stallRecoverMs = 2500;
     /** Micro-fades at every break of the PCM stream (play, pause, stop, skip, seek, rate change). */
     static constexpr double transitionFadeMs = 10.0;
     /** True after the exclusive (Hog Mode) stream never clocked and the shared system output took over. */
@@ -317,7 +319,9 @@ private:
     bool sharedFallback = false;             // exclusive access gave no clock: the shared output is used (until another device)
     // Continuous monitor (message thread), after the start watch: dropouts and hardware stalls with their time.
     juce::uint64 monUnderruns = 0, monCallbacks = 0;
-    juce::uint32 monStallSince = 0, monLastGlitchLog = 0;
+    juce::uint32 monStallSince = 0, monLastGlitchLog = 0, lastStallRecoverAt = 0;
+    int stallRecoveries = 0;
+    void recoverStalledDevice (juce::uint32 stalledMs);
     void monitorPlayback();
     void abortDeviceStart (const juce::String& why);
     void watchDeviceStart();
@@ -333,11 +337,23 @@ private:
     // Auto-Headroom True Peak: settings for the realtime threads, and a measurement that arrived during playback
     std::atomic<bool> tpAuto { false };
     std::atomic<double> tpCeiling { -1.0 };
-    std::atomic<int> liveTpIndex { -1 };
-    std::atomic<double> liveTpDb { 0.0 };
+    /** A measurement that arrived during playback, per track (4 slots, index & 3): the analysis of the next track must
+        never replace the one of the track being played. Written by the message thread, read by the realtime ones. */
+    struct LiveSlot
+    {
+        std::atomic<int> index { -1 };
+        std::atomic<double> value { 0.0 };
+        void put (int i, double v) noexcept { index.store (-1, std::memory_order_relaxed); value.store (v, std::memory_order_relaxed); index.store (i, std::memory_order_release); }
+        bool get (int i, double& v) const noexcept
+        {
+            if (index.load (std::memory_order_acquire) != i) return false;
+            v = value.load (std::memory_order_relaxed);
+            return index.load (std::memory_order_acquire) == i;
+        }
+    };
+    static constexpr int liveSlots = 4;
+    LiveSlot liveTp[liveSlots], liveComfort[liveSlots];
     std::atomic<bool> smartOn { false };
-    std::atomic<int> liveComfortIndex { -1 };
-    std::atomic<double> liveComfortDb { 0.0 };
     double comfortFor (int itemIndex, bool pcmSource, double eventDb) const noexcept;
     double decComfortDb = 0.0;
     bool decPcmSource = false;

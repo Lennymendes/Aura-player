@@ -163,7 +163,7 @@ void PlayerBar::paint (juce::Graphics& g)
     // technical line: channels (file header) + Peak / RMS / DR once the background scan is done
     {
         juce::String info;
-        if (const auto* tr = ctx.currentTrack()) info = channelBadge (tr->channels);
+        if (const auto* tr = ctx.currentTrack()) if (tr->channels != 2) info = channelBadge (tr->channels);   // stereo is the norm: not worth the space
         if (auto an = ctx.currentAnalysis()) info << (info.isNotEmpty() ? juce::String::fromUTF8 (" \xc2\xb7 ") : juce::String()) << an->summary();
         if (info.isNotEmpty() && r.getHeight() >= 46 * uiScale)
         {
@@ -203,7 +203,8 @@ void PlayerBar::resized()
 {
     const float k = uiScale;
     auto sc = [k] (int v) { return juce::roundToInt ((float) v * k); };
-    auto r = getLocalBounds().reduced (12, sc (10));
+    const bool shortBar = getHeight() < sc (80);                  // compact / integrated density: less padding, bigger buttons
+    auto r = getLocalBounds().reduced (12, sc (shortBar ? 5 : 10));
     artwork.setBounds (r.removeFromLeft (r.getHeight()));
     r.removeFromLeft (sc (12));
     const int third = getWidth() / 3;
@@ -216,7 +217,7 @@ void PlayerBar::resized()
 
     // center: transport row + seek bar
     // waveform mode gives the seek area more height (Audirvana style)
-    auto row = center.removeFromTop (center.getHeight() * (waveButton.active ? 44 : 55) / 100);
+    auto row = center.removeFromTop (center.getHeight() * (waveButton.active ? 44 : shortBar ? 62 : 55) / 100);
     const int b = row.getHeight();
     auto controls = row.withSizeKeepingCentre (b * 5 + sc (40 + 10 + 44), b);
     shuffleButton.setBounds (controls.removeFromLeft (b).reduced (6));

@@ -94,7 +94,19 @@ public:
     /** Headphone view, once a profile is loaded: adds the parametric EQ on top (its own bands, the profile untouched). */
     juce::TextButton addPeqButton;
     juce::ComboBox userPresets;
-    juce::ToggleButton headroom, truePeak, upsample, crossfeed, hpEq, peq, phase, e9ds, smart;
+    juce::ToggleButton headroom, truePeak, crossfeed, hpEq, peq, phase, e9ds, smart;
+    /** The optional stages (headphone EQ, parametric EQ, polarity) stay behind "+ Ajouter un étage" until they are used. */
+    enum class Stage { HeadphoneEq, ParametricEq, Polarity };
+    bool isStageShown (Stage s) const;
+    void addStage (Stage s);
+    /** Presets of the chain: 0 Bit-Perfect (everything off), 1 ZEYN Safe EarMaster, 2 ZEYN ready-to-use headphone (Momentum M2). */
+    void applyPreset (int index);
+    static juce::String presetName (int index);
+    static juce::String presetSummary (int index);
+    static constexpr int numPresets = 3;
+    bool headphoneListVisible() const { return list.isVisible(); }
+    juce::TextButton addStageButton;
+    juce::ComboBox presetBox;
     /** Auto-Headroom True Peak: ceiling -1,0 / -0,5 dBTP (a click switches). */
     juce::TextButton tpCeiling;
     /** E9DS view: Focus 4-12 kHz (presets 6.5 / 9 kHz), Amount 0 to -6 dB, Split-Band / Dynamic HF. */
@@ -110,6 +122,12 @@ private:
     void bandsChanged (const hpeq::ParametricBands& b, bool final);
     juce::Rectangle<int> panelBounds() const;
     juce::Rectangle<int> rowBounds (int row) const;
+    bool rowShown (int row) const;
+    int slotOf (int row) const;                         // position among the shown rows
+    int shownRows() const;
+    void saveStages();
+    void showAddStageMenu();
+    bool showHp = false, showPeq = false, showPhase = false;
 
     // ListBoxModel
     int getNumRows() override { return (int) rows.size(); }

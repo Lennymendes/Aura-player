@@ -1,6 +1,6 @@
 // Aura — Copyright (c) 2026 NX Audio. Proprietary, all rights reserved (see LICENSE).
 // Equalisers of the AURA DSP panel, RBJ biquads in 64 bits:
-//   headphone profiles (up to 8 bands; the two Momentum M2 profiles are NX Audio's own) and studio curves,
+//   headphone profiles (up to 8 bands; Momentum M2 and HD 650 follow the reference settings of the EQ editor) and studio curves,
 //   and the 7-band parametric EQ edited by hand.
 // Headroom management: the preamp is the peak boost of the whole curve (measured on 240 log-spaced points), so a
 // full-scale track never clips.
@@ -34,15 +34,17 @@ inline const std::array<Preset, 11>& presets()
 {
     using T = BandType;
     static const std::array<Preset, 11> list {{
+        // Momentum M2 and HD 650: the reference settings of the EQ editor (7 bands: Bass, Band 1-5, Treble), measured on the
+        // editor's curve to within 0,1 dB (section 128). The shelves of Band 1 / 5 are shelves, as in the editor.
         { "momentum-m2", "Momentum M2", "Sennheiser", "Profil — ZEYN", false, 7, {{
-            { T::LowShelf, 105.0, 4.0, 0.7 }, { T::Peak, 66.0, -6.5, 0.5 }, { T::Peak, 220.0, -1.0, 0.8 }, { T::Peak, 6500.0, -1.5, 3.0 },
-            { T::Peak, 4000.0, 1.5, 2.5 }, { T::Peak, 2700.0, -1.0, 2.8 }, { T::HighShelf, 10000.0, 3.0, 0.7 } }} },
+            { T::LowShelf, 105.0, 4.0, 0.7 }, { T::LowShelf, 66.0, -6.5, 0.5 }, { T::Peak, 220.0, -1.0, 0.8 }, { T::Peak, 6500.0, -1.5, 3.0 },
+            { T::Peak, 4000.0, 1.5, 2.5 }, { T::HighShelf, 10000.0, 1.0, 0.7 }, { T::HighShelf, 2700.0, -1.0, 2.8 } }} },
         { "momentum-m2-cl", "Momentum M2 CL", "Sennheiser", "Clear — ZEYN", false, 7, {{
             { T::LowShelf, 105.0, 4.0, 0.7 }, { T::Peak, 66.0, -6.5, 0.5 }, { T::Peak, 220.0, -1.0, 0.8 }, { T::Peak, 6500.0, -1.5, 3.0 },
             { T::Peak, 4000.0, 1.5, 2.5 }, { T::Peak, 2700.0, -1.0, 2.8 }, { T::HighShelf, 10000.0, 1.0, 0.7 } }} },
-        { "hd-650", "HD 650", "Sennheiser", "Profil — ZEYN", false, 5, {{
-            { T::LowShelf, 70.0, 3.5, 0.7 }, { T::Peak, 160.0, -2.0, 1.0 }, { T::Peak, 2100.0, 1.5, 1.4 }, { T::Peak, 4500.0, -2.5, 3.0 },
-            { T::HighShelf, 10000.0, 2.0, 0.7 } }} },
+        { "hd-650", "HD 650", "Sennheiser", "Profil — ZEYN", false, 7, {{
+            { T::LowShelf, 105.0, 5.5, 0.7 }, { T::Peak, 180.0, -5.5, 0.5 }, { T::Peak, 1130.0, -2.0, 1.4 }, { T::Peak, 3100.0, -3.0, 3.0 },
+            { T::Peak, 5000.0, -1.0, 5.0 }, { T::Peak, 10500.0, 3.0, 1.4 }, { T::HighShelf, 10000.0, -5.0, 0.7 } }} },
         { "hd-600", "HD 600", "Sennheiser", "", false, 4, {{
             { T::LowShelf, 75.0, 4.0, 0.7 }, { T::Peak, 180.0, -1.5, 1.1 }, { T::Peak, 3300.0, -2.0, 2.5 }, { T::HighShelf, 10000.0, 1.5, 0.7 } }} },
         { "hd-800-s", "HD 800 S", "Sennheiser", "", false, 4, {{

@@ -1159,6 +1159,35 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     for (auto& p : app.plugins().getUiPlugins()) if (p.id == "nx.waterfall") radialOn = p.enabled && p.folder.isAChildOf (app.userDataDirectory());
     t.check (radialOk && radialOn, "installation en un clic : Spectrogramme copié dans le dossier utilisateur et activé"_t
                                    + (installError.isNotEmpty() ? " (" + installError + ")" : juce::String()));
+    {
+        // Spectrogramme: no « interrupted » error (60 ms budget), and the picture follows the dynamics (loud ≫ quiet)
+        auto& pm = app.plugins();
+        auto avgLight = [&] (double level, double& worstMs, bool& ok)
+        {
+            juce::Array<juce::var> spectrum;
+            for (int i = 0; i < 64; ++i) spectrum.add (level * (0.6 + 0.4 * std::abs (std::sin (i * 0.3))));
+            auto* audio = new juce::DynamicObject();
+            audio->setProperty ("spectrum", spectrum);
+            pm.setState ("audio", juce::var (audio));
+            juce::Image img (juce::Image::ARGB, 420, 170, true);
+            for (int frame = 0; frame < 150; ++frame)
+            {
+                juce::Graphics g (img);
+                g.fillAll (juce::Colour (0xff0a0c0e));
+                const auto t0 = juce::Time::getMillisecondCounterHiRes();
+                ok &= pm.render ("nx.waterfall", "nowplaying.side", g, img.getBounds().toFloat());
+                worstMs = juce::jmax (worstMs, juce::Time::getMillisecondCounterHiRes() - t0);
+            }
+            double sum = 0;
+            for (int y = 0; y < img.getHeight(); ++y) for (int x = 0; x < img.getWidth(); ++x) sum += img.getPixelAt (x, y).getBrightness();
+            return sum / (img.getWidth() * img.getHeight());
+        };
+        double worst = 0; bool ok = true;
+        const auto quiet = avgLight (0.25, worst, ok), loud = avgLight (0.95, worst, ok);
+        t.check (ok && worst < 40.0 && loud > quiet + 0.05,
+                 "Spectrogramme : aucune erreur, image en moins de 40 ms, plus clair quand le morceau est fort"_t
+                 + " [" + juce::String (worst, 1) + " ms, " + juce::String (quiet, 3) + " -> " + juce::String (loud, 3) + "]");
+    }
     const bool toneOk = market.installFromCatalogue ("nx.tone", installError);
     bool toneOn = false;
     for (auto& p : app.plugins().getDspPlugins()) if (p.id == "nx.tone") toneOn = p.enabled && p.error.isEmpty();
@@ -1232,6 +1261,19 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         // AURA DSP (studio button): headphone profile list (search), parametric EQ (knobs, handles, presets), header chip
         auto& dsp = main->auraDsp;
         main->player.studioButton.onClick();
+        settle (100);
+        // clean main view: the headphone EQ, parametric EQ and polarity stay behind "+ Ajouter un étage", no frequency conversion row
+        using Stage = nx::AuraDspPanel::Stage;
+        const bool clean = dsp.isVisible() && dsp.getView() == nx::AuraDspPanel::View::E9ds && ! dsp.isStageShown (Stage::HeadphoneEq) && ! dsp.isStageShown (Stage::ParametricEq)
+                           && ! dsp.isStageShown (Stage::Polarity) && ! dsp.hpEq.isVisible() && ! dsp.peq.isVisible() && ! dsp.phase.isVisible() && dsp.addStageButton.isVisible()
+                           && dsp.infoFor ("dxd") == nullptr;
+        shoot ("46g_aura_dsp_epure");
+        dsp.addStage (Stage::HeadphoneEq);
+        settle (60);
+        const bool added = dsp.isStageShown (Stage::HeadphoneEq) && dsp.hpEq.isVisible() && ! dsp.peq.isVisible() && dsp.headphoneListVisible()
+                           && (bool) app.settings().get ("dspStages").getProperty ("hp", false);
+        t.check (clean && added, "AURA DSP épuré : polarité, EQ paramétrique et EQ casque derrière « + Ajouter un étage », plus de conversion de fréquence ; l'étage ajouté apparaît et reste enregistré"_t
+                 + " [" + juce::String ((int) clean) + juce::String ((int) added) + "]");
         const bool open = dsp.isVisible() && dsp.getView() == nx::AuraDspPanel::View::Headphone;
         const int all = dsp.visiblePresetCount();
         dsp.searchFor ("hd 650");
@@ -1425,14 +1467,14 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
             settle (100);
             shoot ("46d_aura_dsp_e9ds");
             bool infos = true;
-            for (auto* id : { "headroom", "dxd", "crossfeed", "hpeq", "e9ds" }) infos = infos && dsp.infoFor (id) != nullptr && shownInMain (dsp.infoFor (id));
+            for (auto* id : { "headroom", "crossfeed", "hpeq", "e9ds" }) infos = infos && dsp.infoFor (id) != nullptr && shownInMain (dsp.infoFor (id));
             const bool e9Info = openInfo ("e9ds");
             shoot ("46e_aura_dsp_explication_e9ds");
             closePopover();
             juce::String missingInfo;
-            for (auto* id : { "headroom", "truepeak", "dxd", "crossfeed", "hpeq", "e9ds" })
+            for (auto* id : { "headroom", "truepeak", "crossfeed", "hpeq", "e9ds", "smart" })
                 if (dsp.infoFor (id) == nullptr || ! shownInMain (dsp.infoFor (id))) missingInfo << id << " ";
-            t.check (infos && e9Info && missingInfo.isEmpty(), "AURA DSP : « + » sur Headroom, Auto-Headroom, Conversion DXD, Crossfeed, Égaliseur casque, E9DS ; fenêtre E9DS en 3 points"_t
+            t.check (infos && e9Info && missingInfo.isEmpty(), "AURA DSP : « + » sur Headroom, Auto-Headroom, Smart Crossfeed, Égaliseur casque, E9DS, Smart Ear Comfort ; fenêtre E9DS en 3 points"_t
                      + " [" + juce::String ((int) e9Info) + " " + missingInfo + juce::String (main->getWidth()) + "x" + juce::String (main->getHeight()) + "]");
             dsp.e9Split.triggerClick();
             dsp.e9ds.triggerClick();
@@ -1441,6 +1483,28 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
             dsp.close();
             t.check (on && off, "AURA DSP · E9DS : vue dédiée (Brillance 9 kHz, -4,5 dB, Dynamic HF), réglages gardés, DSD converti tant qu'il est actif, éteint sans reconstruire la chaîne"_t
                      + " [" + juce::String ((int) on) + juce::String ((int) off) + "]");
+        }
+        {
+            // presets of the chain: Bit-Perfect, ZEYN Safe EarMaster (Smart Ear Comfort + E9DS auto), ready-to-use headphone
+            main->player.studioButton.onClick();
+            settle (60);
+            dsp.applyPreset (1);
+            settle (80);
+            const auto st1 = app.engine().getSettings();
+            const bool safe = st1.smartComfort && st1.autoTruePeak && ! app.e9ds().enabled.load() && (bool) app.settings().get ("engine").getProperty ("smartComfort", false)
+                              && nx::AuraDspPanel::presetName (1) == "ZEYN Safe EarMaster" && ! app.studioTools().eqActive();
+            shoot ("49c_aura_dsp_preset_safe_earmaster");
+            dsp.applyPreset (2);
+            settle (80);
+            const bool cans = app.studioTools().eqActive() && main->audioStatus.eqLabel() == "MOMENTUM M2" && app.engine().getSettings().smartComfort
+                              && dsp.getView() == nx::AuraDspPanel::View::Headphone && dsp.isStageShown (nx::AuraDspPanel::Stage::HeadphoneEq);
+            shoot ("49d_aura_dsp_preset_casque");
+            dsp.applyPreset (0);
+            settle (80);
+            const bool bp = ! app.engine().getSettings().smartComfort && ! app.engine().getSettings().autoTruePeak && ! app.studioTools().anyActive();
+            dsp.close();
+            t.check (safe && cans && bp, "AURA DSP : presets (ZEYN Safe EarMaster = Smart Ear Comfort + E9DS auto + Auto-Headroom, casque prêt à l'emploi Momentum M2, Bit-Perfect = tout désactivé)"_t
+                     + " [" + juce::String ((int) safe) + juce::String ((int) cans) + juce::String ((int) bp) + "]");
         }
         {
             // no third-party product name anywhere in the interface (French and English dictionaries, sources);
