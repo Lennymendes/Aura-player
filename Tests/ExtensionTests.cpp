@@ -508,6 +508,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
     {
         if (auto* p = nx::InfoButton::lastPopover())
             if (auto* box = p->findParentComponentOfClass<juce::CallOutBox>()) box->dismiss();
+        for (int i = 0; i < 40 && nx::InfoButton::lastPopover() != nullptr; ++i) settle (50);      // slow macOS CI: the callout goes away asynchronously
         settle (200);
     };
     auto openInfo = [&] (const juce::String& id)
@@ -1019,6 +1020,7 @@ NX_TEST_SECTION (301, "Interface complète hors écran (captures de chaque page)
         auto& sv = main->getStudioView();
         for (int i = 0; i < 60 && app.currentAnalysis() == nullptr; ++i) settle (50);
         settle (1500);
+        for (int i = 0; i < 80 && ! sv.showsHiResMark(); ++i) settle (50);        // the analyzer takes the track's rate a moment after the start
         const auto lines = sv.metricLines().joinIntoString ("\n");
         const bool measures = sv.isVisible() && lines.contains ("Dynamic Range|DR") && lines.contains ("dBTP") && lines.contains ("Hi-Res|" + nx::hires::verdictName (nx::hires::Real));
         const bool live = sv.showsHiResMark() && sv.spectrogramColumns() > 0;
